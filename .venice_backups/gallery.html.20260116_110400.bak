@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Gallery</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .gallery-item {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .gallery-item:hover {
+            transform: scale(1.05);
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            display: block;
+            cursor: pointer;
+        }
+        .gallery-item .caption {
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+        .lightbox {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+        .lightbox-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90%;
+            max-height: 90%;
+        }
+        .lightbox-content img {
+            max-width: 100%;
+            max-height: 90vh;
+            object-fit: contain;
+        }
+        .close {
+            position: absolute;
+            top: 20px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+ .close:hover {
+ color: #bbb;
+ }
+ .prev, .next {
+ position: absolute;
+ top: 50%;
+ transform: translateY(-50%);
+ color: #f1f1f1;
+ font-size: 50px;
+ font-weight: bold;
+ cursor: pointer;
+ padding: 20px;
+ user-select: none;
+ transition: 0.3s;
+ }
+ .prev {
+ left: 20px;
+ }
+ .next {
+ right: 20px;
+ }
+ .prev:hover, .next:hover {
+ color: #bbb;
+ background-color: rgba(255, 255, 255, 0.1);
+ border-radius: 5px;
+ }
+ </style>
+</head>
+<body>
+    <h1>Image Gallery</h1>
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="images/tink.webp" alt="tink">
+            <div class="caption">tink.webp</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/co25y0.jpg" alt="co25y0">
+            <div class="caption">co25y0.jpg</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/girls.webp" alt="girls">
+            <div class="caption">girls.webp</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/nonips.jpeg" alt="nonips">
+            <div class="caption">nonips.jpeg</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/Untitled.webp" alt="Untitled">
+            <div class="caption">Untitled.webp</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/hermionemovie1.webp" alt="hermionemovie1">
+            <div class="caption">hermionemovie1.webp</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/icon.png" alt="icon">
+            <div class="caption">icon.png</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/klayton-sarah-kerrigan-starcraft.jpeg" alt="klayton-sarah-kerrigan-starcraft">
+            <div class="caption">klayton-sarah-kerrigan-starcraft.jpeg</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/pond.avif" alt="pond">
+            <div class="caption">pond.avif</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/BJO24YTt.jpeg" alt="BJO24YTt">
+            <div class="caption">BJO24YTt.jpeg</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/Amy-Pond.Doctor-Who.webp" alt="Amy-Pond.Doctor-Who">
+            <div class="caption">Amy-Pond.Doctor-Who.webp</div>
+        </div>
+        <div class="gallery-item">
+            <img src="images/amy-pond-feature-image-1-768x549.webp" alt="amy-pond-feature-image-1-768x549">
+            <div class="caption">amy-pond-feature-image-1-768x549.webp</div>
+        </div>
+    </div>
+    <div class="lightbox" id="lightbox">
+        <span class="close" onclick="closeLightbox()">&times;</span>
+        <div class="lightbox-content">
+            <img id="lightbox-img" src="" alt="">
+        </div>
+    </div>
+    <script>
+        function openLightbox(imgSrc) {
+            document.getElementById('lightbox-img').src = imgSrc;
+            document.getElementById('lightbox').style.display = 'block';
+        }
+        function closeLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+        }
+        document.querySelectorAll('.gallery-item img').forEach(img => {
+            img.addEventListener('click', function() {
+                openLightbox(this.src);
+            });
+        });
+        document.getElementById('lightbox').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeLightbox();
+            }
+        });
+    </script>
+</body>
+</html>

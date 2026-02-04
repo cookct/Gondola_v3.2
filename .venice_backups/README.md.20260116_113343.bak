@@ -1,0 +1,38 @@
+# Dynamic Image Gallery
+
+## How to Use
+
+1. **Start the server:**
+   ```bash
+   python gallery_server.py
+     ```
+
+2. **Open your browser:**
+   Navigate to http://localhost:8000
+
+3. **Add new photos:**
+   Simply drop any image files (jpg, jpeg, png, gif, webp, avif, bmp, svg) into the `images/` folder
+
+4. **Refresh the page** to see new images appear automatically!
+
+## Features
+
+- **Auto-detects images** in the `/images` folder
+- **Lightbox view** with navigation arrows
+- **Keyboard support:** Arrow keys to navigate, Escape to close
+- **Image counter** shows current position
+- **Responsive grid** layout
+
+## Supported Image Formats
+
+- JPG/JPEG
+- PNG
+- GIF
+- WebP
+- AVIF
+- BMP
+- SVG
+
+## Stopping the Server
+
+Press `Ctrl+C` in the terminal to stop the server.

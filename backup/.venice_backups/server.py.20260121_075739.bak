@@ -1,0 +1,667 @@
+import sys
+import os
+import json
+import traceback
+import queue
+import threading
+import re
+import time
+import uuid
+import base64  # Moved to top level
+from flask import Flask, request, jsonify, render_template, Response, stream_with_context, send_from_directory
+
+# Add parent dir to path to import venice package
+sandbox_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(sandbox_dir)
+
+# Import from the modular package
+from venice.core import UI, MODELS
+from venice.workspace import Workspace
+from venice.memory import Memory
+from venice.tools import CombinedTools
+from venice.prompts.system import SYSTEM_PROMPT
+from venice.api import get_api_key, execute_tool
+from venice.tools.schema import TOOL_SCHEMAS
+
+app = Flask(__name__)
+
+# Configuration
+# sandbox_dir is the 'gondola' root
+WORKSPACE_DIR = sandbox_dir
+IMAGES_DIR = os.path.join(sandbox_dir, 'images')
+print(f"Workspace Dir: {WORKSPACE_DIR}")
+print(f"Images Dir: {IMAGES_DIR}")
+
+# Global state
+workspace = None
+memory = None
+tools = None
+client = None
+messages = []
+interrupt_flag = threading.Event()
+
+def web_symlink_handler(link_path, real_target, inside_workspace):
+    """Web UI symlink handler: allow internal symlinks, deny external"""
+    if inside_workspace:
+        print(f"SYMLINK (allowed): {link_path} -> {real_target}")
+        return True
+    print(f"SYMLINK BLOCKED: {link_path} -> {real_target} (outside workspace)")
+    return False
+
+def initialize():
+    global workspace, memory, tools, client, messages, interrupt_flag
+    
+    try:
+        workspace = Workspace(WORKSPACE_DIR, symlink_handler=web_symlink_handler)
+        memory = Memory(workspace.root_dir)
+        tools = CombinedTools(workspace, memory)
+        interrupt_flag.clear()
+        
+        api_key = get_api_key()
+        if not api_key:
+            print("WARNING: VENICE_API_KEY not found. Chat will fail.")
+        else:
+            from openai import OpenAI
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.venice.ai/api/v1",
+                timeout=120.0
+            )
+        
+        # Initialize system prompt
+        memory_context = memory.get_context()
+        full_prompt = SYSTEM_PROMPT
+        if memory_context:
+            full_prompt += f"\n\n## MEMORY FROM PREVIOUS SESSIONS:\n\n{memory_context}"
+        
+        messages = [{"role": "system", "content": full_prompt}]
+        print("Initialization complete.")
+    
+    except Exception as e:
+        print(f"Error initializing: {e}")
+        traceback.print_exc()
+
+# Initialize on startup
+initialize()
+
+@app.route('/images/<path:filename>')
+def serve_image(filename):
+    return send_from_directory(IMAGES_DIR, filename)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/files', methods=['GET'])
+def list_files():
+    try:
+        path = request.args.get('path', '.')
+        result = tools.list_files(path, recursive=False)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/files/content', methods=['GET'])
+def get_file_content():
+    filename = request.args.get('filename')
+    if not filename:
+        return jsonify({"success": False, "error": "No filename provided"}), 400
+    result = tools.read_file(filename)
+    return jsonify(result)
+
+@app.route('/api/backups', methods=['GET'])
+def list_backups():
+    """List all available backups"""
+    try:
+        backup_dir = os.path.join(WORKSPACE_DIR, '.venice_backups')
+        if not os.path.exists(backup_dir):
+            return jsonify({"success": True, "backups": []})
+        backups = []
+        for f in sorted(os.listdir(backup_dir), reverse=True):
+            if f.endswith('.bak'):
+                full_path = os.path.join(backup_dir, f)
+                stat = os.stat(full_path)
+                size = stat.st_size
+                for unit in ['B', 'KB', 'MB', 'GB']:
+                    if size < 1024:
+                        size_str = f"{size:.1f} {unit}"
+                        break
+                    size /= 1024
+                else:
+                    size_str = f"{size:.1f} TB"
+                from datetime import datetime
+                modified = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
+                backups.append({"name": f, "size": size_str, "modified": modified})
+        return jsonify({"success": True, "backups": backups})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/backups/restore', methods=['POST'])
+def restore_backup():
+    """Restore a file from backup"""
+    try:
+        data = request.json
+        backup_name = data.get('backup_name')
+        
+        if not backup_name:
+            return jsonify({"success": False, "error": "No backup name provided"}), 400
+        
+        result = tools.restore_backup(backup_name)
+        return jsonify(result)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/memory', methods=['GET'])
+def get_memory():
+    """Get session history and notes from memory"""
+    try:
+        if not memory:
+            return jsonify({"success": False, "error": "Memory not initialized"}), 500
+        
+        return jsonify({
+            "success": True,
+            "sessions": memory.data.get("session_history", []),
+            "notes": memory.data.get("project_notes", []),
+            "key_files": memory.data.get("key_files", [])
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/balance', methods=['GET'])
+def get_balance():
+    """Get cached balance from memory"""
+    try:
+        if not memory:
+            return jsonify({"success": False, "error": "Memory not initialized"}), 500
+        
+        usd = memory.data.get("last_balance_usd")
+        vcu = memory.data.get("last_balance_vcu")
+        
+        return jsonify({
+            "success": True,
+            "usd_balance": f"{usd:.4f}" if usd is not None else None,
+            "vcu_balance": f"{vcu:.0f}" if vcu is not None else None
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/image/edit', methods=['POST'])
+def edit_image():
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        image_b64 = data.get('image') # Base64 encoded string
+        
+        if not prompt:
+            return jsonify({"success": False, "error": "No prompt provided"}), 400
+
+        api_key = get_api_key()
+        if not api_key:
+            return jsonify({"success": False, "error": "API Key not found"}), 500
+
+        import httpx
+        
+        # Determine mode: Text-to-Image or Image-to-Image (Edit)
+        if image_b64:
+            endpoint = "https://api.venice.ai/api/v1/image/edit"
+            # Minimal payload for Edit endpoint (based on error message)
+            payload = {
+                "prompt": prompt,
+                "image": image_b64 # Frontend sends raw base64 (split(',')[1])
+            }
+        else:
+            endpoint = "https://api.venice.ai/api/v1/image/generate"
+            payload = {
+                "model": "qwen-image",
+                "prompt": prompt,
+                "width": 1024,
+                "height": 1024,
+                "steps": 4, 
+                "hide_watermark": False,
+                "return_binary": False 
+            }
+
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(
+                endpoint,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json=payload
+            )
+            
+            if response.status_code != 200:
+                print(f"DEBUG IMAGE ERROR: {response.text}")
+                return jsonify({"success": False, "error": f"Venice API Error ({response.status_code}): {response.text}"}), response.status_code
+            
+            # Handle Binary Response (image/png)
+            content_type = response.headers.get("Content-Type", "")
+            if "image" in content_type:
+                filename = f"edit_{int(time.time())}.png"
+                filepath = os.path.join(IMAGES_DIR, filename)
+                with open(filepath, "wb") as f:
+                    f.write(response.content)
+                return jsonify({"success": True, "image_url": f"/images/{filename}"})
+
+            # Handle JSON Response
+            try:
+                result = response.json()
+            except json.JSONDecodeError:
+                return jsonify({"success": False, "error": f"Invalid response: {response.text[:200]}"}), 500
+            
+            # DEBUG: Print raw response if something is wrong
+            if "images" not in result and "data" not in result:
+                print(f"DEBUG IMAGE RESPONSE: {json.dumps(result, indent=2)}")
+            
+            # Handle new format: {"images": ["base64string..."]}
+            if "images" in result and len(result["images"]) > 0:
+                output_b64 = result["images"][0]
+                
+                filename = f"edit_{int(time.time())}.png"
+                filepath = os.path.join(IMAGES_DIR, filename)
+                
+                with open(filepath, "wb") as f:
+                    f.write(base64.b64decode(output_b64))
+                return jsonify({"success": True, "image_url": f"/images/{filename}"})
+
+            # Handle old/OpenAI format: {"data": [{"b64_json": "..."}]}
+            elif "data" in result and len(result["data"]) > 0:
+                img_data = result["data"][0]
+                output_b64 = img_data.get("b64_json")
+                output_url = img_data.get("url")
+                
+                filename = f"edit_{int(time.time())}.png"
+                filepath = os.path.join(IMAGES_DIR, filename)
+                
+                if output_b64:
+                    with open(filepath, "wb") as f:
+                        f.write(base64.b64decode(output_b64))
+                    return jsonify({"success": True, "image_url": f"/images/{filename}"})
+                elif output_url:
+                    img_resp = client.get(output_url)
+                    with open(filepath, "wb") as f:
+                        f.write(img_resp.content)
+                    return jsonify({"success": True, "image_url": f"/images/{filename}"})
+            
+            return jsonify({"success": False, "error": "No image data in response"}), 500
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/interrupt', methods=['POST'])
+def interrupt():
+    global interrupt_flag
+    interrupt_flag.set()
+    return jsonify({"success": True, "message": "Interrupt signal sent"})
+
+@app.route('/api/models', methods=['GET'])
+def get_models():
+    return jsonify({
+        "models": MODELS,
+        "current": "qwen3-235b-a22b-instruct-2507"
+    })
+
+@app.route('/api/models', methods=['POST'])
+def set_model():
+    data = request.json
+    model_id = data.get('model')
+    if model_id in MODELS:
+        return jsonify({"success": True, "model": MODELS[model_id]})
+    return jsonify({"success": False, "error": "Invalid model"}), 400
+
+@app.route('/api/workspace', methods=['GET', 'POST'])
+def handle_workspace():
+    global WORKSPACE_DIR, workspace, memory, tools
+    if request.method == 'POST':
+        data = request.json
+        new_path = data.get('path')
+        if not new_path:
+            return jsonify({"success": False, "error": "No path provided"}), 400
+        
+        new_path = os.path.expanduser(os.path.expandvars(new_path))
+        if not os.path.isabs(new_path):
+            new_path = os.path.abspath(os.path.join(sandbox_dir, new_path))
+        
+        try:
+            WORKSPACE_DIR = new_path
+            initialize() 
+            return jsonify({"success": True, "path": WORKSPACE_DIR})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+    
+    return jsonify({"success": True, "path": WORKSPACE_DIR})
+
+def manage_context(messages, max_bytes=600000):
+    while True:
+        current_size = len(json.dumps(messages))
+        if current_size < max_bytes or len(messages) <= 2:
+            break
+        
+        found = False
+        # Start searching from index 1 to preserve the System Prompt at index 0
+        i = 1
+        while i < len(messages):
+            msg = messages[i]
+            
+            # If we find an Assistant message with Tool Calls, we must remove the entire chain
+            if msg.get('role') == 'assistant' and 'tool_calls' in msg:
+                # Remove the assistant message (Request)
+                messages.pop(i)
+                found = True
+                
+                # Remove all subsequent Tool messages (Results)
+                # Note: We keep popping from index 'i' because the list shifts left
+                while i < len(messages) and messages[i].get('role') == 'tool':
+                    messages.pop(i)
+                
+                break # Exit inner loop to re-evaluate size
+            
+            # If we find an orphan Tool message (shouldn't happen with above logic, but for safety)
+            elif msg.get('role') == 'tool':
+                messages.pop(i)
+                found = True
+                break
+                
+            # Standard User or Assistant message
+            elif msg.get('role') != 'system':
+                messages.pop(i)
+                found = True
+                break
+            
+            # If it's a system message (unlikely at i>0 but possible), skip it
+            i += 1
+            
+        if not found: break
+    return messages
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    global messages, client, interrupt_flag
+    if not client:
+        return jsonify({"error": "Backend not initialized with API Key"}), 500
+
+    data = request.json
+    user_message = data.get('message')
+    image_data = data.get('image')
+    image_mime = data.get('image_mime', 'image/png')
+    model_id = data.get('model', 'qwen3-235b-a22b-instruct-2507')
+    if not user_message and not image_data:
+        return jsonify({"error": "No message or image provided"}), 400
+
+    if user_message and user_message.lower() == 'clear':
+        initialize()
+        return jsonify({"response": "Conversation cleared."})
+
+    if image_data:
+        message_content = [
+            {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}},
+            {"type": "text", "text": user_message or "Describe this image in detail."}
+        ]
+        messages.append({"role": "user", "content": message_content})
+    else:
+        messages.append({"role": "user", "content": user_message})
+    
+    interrupt_flag.clear()
+
+    def generate():
+        event_queue = queue.Queue()
+        def custom_printer(text):
+            if text:
+                event_queue.put({"type": "terminal", "data": text})
+        UI.set_printer(custom_printer)
+        stop_signal = False
+        
+        # Capture baseline balance for this entire operation
+        baseline_usd = memory.data.get("last_balance_usd")
+        baseline_vcu = memory.data.get("last_balance_vcu")
+
+        def run_llm_and_tools():
+            nonlocal stop_signal, baseline_usd, baseline_vcu
+            try:
+                agent_turns = 0
+                MAX_AGENT_TURNS = 1000
+                
+                while not stop_signal:
+                    event_queue.put({"type": "status", "data": "Thinking..."})
+                    response_content = ""
+                    global messages
+                    messages = manage_context(messages)
+                    
+                    try:
+                        import httpx
+                        api_key = get_api_key()
+                        
+                        with httpx.Client(timeout=120.0) as http_client:
+                            with http_client.stream(
+                                "POST",
+                                "https://api.venice.ai/api/v1/chat/completions",
+                                headers={
+                                    "Authorization": f"Bearer {api_key}",
+                                    "Content-Type": "application/json"
+                                },
+                                json={
+                                    "model": model_id,
+                                    "messages": messages,
+                                    "temperature": 0.4,
+                                    "max_tokens": 20000,
+                                    "stream": True,
+                                    "tools": TOOL_SCHEMAS,
+                                    "tool_choice": "auto",
+                                    "venice_parameters": {"include_venice_system_prompt": False}
+                                }
+                                    ) as response:
+                                # DEBUG: Print ALL headers received
+                                print("\n--- VENICE API HEADERS ---")
+                                for k, v in response.headers.items():
+                                    print(f"{k}: {v}")
+                                print("--------------------------\n")
+
+                                # Extract Balance Headers (Handle case sensitivity)
+                                balance_usd = response.headers.get('x-venice-balance-usd') or response.headers.get('X-Venice-Balance-USD')
+                                balance_vcu = response.headers.get('x-venice-balance-vcu') or response.headers.get('X-Venice-Balance-VCU')
+                                
+                                if balance_usd:
+                                    try:
+                                        curr_usd = float(balance_usd)
+                                        curr_vcu = float(balance_vcu) if balance_vcu else 0.0
+                                        
+                                        # Initialize baseline if first run
+                                        if baseline_usd is None: baseline_usd = curr_usd
+                                        if baseline_vcu is None: baseline_vcu = curr_vcu
+                                        
+                                        # Cost = Baseline - Current
+                                        cost_usd = 0.0
+                                        if baseline_usd is not None:
+                                            diff = float(baseline_usd) - curr_usd
+                                            if diff > 0: cost_usd = diff
+                                        
+                                        cost_vcu = 0.0
+                                        if baseline_vcu is not None and balance_vcu:
+                                            cost_vcu = float(baseline_vcu) - curr_vcu
+                                        
+                                        # Update persistent memory for NEXT request
+                                        memory.data["last_balance_vcu"] = curr_vcu
+                                        memory.data["last_balance_usd"] = curr_usd
+                                        memory.save()
+                                        
+                                        event_queue.put({
+                                            "type": "metadata", 
+                                            "data": {
+                                                "usd_balance": f"{curr_usd:.4f}", 
+                                                "usd_cost": f"{cost_usd:.4f}",
+                                                "vcu_cost": f"{cost_vcu:.0f}"
+                                            }
+                                        })
+                                    except: pass
+
+                                # Check Content-Type for error/JSON responses
+                                content_type = response.headers.get("content-type", "")
+                                if "application/json" in content_type:
+                                    # Handle non-stream response (likely an error)
+                                    error_json = response.read().decode('utf-8')
+                                    print(f"DEBUG API JSON: {error_json}")
+                                    try:
+                                        err_data = json.loads(error_json)
+                                        err_msg = err_data.get("error", "Unknown API Error")
+                                        if isinstance(err_msg, dict): err_msg = err_msg.get("message", str(err_msg))
+                                        event_queue.put({"type": "error", "data": f"API Error: {err_msg}"})
+                                    except:
+                                        event_queue.put({"type": "error", "data": f"API returned JSON: {error_json[:200]}"})
+                                    return
+
+                                # Process SSE stream
+                                buffer = ""
+                                tool_calls_buffer = {}
+                                last_chunk_time = time.time()
+                                
+                                for chunk in response.iter_text():
+                                    if stop_signal: break
+                                    last_chunk_time = time.time()
+                                    buffer += chunk
+                                    while "\n" in buffer:
+                                        line, buffer = buffer.split("\n", 1)
+                                        line = line.strip()
+                                        if line.startswith("data: "):
+                                            data_str = line[6:]
+                                            if data_str == "[DONE]": continue
+                                            try:
+                                                data_obj = json.loads(data_str)
+                                                if data_obj.get('choices'):
+                                                    delta = data_obj['choices'][0].get('delta', {})
+                                                    
+                                                    if 'reasoning_content' in delta:
+                                                        event_queue.put({"type": "reasoning", "data": delta['reasoning_content']})
+                                                    
+                                                    if 'content' in delta and delta['content']:
+                                                        c = delta['content']
+                                                        response_content += c
+                                                        event_queue.put({"type": "content", "data": c})
+                                                    
+                                                    if 'tool_calls' in delta:
+                                                        for tc in delta['tool_calls']:
+                                                            idx = tc.get('index', 0)
+                                                            if idx not in tool_calls_buffer:
+                                                                tool_calls_buffer[idx] = {"id": tc.get('id'), "name": "", "arguments": ""}
+                                                            
+                                                            if tc.get('id'): tool_calls_buffer[idx]["id"] = tc['id']
+                                                            if tc.get('function'):
+                                                                if tc['function'].get('name'):
+                                                                    tool_calls_buffer[idx]["name"] += tc['function']['name']
+                                                                if tc['function'].get('arguments'):
+                                                                    tool_calls_buffer[idx]["arguments"] += tc['function']['arguments']
+                                            except: continue
+                    except Exception as e:
+                        event_queue.put({"type": "error", "data": str(e)})
+                        return
+                    
+                    if stop_signal:
+                        event_queue.put({"type": "status", "data": "Interrupted."})
+                        break
+                    
+                    # Store assistant message
+                    if not response_content and not tool_calls_buffer:
+                        break
+
+                    # Convert tool calls
+                    native_tool_calls = []
+                    if tool_calls_buffer:
+                        for idx in sorted(tool_calls_buffer.keys()):
+                            tc_info = tool_calls_buffer[idx]
+                            native_tool_calls.append({
+                                "id": tc_info["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tc_info["name"],
+                                    "arguments": tc_info["arguments"]
+                                }
+                            })
+                    
+                    # Build assistant message - must have either content OR tool_calls
+                    assistant_msg = {"role": "assistant"}
+                    
+                    # If we have tool calls but no content, omit content field entirely
+                    # If we have content (even with tool calls), include it
+                    # This prevents "Assistant messages must have either content or tool_calls" error
+                    if response_content:
+                        assistant_msg["content"] = response_content
+                    elif not native_tool_calls:
+                        # No content and no tool calls - shouldn't happen due to check above, but be safe
+                        assistant_msg["content"] = ""
+                    
+                    if native_tool_calls:
+                        assistant_msg["tool_calls"] = native_tool_calls
+                    
+                    messages.append(assistant_msg)
+                    
+                    if not native_tool_calls:
+                        break 
+                    
+                    # Execute tools
+                    for tc in native_tool_calls:
+                        tool_name = tc["function"]["name"]
+                        event_queue.put({"type": "status", "data": f"Executing {tool_name}..."})
+                        
+                        try:
+                            class NativeTC:
+                                def __init__(self, d):
+                                    self.function = type('Func', (), d['function'])
+                            
+                            result = execute_tool(tools, NativeTC(tc))
+                            
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "name": tool_name,
+                                "content": json.dumps(result)
+                            })
+                            
+                            if tool_name == "done":
+                                stop_signal = True
+                                break
+                        except Exception as e:
+                            error_msg = f"Tool execution failed: {str(e)}"
+                            messages.append({"role": "tool", "tool_call_id": tc["id"], "name": tool_name, "content": error_msg})
+                            event_queue.put({"type": "error", "data": error_msg})
+                    
+                    agent_turns += 1
+                    if agent_turns >= MAX_AGENT_TURNS:
+                        messages.append({"role": "user", "content": "SYSTEM: Max turns reached."})
+                        break
+            except Exception as e:
+                traceback.print_exc()
+                event_queue.put({"type": "error", "data": str(e)})
+            finally:
+                event_queue.put(None)
+
+        logic_thread = threading.Thread(target=run_llm_and_tools)
+        logic_thread.start()
+        
+        last_ping = time.time()
+        while True:
+            try:
+                if interrupt_flag.is_set(): stop_signal = True
+                event = event_queue.get(timeout=0.1)
+                if event is None: break
+                yield f"event: {event['type']}\ndata: {json.dumps(event['data'])}\n\n"
+                last_ping = time.time()
+            except queue.Empty:
+                if time.time() - last_ping > 3:
+                    yield ": ping\n\n"
+                    last_ping = time.time()
+                continue
+            except Exception as e:
+                yield f"event: error\ndata: {json.dumps(str(e))}\n\n"
+                break
+        logic_thread.join()
+        yield f"event: done\ndata: {json.dumps({'history_length': len(messages)})}\n\n"
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
+if __name__ == '__main__':
+    print("Starting Gondola Server (Modular) on port 5009...")
+    app.run(host='0.0.0.0', port=5009, debug=True, use_reloader=False)

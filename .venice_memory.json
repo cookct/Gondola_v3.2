@@ -1,0 +1,60 @@
+{
+  "project_notes": [],
+  "session_history": [
+    {
+      "summary": "Added navigation arrows to your lightbox gallery. You can now:\n\n- Click the left/right arrows on the lightbox to navigate between images\n- Use keyboard arrow keys (left/right) to navigate\n- Press Escape to close the lightbox\n\nThe arrows wrap around (clicking next on the last image goes to the first, and vice versa).",
+      "files": [
+        "gallery.html"
+      ],
+      "timestamp": "2026-01-16T11:12:33.960310"
+    },
+    {
+      "summary": "Session with file edits",
+      "files": [
+        "gallery_server.py"
+      ],
+      "timestamp": "2026-01-16T13:52:01.192027"
+    },
+    {
+      "summary": "Successfully repaired gallery_server.py with the following fixes:\n\n1. **Fixed malformed HTML string construction** in send_web_gallery() - removed duplicate and misplaced HTML tags that were causing syntax errors\n\n2. **Removed duplicate JavaScript variable declarations** - eliminated duplicate 'images' and 'batchSize' declarations in the web gallery script\n\n3. **Removed duplicate directory existence check** - cleaned up redundant 'os.path.exists(images_dir)' check in send_local_gallery()\n\n4. **Fixed indentation issues** - normalized all tabs to spaces for consistent Python syntax\n\nThe server now starts successfully and is ready to run at http://localhost:8000; Fixed the web gallery lightbox issue by removing the duplicate batchSize declaration. Restart the server and try the web gallery again - clicking on images should now open the lightbox.; Created Google Dork Builder in search-app/index.html with:\n\n- Form with fields for keywords, site, filetype, inurl, intitle, intext, and exclude terms\n- Dropdown for common file types (PDF, DOC, XLS, etc.)\n- JavaScript to build Google search queries with proper operators\n- Generated dork display with direct link to Google\n- Clear form button\n- Tips section with usage examples\n- Responsive, modern UI with gradient styling\n\nOpen search-app/index.html in your browser to use the dork builder.; Created Google Dork Builder in search-app/ with the requested features:\n\n**Multiple Keywords with Operators:**\n- Add unlimited keywords with individual operator selection (AND, OR, NOT)\n- First keyword has no operator (default behavior)\n- Subsequent keywords can have AND, OR, or NOT operators\n- Remove button for each keyword (except the first one)\n\n**Multiple File Types:**\n- Checkbox grid for selecting multiple file types (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, XML, JSON, HTML, PHP, JS, SQL, ZIP, RAR)\n- Generates filetype:(pdf|doc|docx) syntax for multiple selections\n\n**Files Created:**\n- search-app/index.html - Main form with styling\n- search-app/script.js - JavaScript logic for building dorks\n\nOpen search-app/index.html in your browser to use the dork builder.; Updated file types to only include image and video formats:\n\n**Image Types:** JPG, JPEG, PNG, GIF, WebP, SVG, BMP\n\n**Video Types:** MP4, AVI, MOV, WMV, MKV, WebM, FLV, MPEG\n\nThe file type checkboxes now only show relevant media formats for searching images and videos.; Fixed the Build & Search button by wrapping the event listener in DOMContentLoaded. This ensures the JavaScript loads after the HTML is fully parsed, preventing the button from doing nothing. Try clicking the button now - it should build and display the Google dork.; Fixed the Build & Search button issue by rewriting both files:\n\n1. Cleaned up corrupted HTML with duplicate file types\n2. Added null check in JavaScript event listener\n3. Wrapped event listener in DOMContentLoaded\n\nThe button should now work properly without refreshing the page. Try clicking it again - it should build and display the Google dork query.; You're welcome! The Google Dork Builder is now working with:\n\n- Multiple keywords with AND/OR/NOT operators\n- Multiple file type selection (images and videos)\n- Build & Search button that generates Google dork queries\n- Direct link to open the search in Google\n\nFeel free to ask if you need any modifications or have other projects!",
+      "files": [
+        "search-app/index.html",
+        "gallery_server.py",
+        "search-app/script.js"
+      ],
+      "timestamp": "2026-01-16T19:29:20.192952"
+    },
+    {
+      "summary": "Successfully converted images/dana1.webp to images/dana1.jpg (218.0 KB); Successfully converted VeniceAI_Vf1MApn.mp4 to VeniceAI_Vf1MApn.gif (81.5 MB, 540x1704 resolution, 18 fps, 10 seconds)",
+      "files": [],
+      "timestamp": "2026-01-17T00:42:19.068842"
+    },
+    {
+      "summary": "Added configuration option to allow/deny symlinks in venice_cli_v2.py. Added three symlink modes (allow, deny, follow) with 'follow' as default. Updated Workspace class to accept symlink_mode parameter, enhanced _resolve() to validate symlinks based on mode, added --symlink-mode CLI argument, and updated app_config.json with symlink_mode setting.; Verified all file operations use enhanced path resolution. All 15 file operations in the Tools class already use self.workspace._resolve(), ensuring symlink validation is applied consistently across all file reading, writing, and management operations based on the configured symlink_mode.",
+      "files": [
+        "venice_cli_v2.py",
+        "app_config.json"
+      ],
+      "timestamp": "2026-01-17T07:00:22.244420"
+    },
+    {
+      "summary": "Removed gallery and all related files:\n- gallery_server.py\n- gallery.html\n- __pycache__/gallery_server.cpython-312.pyc\n\nThe gallery_v2 folder and its contents were preserved as requested.",
+      "files": [
+        "venice-web-ui/requirements.txt"
+      ],
+      "timestamp": "2026-01-17T07:08:50.603202"
+    }
+  ],
+  "key_files": [
+    "gallery.html",
+    "gallery_server.py",
+    "search-app/index.html",
+    "search-app/script.js",
+    "venice_cli_v2.py",
+    "app_config.json",
+    "venice-web-ui/requirements.txt"
+  ],
+  "user_preferences": {},
+  "last_balance_vcu": 0.0,
+  "last_balance_usd": 19.24006784
+}

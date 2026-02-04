@@ -1,0 +1,821 @@
+import os
+import re
+import json
+import urllib.request
+import urllib.error
+from urllib.parse import urlparse, urljoin
+from html.parser import HTMLParser
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from urllib.parse import quote, unquote
+
+# Image extensions to include
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp', '.svg'}
+
+class ImageLinkParser(HTMLParser):
+    def __init__(self, base_url):
+        super().__init__()
+        self.base_url = base_url
+        self.image_urls = []
+    
+    def handle_starttag(self, tag, attrs):
+        if tag == 'img':
+            for attr, value in attrs:
+                if attr == 'src':
+                    full_url = urljoin(self.base_url, value)
+                    self.image_urls.append(full_url)
+        elif tag == 'a':
+            for attr, value in attrs:
+                if attr == 'href':
+                    ext = os.path.splitext(value)[1].lower()
+                    if ext in IMAGE_EXTENSIONS:
+                        full_url = urljoin(self.base_url, value)
+                        self.image_urls.append(full_url)
+
+def fetch_image_urls(url):
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html_content = response.read().decode('utf-8', errors='ignore')
+        
+        parser = ImageLinkParser(url)
+        parser.feed(html_content)
+        
+        seen = set()
+        unique_urls = []
+        for img_url in parser.image_urls:
+            if img_url not in seen:
+                seen.add(img_url)
+                unique_urls.append(img_url)
+        
+        return unique_urls
+    except Exception as e:
+        print(f"Error fetching {url}: {e}")
+        return []
+
+class GalleryHandler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/' or self.path == '/index.html':
+            self.send_landing_page()
+        elif self.path == '/local':
+            self.send_local_gallery()
+        elif self.path == '/web':
+            self.send_web_form()
+        else:
+            super().do_GET()
+    
+    def do_POST(self):
+        if self.path == '/web':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            params = {}
+            for param in post_data.split('&'):
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                    params[key] = unquote(value)
+            
+            url = params.get('url', '')
+            if url:
+                self.send_web_gallery(url)
+            else:
+                self.send_web_form(error='Please enter a URL')
+        else:
+            self.send_error(404)
+    
+    def send_html(self, html):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode('utf-8'))
+    
+    def send_landing_page(self):
+        html = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Gallery</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 60px 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+        }
+        h1 { color: #333; margin-bottom: 10px; font-size: 32px; }
+        .subtitle { color: #666; margin-bottom: 40px; font-size: 16px; }
+        .buttons { display: flex; flex-direction: column; gap: 20px; }
+        .btn {
+            padding: 20px 40px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: bold;
+        }
+        .btn-local { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-web { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+        .btn:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        .icon { font-size: 48px; margin-bottom: 10px; display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Image Gallery</h1>
+        <p class="subtitle">Choose your gallery type</p>
+        <div class="buttons">
+            <a href="/local" class="btn btn-local">
+                <span class="icon">📁</span>
+                Local Gallery
+            </a>
+            <a href="/web" class="btn btn-web">
+                <span class="icon">🌐</span>
+                Web Gallery
+            </a>
+        </div>
+    </div>
+</body>
+</html>'''
+        self.send_html(html)
+    
+    def send_web_form(self, error=''):
+        error_html = f'<div class="error">{error}</div>' if error else ''
+        html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Gallery</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }}
+        .container {{
+            text-align: center;
+            background: white;
+            padding: 60px 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+        }}
+        h1 {{ color: #333; margin-bottom: 10px; font-size: 32px; }}
+        .subtitle {{ color: #666; margin-bottom: 30px; font-size: 16px; }}
+        .form-group {{ margin-bottom: 20px; text-align: left; }}
+        label {{ display: block; margin-bottom: 8px; color: #333; font-weight: bold; }}
+        input[type="url"] {{
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }}
+        input[type="url"]:focus {{ outline: none; border-color: #f5576c; }}
+        .btn {{
+            padding: 15px 40px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            width: 100%;
+        }}
+        .btn-submit {{ background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }}
+        .btn-submit:hover {{ transform: translateY(-2px); box-shadow: 0 10px 20px rgba(245, 87, 108, 0.3); }}
+        .btn-back {{ background: #ddd; color: #333; margin-top: 15px; }}
+        .btn-back:hover {{ background: #ccc; }}
+        .error {{ color: #f5576c; margin-bottom: 20px; padding: 10px; background: #fee; border-radius: 5px; }}
+        .help {{ color: #999; font-size: 14px; margin-top: 10px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Web Gallery</h1>
+        <p class="subtitle">Enter a URL to extract images</p>
+        {error_html}
+        <form method="POST" action="/web">
+            <div class="form-group">
+                <label for="url">Website URL:</label>
+                <input type="url" id="url" name="url" placeholder="https://example.com" required>
+                <p class="help">Enter a webpage URL containing images</p>
+            </div>
+            <button type="submit" class="btn btn-submit">Extract Images</button>
+        </form>
+        <a href="/" class="btn btn-back">← Back to Home</a>
+    </div>
+</body>
+</html>'''
+        self.send_html(html)
+    
+    def send_web_gallery(self, url):
+        image_urls = fetch_image_urls(url)
+        
+        html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Gallery</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; }}
+        .header {{ max-width: 1200px; margin: 0 auto 30px; text-align: center; }}
+        h1 {{ color: #333; margin-bottom: 10px; }}
+        .source-url {{ color: #666; font-size: 14px; word-break: break-all; margin-bottom: 20px; }}
+        .back-link {{
+            display: inline-block;
+            padding: 10px 20px;
+            background: #ddd;
+            color: #333;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }}
+        .back-link:hover {{ background: #ccc; }}
+        .gallery {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        .gallery-item {{
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }}
+        .gallery-item:hover {{ transform: scale(1.05); }}
+        .gallery-item img {{
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            display: block;
+            cursor: pointer;
+        }}
+        .gallery-item .caption {{
+            padding: 10px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+        }}
+        .no-images {{
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            background: white;
+            border-radius: 10px;
+            max-width: 600px;
+            margin: 0 auto;
+        }}
+        .lightbox {{
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+        }}
+        .lightbox-content {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+        }}
+        .lightbox-content img {{
+            max-width: 100%;
+            max-height: 90vh;
+            object-fit: contain;
+            cursor: zoom-in;
+            transition: transform 0.3s ease;
+        }}
+        .lightbox-content img.zoomed {{
+            cursor: zoom-out;
+            transform: scale(2);
+            max-width: none;
+            max-height: none;
+        }}
+        .close {{
+            position: absolute;
+            top: 20px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }}
+        .close:hover {{ color: #bbb; }}
+        .prev, .next {{
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #f1f1f1;
+            font-size: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 20px;
+            user-select: none;
+            transition: 0.3s;
+        }}
+        .prev {{ left: 20px; }}
+        .next {{ right: 20px; }}
+        .prev:hover, .next:hover {{
+            color: #bbb;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }}
+        .lightbox-content::-webkit-scrollbar {{ width: 12px; height: 12px; }}
+        .lightbox-content::-webkit-scrollbar-track {{
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+        }}
+        .lightbox-content::-webkit-scrollbar-thumb {{
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+        }}
+        .lightbox-content::-webkit-scrollbar-thumb:hover {{
+            background: rgba(255, 255, 255, 0.5);
+        }}
+		.image-count {{
+			position: absolute;
+			bottom: 20px;
+			left: 50%;
+			transform: translateX(-50%);
+			color: #f1f1f1;
+			font-size: 16px;
+		}}
+		.load-more-container {{
+			text-align: center;
+			padding: 40px 20px;
+		}}
+		.btn-load-more {{
+			padding: 15px 40px;
+			font-size: 16px;
+			background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+			color: white;
+			border: none;
+			border-radius: 10px;
+			cursor: pointer;
+			transition: all 0.3s ease;
+			font-weight: bold;
+		}}
+		.btn-load-more:hover {{
+			transform: translateY(-2px);
+			box-shadow: 0 10px 20px rgba(245, 87, 108, 0.3);
+		}}
+		.btn-load-more:disabled {{
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}}
+	</style>
+</head>
+<body>
+    <div class="header">
+        <h1>Web Gallery ({len(image_urls)} images)</h1>
+        <p class="source-url">Source: {url}</p>
+        <a href="/web" class="back-link">← Extract Another URL</a>
+
+    if image_urls:
+        html += ' <div class="gallery" id="gallery">\n'
+        # Only render first 50 images initially
+        for i, img_url in enumerate(image_urls[:50]):
+            img_name = os.path.basename(urlparse(img_url).path)
+            html += f' <div class="gallery-item">\n'
+            html += f' <img src="{img_url}" alt="{img_name}" loading="lazy">\n'
+            html += f' <div class="caption">{img_name}</div>\n'
+            html += ' </div>\n'
+        html += ' </div>\n'
+        
+        # Add See More button if there are more than 50 images
+        if len(image_urls) > 50:
+            html += f' <div class="load-more-container">\n'
+            html += f' <button id="load-more" class="btn-load-more">See More ({len(image_urls) - 50} remaining)</button>\n'
+            html += ' </div>\n'
+    else:
+			img_name = os.path.basename(urlparse(img_url).path)
+			html += f' <div class="gallery-item">\n'
+			html += f' <img src="{img_url}" alt="{img_name}" loading="lazy">\n'
+			html += f' <div class="caption">{img_name}</div>\n'
+			html += ' </div>\n'
+		html += ' </div>\n'
+		
+		# Add See More button if there are more than 50 images
+		if len(image_urls) > 50:
+			html += f' <div class="load-more-container">\n'
+			html += f' <button id="load-more" class="btn-load-more">See More ({len(image_urls) - 50} remaining)</button>\n'
+			html += ' </div>\n'
+	else:
+            html += '    <div class="no-images">\n'
+            html += '        <h2>No Images Found</h2>\n'
+            html += '        <p>Could not extract any images from the provided URL.</p>\n'
+            html += '        <p style="margin-top: 20px;">The website might be blocking access or have no images.</p>\n'
+            html += '    </div>\n'
+        
+        html += f'''    <div class="lightbox" id="lightbox">
+        <span class="close" onclick="closeLightbox()">&times;</span>
+        <span class="prev" onclick="showPrevImage()">&#10094;</span>
+        <span class="next" onclick="showNextImage()">&#10095;</span>
+        <div class="lightbox-content">
+            <img id="lightbox-img" src="" alt="">
+        </div>
+        <div class="image-count" id="image-count"></div>
+    </div>
+	<script>
+	// Store all image URLs for pagination
+	const allImages = {json.dumps(image_urls)};
+	let images = [];
+	let currentIndex = 0;
+	let loadedCount = 0;
+	const batchSize = 50;
+        
+        function openLightbox(imgSrc) {{
+            document.getElementById('lightbox-img').src = imgSrc;
+            document.getElementById('lightbox').style.display = 'block';
+            document.getElementById('lightbox-img').classList.remove('zoomed');
+            updateImageCount();
+        }}
+        function closeLightbox() {{
+            document.getElementById('lightbox').style.display = 'none';
+        }}
+        function showNextImage() {{
+            currentIndex = (currentIndex + 1) % images.length;
+            document.getElementById('lightbox-img').src = images[currentIndex];
+            document.getElementById('lightbox-img').classList.remove('zoomed');
+            updateImageCount();
+        }}
+        function showPrevImage() {{
+            currentIndex = (currentIndex - 1 + images.length) % images.length;
+            document.getElementById('lightbox-img').src = images[currentIndex];
+            document.getElementById('lightbox-img').classList.remove('zoomed');
+            updateImageCount();
+        }}
+        function updateImageCount() {{
+            document.getElementById('image-count').textContent = (currentIndex + 1) + ' / ' + images.length;
+        }}
+        function toggleZoom() {{
+            const img = document.getElementById('lightbox-img');
+            img.classList.toggle('zoomed');
+        }}
+        document.querySelectorAll('.gallery-item img').forEach((img, index) => {{
+            images.push(img.src);
+            img.addEventListener('click', function() {{
+                currentIndex = index;
+                openLightbox(this.src);
+	}});
+	}});
+	
+	// Load more images function
+	function loadMoreImages() {{
+		const loadMoreBtn = document.getElementById('load-more');
+		const gallery = document.getElementById('gallery');
+		const start = loadedCount;
+		const end = Math.min(start + batchSize, allImages.length);
+		
+		for (let i = start; i < end; i++) {{
+			const img_url = allImages[i];
+			const img_name = img_url.split('/').pop();
+			
+			const item = document.createElement('div');
+			item.className = 'gallery-item';
+			
+			const img = document.createElement('img');
+			img.src = img_url;
+			img.alt = img_name;
+			img.loading = 'lazy';
+			
+			const caption = document.createElement('div');
+			caption.className = 'caption';
+			caption.textContent = img_name;
+			
+			item.appendChild(img);
+			item.appendChild(caption);
+			gallery.appendChild(item);
+			
+			// Add to images array for lightbox
+			images.push(img_url);
+			img.addEventListener('click', function() {{
+				currentIndex = images.length - 1;
+				openLightbox(this.src);
+			}});
+		}}
+		
+		loadedCount = end;
+		
+		// Update or hide button
+		if (loadedCount >= allImages.length) {{
+			loadMoreBtn.style.display = 'none';
+		}} else {{
+			loadMoreBtn.textContent = 'See More (' + (allImages.length - loadedCount) + ' remaining)';
+		}}
+	}}
+	
+	// Add load more button event listener
+	const loadMoreBtn = document.getElementById('load-more');
+	if (loadMoreBtn) {{
+		loadMoreBtn.addEventListener('click', loadMoreImages);
+	}}
+	
+	document.getElementById('lightbox').addEventListener('click', function(e) {{
+            if (e.target === this) {{
+                closeLightbox();
+            }}
+        }});
+        document.getElementById('lightbox-img').addEventListener('click', function(e) {{
+            e.stopPropagation();
+            toggleZoom();
+        }});
+        document.addEventListener('keydown', function(e) {{
+            if (document.getElementById('lightbox').style.display === 'block') {{
+                if (e.key === 'ArrowLeft') {{
+                    showPrevImage();
+                }} else if (e.key === 'ArrowRight') {{
+                    showNextImage();
+                }} else if (e.key === 'Escape') {{
+                    closeLightbox();
+                }} else if (e.key === ' ' || e.key === 'Enter') {{
+                    e.preventDefault();
+                    toggleZoom();
+                }}
+            }}
+        }});
+    </script>
+</body>
+</html>'''
+        
+        self.send_html(html)
+    
+    def send_local_gallery(self):
+        images = []
+        images_dir = 'images'
+        
+        if os.path.exists(images_dir):
+            for filename in sorted(os.listdir(images_dir)):
+                ext = os.path.splitext(filename)[1].lower()
+                if ext in IMAGE_EXTENSIONS:
+                    images.append(filename)
+        
+        html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Gallery</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; }}
+        .header {{ max-width: 1200px; margin: 0 auto 30px; text-align: center; }}
+        h1 {{ color: #333; margin-bottom: 10px; }}
+        .back-link {{
+            display: inline-block;
+            padding: 10px 20px;
+            background: #ddd;
+            color: #333;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }}
+        .back-link:hover {{ background: #ccc; }}
+        .gallery {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        .gallery-item {{
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }}
+        .gallery-item:hover {{ transform: scale(1.05); }}
+        .gallery-item img {{
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            display: block;
+            cursor: pointer;
+        }}
+        .gallery-item .caption {{
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }}
+        .lightbox {{
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+        }}
+        .lightbox-content {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+        }}
+        .lightbox-content img {{
+            max-width: 100%;
+            max-height: 90vh;
+            object-fit: contain;
+            cursor: zoom-in;
+            transition: transform 0.3s ease;
+        }}
+        .lightbox-content img.zoomed {{
+            cursor: zoom-out;
+            transform: scale(2);
+            max-width: none;
+            max-height: none;
+        }}
+        .close {{
+            position: absolute;
+            top: 20px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }}
+        .close:hover {{ color: #bbb; }}
+        .prev, .next {{
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #f1f1f1;
+            font-size: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 20px;
+            user-select: none;
+            transition: 0.3s;
+        }}
+        .prev {{ left: 20px; }}
+        .next {{ right: 20px; }}
+        .prev:hover, .next:hover {{
+            color: #bbb;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }}
+        .lightbox-content::-webkit-scrollbar {{ width: 12px; height: 12px; }}
+        .lightbox-content::-webkit-scrollbar-track {{
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+        }}
+        .lightbox-content::-webkit-scrollbar-thumb {{
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+        }}
+        .lightbox-content::-webkit-scrollbar-thumb:hover {{
+            background: rgba(255, 255, 255, 0.5);
+        }}
+        .image-count {{
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #f1f1f1;
+            font-size: 16px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Local Gallery ({len(images)} images)</h1>
+        <a href="/" class="back-link">← Back to Home</a>
+    </div>
+    <div class="gallery">
+'''
+        
+        for img in images:
+            img_name = os.path.splitext(img)[0]
+            html += f'        <div class="gallery-item">\n'
+            html += f'            <img src="images/{quote(img)}" alt="{img_name}">\n'
+            html += f'            <div class="caption">{img}</div>\n'
+            html += '        </div>\n'
+        
+        html += f'''    </div>
+    <div class="lightbox" id="lightbox">
+        <span class="close" onclick="closeLightbox()">&times;</span>
+        <span class="prev" onclick="showPrevImage()">&#10094;</span>
+        <span class="next" onclick="showNextImage()">&#10095;</span>
+        <div class="lightbox-content">
+            <img id="lightbox-img" src="" alt="">
+        </div>
+        <div class="image-count" id="image-count"></div>
+    </div>
+    <script>
+        let images = [];
+        let currentIndex = 0;
+        
+        function openLightbox(imgSrc) {{
+            document.getElementById('lightbox-img').src = imgSrc;
+            document.getElementById('lightbox').style.display = 'block';
+            document.getElementById('lightbox-img').classList.remove('zoomed');
+            updateImageCount();
+        }}
+        function closeLightbox() {{
+            document.getElementById('lightbox').style.display = 'none';
+        }}
+        function showNextImage() {{
+            currentIndex = (currentIndex + 1) % images.length;
+            document.getElementById('lightbox-img').src = images[currentIndex];
+            document.getElementById('lightbox-img').classList.remove('zoomed');
+            updateImageCount();
+        }}
+        function showPrevImage() {{
+            currentIndex = (currentIndex - 1 + images.length) % images.length;
+            document.getElementById('lightbox-img').src = images[currentIndex];
+            document.getElementById('lightbox-img').classList.remove('zoomed');
+            updateImageCount();
+        }}
+        function updateImageCount() {{
+            document.getElementById('image-count').textContent = (currentIndex + 1) + ' / ' + images.length;
+        }}
+        function toggleZoom() {{
+            const img = document.getElementById('lightbox-img');
+            img.classList.toggle('zoomed');
+        }}
+        document.querySelectorAll('.gallery-item img').forEach((img, index) => {{
+            images.push(img.src);
+            img.addEventListener('click', function() {{
+                currentIndex = index;
+                openLightbox(this.src);
+            }});
+        }});
+        document.getElementById('lightbox').addEventListener('click', function(e) {{
+            if (e.target === this) {{
+                closeLightbox();
+            }}
+        }});
+        document.getElementById('lightbox-img').addEventListener('click', function(e) {{
+            e.stopPropagation();
+            toggleZoom();
+        }});
+        document.addEventListener('keydown', function(e) {{
+            if (document.getElementById('lightbox').style.display === 'block') {{
+                if (e.key === 'ArrowLeft') {{
+                    showPrevImage();
+                }} else if (e.key === 'ArrowRight') {{
+                    showNextImage();
+                }} else if (e.key === 'Escape') {{
+                    closeLightbox();
+                }} else if (e.key === ' ' || e.key === 'Enter') {{
+                    e.preventDefault();
+                    toggleZoom();
+                }}
+            }}
+        }});
+    </script>
+</body>
+</html>'''
+        
+        self.send_html(html)
+
+if __name__ == '__main__':
+    port = 8000
+    server = HTTPServer(('localhost', port), GalleryHandler)
+    print(f'Gallery server running at http://localhost:{port}')
+    print(f'Add new images to the "images" folder and refresh to see them!')
+    print('Press Ctrl+C to stop the server')
+    server.serve_forever()

@@ -1,0 +1,836 @@
+2026-02-03 19:05:22.629 | INFO     | <module>                  | ================================================================================
+2026-02-03 19:05:22.629 | INFO     | <module>                  | GONDOLA DEBUG LOGGING INITIALIZED
+2026-02-03 19:05:22.629 | INFO     | <module>                  | Log file: /home/anonymous/gemini-workspace/sandbox1/gondola_v2.1/venice-web-ui/logs/gondola_debug_20260203_190522.log
+2026-02-03 19:05:22.629 | INFO     | <module>                  | ================================================================================
+2026-02-03 19:05:22.759 | INFO     | load_saved_workspace      | Restored workspace from config: /home/anonymous/gemini-workspace/gondola_v2.0
+2026-02-03 19:05:22.759 | INFO     | initialize                | ============================================================
+2026-02-03 19:05:22.759 | INFO     | initialize                | INITIALIZING GONDOLA SERVER
+2026-02-03 19:05:22.759 | INFO     | initialize                | ============================================================
+2026-02-03 19:05:22.760 | DEBUG    | initialize                | Workspace directory: /home/anonymous/gemini-workspace/gondola_v2.0
+2026-02-03 19:05:22.760 | DEBUG    | initialize                | Workspace initialized
+2026-02-03 19:05:22.760 | DEBUG    | initialize                | Memory initialized, root: /home/anonymous/gemini-workspace/gondola_v2.0
+2026-02-03 19:05:22.760 | DEBUG    | initialize                | Tools initialized
+2026-02-03 19:05:22.760 | INFO     | initialize                | Building project index...
+2026-02-03 19:05:22.760 | INFO     | initialize                | Project index built: 72 files in 0.00s
+2026-02-03 19:05:22.761 | DEBUG    | initialize                | Agent state tracker initialized
+2026-02-03 19:05:22.761 | INFO     | initialize                | API key found (length: 59, prefix: VENICE-A...)
+2026-02-03 19:05:23.521 | INFO     | initialize                | OpenAI client initialized with 120s timeout
+2026-02-03 19:05:23.522 | DEBUG    | initialize                | Memory context added (4837 chars)
+2026-02-03 19:05:23.522 | INFO     | initialize                | System prompt initialized (7988 chars)
+2026-02-03 19:05:23.522 | INFO     | initialize                | INITIALIZATION COMPLETE
+2026-02-03 19:05:23.529 | INFO     | <module>                  | ======================================================================
+2026-02-03 19:05:23.529 | INFO     | <module>                  | STARTING GONDOLA SERVER
+2026-02-03 19:05:23.529 | INFO     | <module>                  | Port: 5040
+2026-02-03 19:05:23.529 | INFO     | <module>                  | Log file: /home/anonymous/gemini-workspace/sandbox1/gondola_v2.1/venice-web-ui/logs/gondola_debug_20260203_190522.log
+2026-02-03 19:05:23.529 | INFO     | <module>                  | ======================================================================
+2026-02-03 19:05:51.866 | INFO     | chat                      | ======================================================================
+2026-02-03 19:05:51.866 | INFO     | chat                      | [8c13583d] NEW CHAT REQUEST
+2026-02-03 19:05:51.866 | INFO     | chat                      | ======================================================================
+2026-02-03 19:05:51.866 | INFO     | chat                      | [8c13583d] Model: qwen3-235b-a22b-instruct-2507
+2026-02-03 19:05:51.866 | INFO     | chat                      | [8c13583d] Message length: 81 chars
+2026-02-03 19:05:51.866 | INFO     | chat                      | [8c13583d] Has image: False
+2026-02-03 19:05:51.866 | DEBUG    | chat                      | [8c13583d] User message preview: Read the latest changes and update the README.md to reflect the new architecture....
+2026-02-03 19:05:51.866 | INFO     | chat                      | [8c13583d] Total messages in context: 2
+2026-02-03 19:05:51.867 | INFO     | run_llm_and_tools         | [8c13583d] Model config loaded:
+2026-02-03 19:05:51.867 | INFO     | run_llm_and_tools         | [8c13583d]   max_agent_turns: 15
+2026-02-03 19:05:51.867 | INFO     | run_llm_and_tools         | [8c13583d]   checkpoint_turns: [5, 10, 13]
+2026-02-03 19:05:51.868 | INFO     | run_llm_and_tools         | [8c13583d]   needs_explicit_stop: True
+2026-02-03 19:05:51.868 | INFO     | run_llm_and_tools         | [8c13583d]   native_function_calling: True
+2026-02-03 19:05:51.871 | INFO     | run_llm_and_tools         | [8c13583d] Project context loaded: 4395 chars
+2026-02-03 19:05:51.871 | INFO     | run_llm_and_tools         | [8c13583d] --- AGENT TURN 1 ---
+2026-02-03 19:05:51.872 | DEBUG    | run_llm_and_tools         | [8c13583d] Context managed: 2 -> 2 messages
+2026-02-03 19:05:51.873 | DEBUG    | run_llm_and_tools         | [8c13583d] Dynamic system prompt updated (8773 chars)
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ║ API REQUEST TO VENICE
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ║ Max Tokens:     20000
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ║ Stream Timeout: 120s
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ║ Context Limit:  131000
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ║ Pricing:        unknown
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ║ Messages:       2
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:05:51.873 | INFO     | run_llm_and_tools         | [8c13583d] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:05:51.874 | DEBUG    | run_llm_and_tools         | [8c13583d] Estimated payload size: 9152 bytes
+2026-02-03 19:05:51.874 | INFO     | run_llm_and_tools         | [8c13583d] >>> Initiating API call at 2026-02-03T19:05:51.874209
+2026-02-03 19:05:55.008 | INFO     | run_llm_and_tools         | [8c13583d] <<< Connection established in 3.134s
+2026-02-03 19:05:55.008 | INFO     | run_llm_and_tools         | [8c13583d] Response status: 200
+2026-02-03 19:05:55.008 | DEBUG    | run_llm_and_tools         | [8c13583d] --- RESPONSE HEADERS ---
+2026-02-03 19:05:55.008 | DEBUG    | run_llm_and_tools         | [8c13583d]   date: Wed, 04 Feb 2026 00:05:54 GMT
+2026-02-03 19:05:55.008 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:05:55.008 | DEBUG    | run_llm_and_tools         | [8c13583d]   transfer-encoding: chunked
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   connection: keep-alive
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-allow-origin: *
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-allow-credentials: true
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-expose-headers: *
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   cache-control: no-cache
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   cdn-cache-control: no-store
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-venice-balance-usd: 20.26398283
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-limit-requests: 150
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-remaining-requests: 149
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-reset-requests: 1770163613293
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-remaining-tokens: 10000000
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-reset-tokens: 1770163613309
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   vary: Accept-Encoding
+2026-02-03 19:05:55.009 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-frame-options: SAMEORIGIN
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d]   server: cloudflare
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d]   cf-cache-status: DYNAMIC
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-content-type-options: nosniff
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d]   referrer-policy: strict-origin
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-encoding: gzip
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d]   cf-ray: 9c85eb388c6fa086-BOS
+2026-02-03 19:05:55.010 | DEBUG    | run_llm_and_tools         | [8c13583d] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:05:55.010 | INFO     | run_llm_and_tools         | [8c13583d] Starting SSE stream processing...
+2026-02-03 19:05:55.011 | INFO     | run_llm_and_tools         | [8c13583d] ⚡ FIRST CHUNK received! Time-to-first-token: 3.137s
+2026-02-03 19:05:56.819 | DEBUG    | run_llm_and_tools         | [8c13583d] New tool call detected at index 0
+2026-02-03 19:05:56.848 | INFO     | run_llm_and_tools         | [8c13583d] ✓ Stream completed
+2026-02-03 19:05:56.848 | INFO     | run_llm_and_tools         | [8c13583d]   Total chunks: 32
+2026-02-03 19:05:56.848 | INFO     | run_llm_and_tools         | [8c13583d]   Total content chars: 158
+2026-02-03 19:05:56.848 | INFO     | run_llm_and_tools         | [8c13583d]   Stream duration: 1.84s
+2026-02-03 19:05:56.848 | INFO     | run_llm_and_tools         | [8c13583d]   Tool calls detected: 1
+2026-02-03 19:05:56.848 | INFO     | run_llm_and_tools         | [8c13583d]     [0] read_file (args: 44 chars)
+2026-02-03 19:05:56.849 | INFO     | run_llm_and_tools         | [8c13583d] Executing 1 tool call(s)
+2026-02-03 19:05:56.849 | INFO     | run_llm_and_tools         | [8c13583d] ┌─ TOOL: read_file
+2026-02-03 19:05:56.849 | INFO     | run_llm_and_tools         | [8c13583d] │  ID: call_a394
+2026-02-03 19:05:56.849 | DEBUG    | run_llm_and_tools         | [8c13583d] │  Args: {"filename": "backup/LATEST_FIX_SUMMARY.md"}
+2026-02-03 19:05:56.849 | DEBUG    | execute_tool              | Tool 'read_file' - parsed arguments from function object
+2026-02-03 19:05:56.849 | INFO     | execute_tool              | execute_tool: read_file
+2026-02-03 19:05:56.849 | DEBUG    | execute_tool              | Tool args: {"filename": "backup/LATEST_FIX_SUMMARY.md"}
+2026-02-03 19:05:56.850 | INFO     | execute_tool              | Tool 'read_file' completed in 0.001s (success=True)
+2026-02-03 19:05:56.850 | INFO     | run_llm_and_tools         | [8c13583d] │  Duration: 0.00s
+2026-02-03 19:05:56.851 | INFO     | run_llm_and_tools         | [8c13583d] │  Result size: 3209 chars
+2026-02-03 19:05:56.851 | DEBUG    | run_llm_and_tools         | [8c13583d] │  Result: {"success": true, "content": "# Latest Fix Summary - Assistant Message Error\n\n## Issue Fixed\n**Error:** `\"Assistant messages must have either content or tool_calls\"`\n\nThis error was occurring with cheaper models (Gemma, Llama, Qwen) that sometimes generate empty responses.\n\n## Root Cause\nT...
+2026-02-03 19:05:56.851 | INFO     | run_llm_and_tools         | [8c13583d] └─ SUCCESS
+2026-02-03 19:05:56.851 | INFO     | run_llm_and_tools         | [8c13583d] Turn 1 completed in 4.98s
+2026-02-03 19:05:56.851 | INFO     | run_llm_and_tools         | [8c13583d] --- AGENT TURN 2 ---
+2026-02-03 19:05:56.851 | DEBUG    | run_llm_and_tools         | [8c13583d] Context managed: 4 -> 4 messages
+2026-02-03 19:05:56.851 | DEBUG    | run_llm_and_tools         | [8c13583d] Dynamic system prompt updated (8859 chars)
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ║ API REQUEST TO VENICE
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ║ Max Tokens:     20000
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ║ Stream Timeout: 120s
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ║ Context Limit:  131000
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ║ Pricing:        unknown
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ║ Messages:       4
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:05:56.852 | INFO     | run_llm_and_tools         | [8c13583d] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:05:56.852 | DEBUG    | run_llm_and_tools         | [8c13583d] Estimated payload size: 13102 bytes
+2026-02-03 19:05:56.853 | INFO     | run_llm_and_tools         | [8c13583d] >>> Initiating API call at 2026-02-03T19:05:56.853016
+2026-02-03 19:05:58.533 | INFO     | run_llm_and_tools         | [8c13583d] <<< Connection established in 1.680s
+2026-02-03 19:05:58.533 | INFO     | run_llm_and_tools         | [8c13583d] Response status: 200
+2026-02-03 19:05:58.537 | DEBUG    | run_llm_and_tools         | [8c13583d] --- RESPONSE HEADERS ---
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   date: Wed, 04 Feb 2026 00:05:58 GMT
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   transfer-encoding: chunked
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   connection: keep-alive
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-allow-origin: *
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-allow-credentials: true
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-expose-headers: *
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   cache-control: no-cache
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   cdn-cache-control: no-store
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-venice-balance-usd: 20.26398283
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-limit-requests: 150
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-remaining-requests: 148
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-reset-requests: 1770163617147
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-remaining-tokens: 9993792
+2026-02-03 19:05:58.538 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-reset-tokens: 1770163617149
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   vary: Accept-Encoding
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-frame-options: SAMEORIGIN
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   server: cloudflare
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   cf-cache-status: DYNAMIC
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-content-type-options: nosniff
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   referrer-policy: strict-origin
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-encoding: gzip
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d]   cf-ray: 9c85eb5718084f7f-BOS
+2026-02-03 19:05:58.539 | DEBUG    | run_llm_and_tools         | [8c13583d] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:05:58.539 | INFO     | run_llm_and_tools         | [8c13583d] Starting SSE stream processing...
+2026-02-03 19:05:58.540 | INFO     | run_llm_and_tools         | [8c13583d] ⚡ FIRST CHUNK received! Time-to-first-token: 1.687s
+2026-02-03 19:05:59.971 | DEBUG    | run_llm_and_tools         | [8c13583d] New tool call detected at index 0
+2026-02-03 19:06:00.004 | INFO     | run_llm_and_tools         | [8c13583d] ✓ Stream completed
+2026-02-03 19:06:00.004 | INFO     | run_llm_and_tools         | [8c13583d]   Total chunks: 17
+2026-02-03 19:06:00.005 | INFO     | run_llm_and_tools         | [8c13583d]   Total content chars: 77
+2026-02-03 19:06:00.005 | INFO     | run_llm_and_tools         | [8c13583d]   Stream duration: 1.46s
+2026-02-03 19:06:00.006 | INFO     | run_llm_and_tools         | [8c13583d]   Tool calls detected: 1
+2026-02-03 19:06:00.006 | INFO     | run_llm_and_tools         | [8c13583d]     [0] read_file (args: 25 chars)
+2026-02-03 19:06:00.006 | INFO     | run_llm_and_tools         | [8c13583d] Executing 1 tool call(s)
+2026-02-03 19:06:00.007 | INFO     | run_llm_and_tools         | [8c13583d] ┌─ TOOL: read_file
+2026-02-03 19:06:00.007 | INFO     | run_llm_and_tools         | [8c13583d] │  ID: call_7b68
+2026-02-03 19:06:00.007 | DEBUG    | run_llm_and_tools         | [8c13583d] │  Args: {"filename": "README.md"}
+2026-02-03 19:06:00.007 | DEBUG    | execute_tool              | Tool 'read_file' - parsed arguments from function object
+2026-02-03 19:06:00.007 | INFO     | execute_tool              | execute_tool: read_file
+2026-02-03 19:06:00.007 | DEBUG    | execute_tool              | Tool args: {"filename": "README.md"}
+2026-02-03 19:06:00.007 | INFO     | execute_tool              | Tool 'read_file' completed in 0.000s (success=False)
+2026-02-03 19:06:00.007 | WARNING  | execute_tool              | Tool 'read_file' failed: File 'README.md' does not exist
+2026-02-03 19:06:00.008 | INFO     | run_llm_and_tools         | [8c13583d] │  Duration: 0.00s
+2026-02-03 19:06:00.008 | INFO     | run_llm_and_tools         | [8c13583d] │  Result size: 62 chars
+2026-02-03 19:06:00.008 | DEBUG    | run_llm_and_tools         | [8c13583d] │  Result: {"success": false, "error": "File 'README.md' does not exist"}
+2026-02-03 19:06:00.008 | INFO     | run_llm_and_tools         | [8c13583d] └─ SUCCESS
+2026-02-03 19:06:00.008 | INFO     | run_llm_and_tools         | [8c13583d] Turn 2 completed in 3.16s
+2026-02-03 19:06:00.008 | INFO     | run_llm_and_tools         | [8c13583d] --- AGENT TURN 3 ---
+2026-02-03 19:06:00.008 | DEBUG    | run_llm_and_tools         | [8c13583d] Context managed: 6 -> 6 messages
+2026-02-03 19:06:00.009 | DEBUG    | run_llm_and_tools         | [8c13583d] Dynamic system prompt updated (8859 chars)
+2026-02-03 19:06:00.009 | INFO     | run_llm_and_tools         | [8c13583d] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:06:00.009 | INFO     | run_llm_and_tools         | [8c13583d] ║ API REQUEST TO VENICE
+2026-02-03 19:06:00.009 | INFO     | run_llm_and_tools         | [8c13583d] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:06:00.009 | INFO     | run_llm_and_tools         | [8c13583d] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:06:00.009 | INFO     | run_llm_and_tools         | [8c13583d] ║ Max Tokens:     20000
+2026-02-03 19:06:00.009 | INFO     | run_llm_and_tools         | [8c13583d] ║ Stream Timeout: 120s
+2026-02-03 19:06:00.010 | INFO     | run_llm_and_tools         | [8c13583d] ║ Context Limit:  131000
+2026-02-03 19:06:00.010 | INFO     | run_llm_and_tools         | [8c13583d] ║ Pricing:        unknown
+2026-02-03 19:06:00.010 | INFO     | run_llm_and_tools         | [8c13583d] ║ Messages:       6
+2026-02-03 19:06:00.010 | INFO     | run_llm_and_tools         | [8c13583d] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:06:00.010 | INFO     | run_llm_and_tools         | [8c13583d] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:06:00.010 | DEBUG    | run_llm_and_tools         | [8c13583d] Estimated payload size: 13509 bytes
+2026-02-03 19:06:00.010 | INFO     | run_llm_and_tools         | [8c13583d] >>> Initiating API call at 2026-02-03T19:06:00.010652
+2026-02-03 19:06:00.740 | INFO     | run_llm_and_tools         | [8c13583d] <<< Connection established in 0.730s
+2026-02-03 19:06:00.740 | INFO     | run_llm_and_tools         | [8c13583d] Response status: 200
+2026-02-03 19:06:00.740 | DEBUG    | run_llm_and_tools         | [8c13583d] --- RESPONSE HEADERS ---
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   date: Wed, 04 Feb 2026 00:06:00 GMT
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   transfer-encoding: chunked
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   connection: keep-alive
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-allow-origin: *
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-allow-credentials: true
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   access-control-expose-headers: *
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   cache-control: no-cache
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   cdn-cache-control: no-store
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-venice-balance-usd: 20.26191028
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-limit-requests: 150
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-remaining-requests: 147
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-reset-requests: 1770163620294
+2026-02-03 19:06:00.741 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-remaining-tokens: 9986543
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-ratelimit-reset-tokens: 1770163620296
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   vary: Accept-Encoding
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-frame-options: SAMEORIGIN
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   server: cloudflare
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   cf-cache-status: DYNAMIC
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   x-content-type-options: nosniff
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   referrer-policy: strict-origin
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   content-encoding: gzip
+2026-02-03 19:06:00.742 | DEBUG    | run_llm_and_tools         | [8c13583d]   cf-ray: 9c85eb6acafadf84-BOS
+2026-02-03 19:06:00.743 | DEBUG    | run_llm_and_tools         | [8c13583d] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:06:00.743 | INFO     | run_llm_and_tools         | [8c13583d] Starting SSE stream processing...
+2026-02-03 19:06:00.744 | INFO     | run_llm_and_tools         | [8c13583d] ⚡ FIRST CHUNK received! Time-to-first-token: 0.733s
+2026-02-03 19:06:06.212 | DEBUG    | run_llm_and_tools         | [8c13583d] Chunk #12 | Elapsed: 5.5s | Content chars: 44
+2026-02-03 19:06:10.559 | INFO     | run_llm_and_tools         | [8c13583d] Stop signal received, breaking stream
+2026-02-03 19:06:10.560 | INFO     | run_llm_and_tools         | [8c13583d] ✓ Stream completed
+2026-02-03 19:06:10.560 | INFO     | run_llm_and_tools         | [8c13583d]   Total chunks: 15
+2026-02-03 19:06:10.560 | INFO     | run_llm_and_tools         | [8c13583d]   Total content chars: 56
+2026-02-03 19:06:10.561 | INFO     | run_llm_and_tools         | [8c13583d]   Stream duration: 9.82s
+2026-02-03 19:06:10.561 | INFO     | run_llm_and_tools         | [8c13583d]   Tool calls detected: 0
+2026-02-03 19:06:10.561 | INFO     | run_llm_and_tools         | [8c13583d] ════════════════════════════════════════════════════════
+2026-02-03 19:06:10.561 | INFO     | run_llm_and_tools         | [8c13583d] REQUEST COMPLETE
+2026-02-03 19:06:10.562 | INFO     | run_llm_and_tools         | [8c13583d] Total time: 18.70s
+2026-02-03 19:06:10.562 | INFO     | run_llm_and_tools         | [8c13583d] Agent turns: 2
+2026-02-03 19:06:10.563 | INFO     | run_llm_and_tools         | [8c13583d] Final message count: 6
+2026-02-03 19:06:10.563 | INFO     | run_llm_and_tools         | [8c13583d] ════════════════════════════════════════════════════════
+2026-02-03 19:06:15.900 | INFO     | chat                      | ======================================================================
+2026-02-03 19:06:15.900 | INFO     | chat                      | [10238948] NEW CHAT REQUEST
+2026-02-03 19:06:15.901 | INFO     | chat                      | ======================================================================
+2026-02-03 19:06:15.901 | INFO     | chat                      | [10238948] Model: qwen3-235b-a22b-instruct-2507
+2026-02-03 19:06:15.901 | INFO     | chat                      | [10238948] Message length: 5 chars
+2026-02-03 19:06:15.901 | INFO     | chat                      | [10238948] Has image: False
+2026-02-03 19:06:15.901 | DEBUG    | chat                      | [10238948] User message preview: clear...
+2026-02-03 19:06:15.901 | INFO     | chat                      | [10238948] Clear command received - reinitializing
+2026-02-03 19:06:15.902 | INFO     | initialize                | ============================================================
+2026-02-03 19:06:15.902 | INFO     | initialize                | INITIALIZING GONDOLA SERVER
+2026-02-03 19:06:15.902 | INFO     | initialize                | ============================================================
+2026-02-03 19:06:15.902 | DEBUG    | initialize                | Workspace directory: /home/anonymous/gemini-workspace/gondola_v2.0
+2026-02-03 19:06:15.902 | DEBUG    | initialize                | Workspace initialized
+2026-02-03 19:06:15.902 | DEBUG    | initialize                | Memory initialized, root: /home/anonymous/gemini-workspace/gondola_v2.0
+2026-02-03 19:06:15.903 | DEBUG    | initialize                | Tools initialized
+2026-02-03 19:06:15.903 | INFO     | initialize                | Building project index...
+2026-02-03 19:06:15.905 | INFO     | initialize                | Project index built: 72 files in 0.00s
+2026-02-03 19:06:15.905 | DEBUG    | initialize                | Agent state tracker initialized
+2026-02-03 19:06:15.906 | INFO     | initialize                | API key found (length: 59, prefix: VENICE-A...)
+2026-02-03 19:06:15.957 | INFO     | initialize                | OpenAI client initialized with 120s timeout
+2026-02-03 19:06:15.957 | DEBUG    | initialize                | Memory context added (4837 chars)
+2026-02-03 19:06:15.957 | INFO     | initialize                | System prompt initialized (7988 chars)
+2026-02-03 19:06:15.957 | INFO     | initialize                | INITIALIZATION COMPLETE
+2026-02-03 19:06:25.154 | INFO     | save_workspace            | Saved workspace to config: /home/anonymous/gemini-workspace/sandbox1/gondola_v2.1
+2026-02-03 19:06:25.154 | INFO     | initialize                | ============================================================
+2026-02-03 19:06:25.154 | INFO     | initialize                | INITIALIZING GONDOLA SERVER
+2026-02-03 19:06:25.154 | INFO     | initialize                | ============================================================
+2026-02-03 19:06:25.154 | DEBUG    | initialize                | Workspace directory: /home/anonymous/gemini-workspace/sandbox1/gondola_v2.1
+2026-02-03 19:06:25.154 | DEBUG    | initialize                | Workspace initialized
+2026-02-03 19:06:25.155 | DEBUG    | initialize                | Memory initialized, root: /home/anonymous/gemini-workspace/sandbox1/gondola_v2.1
+2026-02-03 19:06:25.155 | DEBUG    | initialize                | Tools initialized
+2026-02-03 19:06:25.155 | INFO     | initialize                | Building project index...
+2026-02-03 19:06:25.248 | INFO     | initialize                | Project index built: 398 files in 0.09s
+2026-02-03 19:06:25.248 | DEBUG    | initialize                | Agent state tracker initialized
+2026-02-03 19:06:25.248 | INFO     | initialize                | API key found (length: 59, prefix: VENICE-A...)
+2026-02-03 19:06:25.282 | INFO     | initialize                | OpenAI client initialized with 120s timeout
+2026-02-03 19:06:25.283 | DEBUG    | initialize                | Memory context added (4837 chars)
+2026-02-03 19:06:25.283 | INFO     | initialize                | System prompt initialized (7988 chars)
+2026-02-03 19:06:25.283 | INFO     | initialize                | INITIALIZATION COMPLETE
+2026-02-03 19:08:30.369 | INFO     | chat                      | ======================================================================
+2026-02-03 19:08:30.369 | INFO     | chat                      | [cfe0a6d7] NEW CHAT REQUEST
+2026-02-03 19:08:30.370 | INFO     | chat                      | ======================================================================
+2026-02-03 19:08:30.370 | INFO     | chat                      | [cfe0a6d7] Model: qwen3-235b-a22b-instruct-2507
+2026-02-03 19:08:30.370 | INFO     | chat                      | [cfe0a6d7] Message length: 81 chars
+2026-02-03 19:08:30.370 | INFO     | chat                      | [cfe0a6d7] Has image: False
+2026-02-03 19:08:30.370 | DEBUG    | chat                      | [cfe0a6d7] User message preview: Read the latest changes and update the README.md to reflect the new architecture....
+2026-02-03 19:08:30.370 | INFO     | chat                      | [cfe0a6d7] Total messages in context: 2
+2026-02-03 19:08:30.371 | INFO     | run_llm_and_tools         | [cfe0a6d7] Model config loaded:
+2026-02-03 19:08:30.371 | INFO     | run_llm_and_tools         | [cfe0a6d7]   max_agent_turns: 15
+2026-02-03 19:08:30.371 | INFO     | run_llm_and_tools         | [cfe0a6d7]   checkpoint_turns: [5, 10, 13]
+2026-02-03 19:08:30.371 | INFO     | run_llm_and_tools         | [cfe0a6d7]   needs_explicit_stop: True
+2026-02-03 19:08:30.371 | INFO     | run_llm_and_tools         | [cfe0a6d7]   native_function_calling: True
+2026-02-03 19:08:30.383 | INFO     | run_llm_and_tools         | [cfe0a6d7] Project context loaded: 4963 chars
+2026-02-03 19:08:30.383 | INFO     | run_llm_and_tools         | [cfe0a6d7] --- AGENT TURN 1 ---
+2026-02-03 19:08:30.383 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Context managed: 2 -> 2 messages
+2026-02-03 19:08:30.383 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Dynamic system prompt updated (9341 chars)
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ API REQUEST TO VENICE
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Max Tokens:     20000
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Stream Timeout: 120s
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Context Limit:  131000
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Pricing:        unknown
+2026-02-03 19:08:30.384 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Messages:       2
+2026-02-03 19:08:30.385 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:08:30.385 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:08:30.385 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Estimated payload size: 9727 bytes
+2026-02-03 19:08:30.385 | INFO     | run_llm_and_tools         | [cfe0a6d7] >>> Initiating API call at 2026-02-03T19:08:30.385416
+2026-02-03 19:08:31.604 | INFO     | run_llm_and_tools         | [cfe0a6d7] <<< Connection established in 1.220s
+2026-02-03 19:08:31.605 | INFO     | run_llm_and_tools         | [cfe0a6d7] Response status: 200
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] --- RESPONSE HEADERS ---
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   date: Wed, 04 Feb 2026 00:08:31 GMT
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   transfer-encoding: chunked
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   connection: keep-alive
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-origin: *
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-credentials: true
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-expose-headers: *
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cache-control: no-cache
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cdn-cache-control: no-store
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-balance-usd: 20.26033978
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-requests: 150
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-requests: 149
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-requests: 1770163770709
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-tokens: 10000000
+2026-02-03 19:08:31.605 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-tokens: 1770163770710
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   vary: Accept-Encoding
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-frame-options: SAMEORIGIN
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   server: cloudflare
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-cache-status: DYNAMIC
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-content-type-options: nosniff
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   referrer-policy: strict-origin
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-encoding: gzip
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-ray: 9c85ef16bda23e89-BOS
+2026-02-03 19:08:31.606 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:08:31.606 | INFO     | run_llm_and_tools         | [cfe0a6d7] Starting SSE stream processing...
+2026-02-03 19:08:31.607 | INFO     | run_llm_and_tools         | [cfe0a6d7] ⚡ FIRST CHUNK received! Time-to-first-token: 1.222s
+2026-02-03 19:08:33.609 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] New tool call detected at index 0
+2026-02-03 19:08:33.675 | INFO     | run_llm_and_tools         | [cfe0a6d7] ✓ Stream completed
+2026-02-03 19:08:33.675 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total chunks: 25
+2026-02-03 19:08:33.675 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total content chars: 169
+2026-02-03 19:08:33.675 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Stream duration: 2.07s
+2026-02-03 19:08:33.675 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Tool calls detected: 1
+2026-02-03 19:08:33.676 | INFO     | run_llm_and_tools         | [cfe0a6d7]     [0] read_file (args: 25 chars)
+2026-02-03 19:08:33.676 | INFO     | run_llm_and_tools         | [cfe0a6d7] Executing 1 tool call(s)
+2026-02-03 19:08:33.676 | INFO     | run_llm_and_tools         | [cfe0a6d7] ┌─ TOOL: read_file
+2026-02-03 19:08:33.677 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  ID: call_016c
+2026-02-03 19:08:33.677 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Args: {"filename": "README.md"}
+2026-02-03 19:08:33.677 | DEBUG    | execute_tool              | Tool 'read_file' - parsed arguments from function object
+2026-02-03 19:08:33.677 | INFO     | execute_tool              | execute_tool: read_file
+2026-02-03 19:08:33.677 | DEBUG    | execute_tool              | Tool args: {"filename": "README.md"}
+2026-02-03 19:08:33.678 | INFO     | execute_tool              | Tool 'read_file' completed in 0.001s (success=True)
+2026-02-03 19:08:33.678 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Duration: 0.00s
+2026-02-03 19:08:33.678 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Result size: 2313 chars
+2026-02-03 19:08:33.678 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Result: {"success": true, "content": "# Gondola v2.1 (Necromancer Edition)\n\n## Overview\nGondola v2.1 introduces the **Necromancer Architecture**: a stateless, resilient, and high-precision system designed to survive process deaths, interruptions, and \"implementation amnesia.\"\n\n## Key Architectural Up...
+2026-02-03 19:08:33.679 | INFO     | run_llm_and_tools         | [cfe0a6d7] └─ SUCCESS
+2026-02-03 19:08:33.679 | INFO     | run_llm_and_tools         | [cfe0a6d7] Turn 1 completed in 3.30s
+2026-02-03 19:08:33.679 | INFO     | run_llm_and_tools         | [cfe0a6d7] --- AGENT TURN 2 ---
+2026-02-03 19:08:33.679 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Context managed: 4 -> 4 messages
+2026-02-03 19:08:33.679 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Dynamic system prompt updated (9408 chars)
+2026-02-03 19:08:33.679 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:08:33.679 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ API REQUEST TO VENICE
+2026-02-03 19:08:33.679 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:08:33.680 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:08:33.680 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Max Tokens:     20000
+2026-02-03 19:08:33.680 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Stream Timeout: 120s
+2026-02-03 19:08:33.680 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Context Limit:  131000
+2026-02-03 19:08:33.680 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Pricing:        unknown
+2026-02-03 19:08:33.680 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Messages:       4
+2026-02-03 19:08:33.680 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:08:33.680 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:08:33.680 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Estimated payload size: 12603 bytes
+2026-02-03 19:08:33.681 | INFO     | run_llm_and_tools         | [cfe0a6d7] >>> Initiating API call at 2026-02-03T19:08:33.681053
+2026-02-03 19:08:44.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] <<< Connection established in 11.009s
+2026-02-03 19:08:44.690 | INFO     | run_llm_and_tools         | [cfe0a6d7] Response status: 200
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] --- RESPONSE HEADERS ---
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   date: Wed, 04 Feb 2026 00:08:44 GMT
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   transfer-encoding: chunked
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   connection: keep-alive
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-origin: *
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-credentials: true
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-expose-headers: *
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cache-control: no-cache
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cdn-cache-control: no-store
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-balance-usd: 20.26033978
+2026-02-03 19:08:44.690 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-requests: 150
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-requests: 148
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-requests: 1770163773935
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-tokens: 9993583
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-tokens: 1770163773941
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   vary: Accept-Encoding
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-frame-options: SAMEORIGIN
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   server: cloudflare
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-cache-status: DYNAMIC
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-content-type-options: nosniff
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   referrer-policy: strict-origin
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-encoding: gzip
+2026-02-03 19:08:44.694 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-ray: 9c85ef2b4f39e9a7-BOS
+2026-02-03 19:08:44.697 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:08:44.697 | INFO     | run_llm_and_tools         | [cfe0a6d7] Starting SSE stream processing...
+2026-02-03 19:08:44.698 | INFO     | run_llm_and_tools         | [cfe0a6d7] ⚡ FIRST CHUNK received! Time-to-first-token: 11.017s
+2026-02-03 19:08:49.961 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #6 | Elapsed: 5.3s | Content chars: 24
+2026-02-03 19:08:50.574 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #7 | Elapsed: 5.9s | Content chars: 27
+2026-02-03 19:08:54.017 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] New tool call detected at index 0
+2026-02-03 19:08:54.047 | INFO     | run_llm_and_tools         | [cfe0a6d7] ✓ Stream completed
+2026-02-03 19:08:54.047 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total chunks: 43
+2026-02-03 19:08:54.047 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total content chars: 213
+2026-02-03 19:08:54.047 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Stream duration: 9.35s
+2026-02-03 19:08:54.048 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Tool calls detected: 1
+2026-02-03 19:08:54.048 | INFO     | run_llm_and_tools         | [cfe0a6d7]     [0] map_project (args: 16 chars)
+2026-02-03 19:08:54.048 | INFO     | run_llm_and_tools         | [cfe0a6d7] Executing 1 tool call(s)
+2026-02-03 19:08:54.048 | INFO     | run_llm_and_tools         | [cfe0a6d7] ┌─ TOOL: map_project
+2026-02-03 19:08:54.048 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  ID: call_cb39
+2026-02-03 19:08:54.048 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Args: {"max_depth": 2}
+2026-02-03 19:08:54.049 | DEBUG    | execute_tool              | Tool 'map_project' - parsed arguments from function object
+2026-02-03 19:08:54.049 | INFO     | execute_tool              | execute_tool: map_project
+2026-02-03 19:08:54.049 | DEBUG    | execute_tool              | Tool args: {"max_depth": 2}
+2026-02-03 19:08:54.624 | INFO     | execute_tool              | Tool 'map_project' completed in 0.575s (success=True)
+2026-02-03 19:08:54.624 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Compressed result: 14967 -> 5000 chars
+2026-02-03 19:08:54.624 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Duration: 0.58s
+2026-02-03 19:08:54.625 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Result size: 5000 chars
+2026-02-03 19:08:54.625 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Result: {
+  "success": true,
+  "map": "PROJECT MAP:\n- NECROMANCER_IMPLEMENTATION_PLAN.md\n- PROPOSAL_SEMANTIC_SEARCH.md\n- QWEN3_TIMEOUT_FIX.md\n- README.md\n- README_FIXES.md\n- USER_MANUAL.html\n- app_config.json\n- backup/ALL_FIXES_COMPLETE.md\n- backup/COMPLETION_REPORT.md\n- backup/FIXES_APPLIED.md\n-...
+2026-02-03 19:08:54.625 | INFO     | run_llm_and_tools         | [cfe0a6d7] └─ SUCCESS
+2026-02-03 19:08:54.625 | INFO     | run_llm_and_tools         | [cfe0a6d7] Turn 2 completed in 20.95s
+2026-02-03 19:08:54.625 | INFO     | run_llm_and_tools         | [cfe0a6d7] --- AGENT TURN 3 ---
+2026-02-03 19:08:54.625 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Context managed: 6 -> 6 messages
+2026-02-03 19:08:54.625 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Dynamic system prompt updated (9408 chars)
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ API REQUEST TO VENICE
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Max Tokens:     20000
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Stream Timeout: 120s
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Context Limit:  131000
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Pricing:        unknown
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Messages:       6
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:08:54.626 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Estimated payload size: 18200 bytes
+2026-02-03 19:08:54.626 | INFO     | run_llm_and_tools         | [cfe0a6d7] >>> Initiating API call at 2026-02-03T19:08:54.626924
+2026-02-03 19:08:55.783 | INFO     | run_llm_and_tools         | [cfe0a6d7] <<< Connection established in 1.156s
+2026-02-03 19:08:55.783 | INFO     | run_llm_and_tools         | [cfe0a6d7] Response status: 200
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] --- RESPONSE HEADERS ---
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   date: Wed, 04 Feb 2026 00:08:55 GMT
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   transfer-encoding: chunked
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   connection: keep-alive
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-origin: *
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-credentials: true
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-expose-headers: *
+2026-02-03 19:08:55.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cache-control: no-cache
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cdn-cache-control: no-store
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-balance-usd: 20.25823603
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-requests: 150
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-requests: 147
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-requests: 1770163794915
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-tokens: 9986435
+2026-02-03 19:08:55.787 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-tokens: 1770163794917
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   vary: Accept-Encoding
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-frame-options: SAMEORIGIN
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   server: cloudflare
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-cache-status: DYNAMIC
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-content-type-options: nosniff
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   referrer-policy: strict-origin
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-encoding: gzip
+2026-02-03 19:08:55.788 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-ray: 9c85efae0e808fa9-BOS
+2026-02-03 19:08:55.789 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:08:55.789 | INFO     | run_llm_and_tools         | [cfe0a6d7] Starting SSE stream processing...
+2026-02-03 19:08:55.789 | INFO     | run_llm_and_tools         | [cfe0a6d7] ⚡ FIRST CHUNK received! Time-to-first-token: 1.163s
+2026-02-03 19:08:59.639 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] New tool call detected at index 0
+2026-02-03 19:08:59.675 | INFO     | run_llm_and_tools         | [cfe0a6d7] ✓ Stream completed
+2026-02-03 19:08:59.675 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total chunks: 18
+2026-02-03 19:08:59.676 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total content chars: 105
+2026-02-03 19:08:59.676 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Stream duration: 3.89s
+2026-02-03 19:08:59.676 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Tool calls detected: 1
+2026-02-03 19:08:59.677 | INFO     | run_llm_and_tools         | [cfe0a6d7]     [0] list_files (args: 67 chars)
+2026-02-03 19:08:59.677 | INFO     | run_llm_and_tools         | [cfe0a6d7] Executing 1 tool call(s)
+2026-02-03 19:08:59.677 | INFO     | run_llm_and_tools         | [cfe0a6d7] ┌─ TOOL: list_files
+2026-02-03 19:08:59.677 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  ID: call_811c
+2026-02-03 19:08:59.677 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Args: {"path": "lagoon_v1.3_g-test", "recursive": true, "pattern": ".py"}
+2026-02-03 19:08:59.678 | DEBUG    | execute_tool              | Tool 'list_files' - parsed arguments from function object
+2026-02-03 19:08:59.678 | INFO     | execute_tool              | execute_tool: list_files
+2026-02-03 19:08:59.678 | DEBUG    | execute_tool              | Tool args: {"path": "lagoon_v1.3_g-test", "recursive": true, "pattern": ".py"}
+2026-02-03 19:08:59.687 | INFO     | execute_tool              | Tool 'list_files' completed in 0.009s (success=True)
+2026-02-03 19:08:59.687 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Compressed result: 5902 -> 1943 chars
+2026-02-03 19:08:59.687 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Duration: 0.01s
+2026-02-03 19:08:59.687 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Result size: 1943 chars
+2026-02-03 19:08:59.687 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Result: Found 96 files:
+
+  lagoon_v1.3_g-test/: split_css.py, force_summary.py, test_api.py ... +3 more
+  lagoon_v1.3_g-test/FLUX_test/: test_flux_shirt.py, test_flux_dual.py, test_max.py, test_flux_swap.py
+  lagoon_v1.3_g-test/__pycache__/: app.cpython-312.pyc, config.cpython-312.pyc
+  lagoon_v1.3_g-test/i...
+2026-02-03 19:08:59.688 | INFO     | run_llm_and_tools         | [cfe0a6d7] └─ SUCCESS
+2026-02-03 19:08:59.688 | INFO     | run_llm_and_tools         | [cfe0a6d7] Turn 3 completed in 5.06s
+2026-02-03 19:08:59.688 | INFO     | run_llm_and_tools         | [cfe0a6d7] --- AGENT TURN 4 ---
+2026-02-03 19:08:59.688 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Context managed: 8 -> 8 messages
+2026-02-03 19:08:59.688 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Dynamic system prompt updated (9408 chars)
+2026-02-03 19:08:59.688 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ API REQUEST TO VENICE
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Max Tokens:     20000
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Stream Timeout: 120s
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Context Limit:  131000
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Pricing:        unknown
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Messages:       8
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:08:59.689 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Estimated payload size: 20583 bytes
+2026-02-03 19:08:59.689 | INFO     | run_llm_and_tools         | [cfe0a6d7] >>> Initiating API call at 2026-02-03T19:08:59.689910
+2026-02-03 19:09:00.642 | INFO     | run_llm_and_tools         | [cfe0a6d7] <<< Connection established in 0.952s
+2026-02-03 19:09:00.642 | INFO     | run_llm_and_tools         | [cfe0a6d7] Response status: 200
+2026-02-03 19:09:00.642 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] --- RESPONSE HEADERS ---
+2026-02-03 19:09:00.642 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   date: Wed, 04 Feb 2026 00:09:00 GMT
+2026-02-03 19:09:00.642 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:09:00.642 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   transfer-encoding: chunked
+2026-02-03 19:09:00.642 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   connection: keep-alive
+2026-02-03 19:09:00.642 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:09:00.642 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-origin: *
+2026-02-03 19:09:00.642 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-credentials: true
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-expose-headers: *
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cache-control: no-cache
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cdn-cache-control: no-store
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-balance-usd: 20.25673228
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-requests: 150
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-requests: 146
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-requests: 1770163800001
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-tokens: 9976622
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-tokens: 1770163800003
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   vary: Accept-Encoding
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-frame-options: SAMEORIGIN
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   server: cloudflare
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-cache-status: DYNAMIC
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-content-type-options: nosniff
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   referrer-policy: strict-origin
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-encoding: gzip
+2026-02-03 19:09:00.643 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-ray: 9c85efcdcc5783c3-BOS
+2026-02-03 19:09:00.644 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:09:00.644 | INFO     | run_llm_and_tools         | [cfe0a6d7] Starting SSE stream processing...
+2026-02-03 19:09:00.644 | INFO     | run_llm_and_tools         | [cfe0a6d7] ⚡ FIRST CHUNK received! Time-to-first-token: 0.955s
+2026-02-03 19:09:04.393 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] New tool call detected at index 0
+2026-02-03 19:09:04.397 | INFO     | run_llm_and_tools         | [cfe0a6d7] ✓ Stream completed
+2026-02-03 19:09:04.397 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total chunks: 37
+2026-02-03 19:09:04.397 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total content chars: 197
+2026-02-03 19:09:04.397 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Stream duration: 3.75s
+2026-02-03 19:09:04.397 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Tool calls detected: 1
+2026-02-03 19:09:04.398 | INFO     | run_llm_and_tools         | [cfe0a6d7]     [0] read_file (args: 41 chars)
+2026-02-03 19:09:04.398 | INFO     | run_llm_and_tools         | [cfe0a6d7] Executing 1 tool call(s)
+2026-02-03 19:09:04.398 | INFO     | run_llm_and_tools         | [cfe0a6d7] ┌─ TOOL: read_file
+2026-02-03 19:09:04.398 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  ID: call_8fc4
+2026-02-03 19:09:04.398 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Args: {"filename": "lagoon_v1.3_g-test/app.py"}
+2026-02-03 19:09:04.401 | DEBUG    | execute_tool              | Tool 'read_file' - parsed arguments from function object
+2026-02-03 19:09:04.401 | INFO     | execute_tool              | execute_tool: read_file
+2026-02-03 19:09:04.401 | DEBUG    | execute_tool              | Tool args: {"filename": "lagoon_v1.3_g-test/app.py"}
+2026-02-03 19:09:04.402 | INFO     | execute_tool              | Tool 'read_file' completed in 0.001s (success=True)
+2026-02-03 19:09:04.402 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Duration: 0.00s
+2026-02-03 19:09:04.402 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Result size: 1517 chars
+2026-02-03 19:09:04.403 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Result: {"success": true, "content": "\"\"\"\nLagoon V1 - Chat Application\nMain entry point.\n\"\"\"\nimport os\nimport logging\nfrom flask import Flask, render_template, send_from_directory\n\nfrom config import CHATS_DIR, CONFIG_DIR, MODEL_AVATARS_DIR, MAX_CONTENT_LENGTH\n\n# --- Flask App Initialization...
+2026-02-03 19:09:04.403 | INFO     | run_llm_and_tools         | [cfe0a6d7] └─ SUCCESS
+2026-02-03 19:09:04.403 | INFO     | run_llm_and_tools         | [cfe0a6d7] Turn 4 completed in 4.71s
+2026-02-03 19:09:04.403 | INFO     | run_llm_and_tools         | [cfe0a6d7] --- AGENT TURN 5 ---
+2026-02-03 19:09:04.403 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Context managed: 10 -> 10 messages
+2026-02-03 19:09:04.403 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Dynamic system prompt updated (9435 chars)
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ API REQUEST TO VENICE
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Max Tokens:     20000
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Stream Timeout: 120s
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Context Limit:  131000
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Pricing:        unknown
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Messages:       10
+2026-02-03 19:09:04.404 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:09:04.405 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:09:04.405 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Estimated payload size: 22677 bytes
+2026-02-03 19:09:04.405 | INFO     | run_llm_and_tools         | [cfe0a6d7] >>> Initiating API call at 2026-02-03T19:09:04.405408
+2026-02-03 19:09:06.329 | INFO     | run_llm_and_tools         | [cfe0a6d7] <<< Connection established in 1.924s
+2026-02-03 19:09:06.329 | INFO     | run_llm_and_tools         | [cfe0a6d7] Response status: 200
+2026-02-03 19:09:06.329 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] --- RESPONSE HEADERS ---
+2026-02-03 19:09:06.329 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   date: Wed, 04 Feb 2026 00:09:06 GMT
+2026-02-03 19:09:06.329 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:09:06.329 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   transfer-encoding: chunked
+2026-02-03 19:09:06.333 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   connection: keep-alive
+2026-02-03 19:09:06.333 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:09:06.333 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-origin: *
+2026-02-03 19:09:06.333 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-credentials: true
+2026-02-03 19:09:06.333 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-expose-headers: *
+2026-02-03 19:09:06.333 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cache-control: no-cache
+2026-02-03 19:09:06.333 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cdn-cache-control: no-store
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-balance-usd: 20.25673228
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-requests: 150
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-requests: 145
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-requests: 1770163804682
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-tokens: 9966038
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-tokens: 1770163804684
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   vary: Accept-Encoding
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-frame-options: SAMEORIGIN
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   server: cloudflare
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-cache-status: DYNAMIC
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-content-type-options: nosniff
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   referrer-policy: strict-origin
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-encoding: gzip
+2026-02-03 19:09:06.334 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-ray: 9c85efeb58447d47-BOS
+2026-02-03 19:09:06.335 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:09:06.335 | INFO     | run_llm_and_tools         | [cfe0a6d7] Starting SSE stream processing...
+2026-02-03 19:09:06.335 | INFO     | run_llm_and_tools         | [cfe0a6d7] ⚡ FIRST CHUNK received! Time-to-first-token: 1.931s
+2026-02-03 19:09:07.750 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] New tool call detected at index 0
+2026-02-03 19:09:07.780 | INFO     | run_llm_and_tools         | [cfe0a6d7] ✓ Stream completed
+2026-02-03 19:09:07.780 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total chunks: 20
+2026-02-03 19:09:07.780 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total content chars: 102
+2026-02-03 19:09:07.780 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Stream duration: 1.44s
+2026-02-03 19:09:07.780 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Tool calls detected: 1
+2026-02-03 19:09:07.780 | INFO     | run_llm_and_tools         | [cfe0a6d7]     [0] read_file (args: 44 chars)
+2026-02-03 19:09:07.781 | INFO     | run_llm_and_tools         | [cfe0a6d7] Executing 1 tool call(s)
+2026-02-03 19:09:07.781 | INFO     | run_llm_and_tools         | [cfe0a6d7] ┌─ TOOL: read_file
+2026-02-03 19:09:07.781 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  ID: call_b37c
+2026-02-03 19:09:07.781 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Args: {"filename": "lagoon_v1.3_g-test/config.py"}
+2026-02-03 19:09:07.781 | DEBUG    | execute_tool              | Tool 'read_file' - parsed arguments from function object
+2026-02-03 19:09:07.781 | INFO     | execute_tool              | execute_tool: read_file
+2026-02-03 19:09:07.781 | DEBUG    | execute_tool              | Tool args: {"filename": "lagoon_v1.3_g-test/config.py"}
+2026-02-03 19:09:07.782 | INFO     | execute_tool              | Tool 'read_file' completed in 0.001s (success=True)
+2026-02-03 19:09:07.782 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Duration: 0.00s
+2026-02-03 19:09:07.782 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Result size: 1326 chars
+2026-02-03 19:09:07.782 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Result: {"success": true, "content": "\"\"\"\nLagoon V1 Configuration\nConstants and settings for the chat application.\n\"\"\"\nimport os\n\n# --- Directory Paths ---\nCHATS_DIR = \"chats\"\nCONFIG_DIR = \"configs\"\nMODEL_AVATARS_DIR = \"model_avatars\"\nSYSTEM_PROMPTS_FILE = \"system_prompts.json\"\nAPP_...
+2026-02-03 19:09:07.782 | INFO     | run_llm_and_tools         | [cfe0a6d7] └─ SUCCESS
+2026-02-03 19:09:07.783 | INFO     | run_llm_and_tools         | [cfe0a6d7] Turn 5 completed in 3.38s
+2026-02-03 19:09:07.783 | INFO     | run_llm_and_tools         | [cfe0a6d7] Injecting checkpoint at turn 5
+2026-02-03 19:09:07.783 | INFO     | run_llm_and_tools         | [cfe0a6d7] --- AGENT TURN 6 ---
+2026-02-03 19:09:07.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Context managed: 13 -> 13 messages
+2026-02-03 19:09:07.783 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Dynamic system prompt updated (9478 chars)
+2026-02-03 19:09:07.783 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:09:07.784 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ API REQUEST TO VENICE
+2026-02-03 19:09:07.784 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:09:07.784 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:09:07.784 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Max Tokens:     20000
+2026-02-03 19:09:07.784 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Stream Timeout: 120s
+2026-02-03 19:09:07.784 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Context Limit:  131000
+2026-02-03 19:09:07.784 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Pricing:        unknown
+2026-02-03 19:09:07.785 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Messages:       13
+2026-02-03 19:09:07.785 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:09:07.785 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:09:07.785 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Estimated payload size: 24660 bytes
+2026-02-03 19:09:07.785 | INFO     | run_llm_and_tools         | [cfe0a6d7] >>> Initiating API call at 2026-02-03T19:09:07.785681
+2026-02-03 19:09:09.644 | INFO     | run_llm_and_tools         | [cfe0a6d7] <<< Connection established in 1.859s
+2026-02-03 19:09:09.644 | INFO     | run_llm_and_tools         | [cfe0a6d7] Response status: 200
+2026-02-03 19:09:09.644 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] --- RESPONSE HEADERS ---
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   date: Wed, 04 Feb 2026 00:09:09 GMT
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   transfer-encoding: chunked
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   connection: keep-alive
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-origin: *
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-credentials: true
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-expose-headers: *
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cache-control: no-cache
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cdn-cache-control: no-store
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-balance-usd: 20.25341788
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-requests: 150
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-requests: 144
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-requests: 1770163808073
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:09:09.645 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-tokens: 9954954
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-tokens: 1770163808078
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   vary: Accept-Encoding
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-frame-options: SAMEORIGIN
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   server: cloudflare
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-cache-status: DYNAMIC
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-content-type-options: nosniff
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   referrer-policy: strict-origin
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-encoding: gzip
+2026-02-03 19:09:09.646 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-ray: 9c85f0006d26e007-BOS
+2026-02-03 19:09:09.647 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:09:09.647 | INFO     | run_llm_and_tools         | [cfe0a6d7] Starting SSE stream processing...
+2026-02-03 19:09:09.647 | INFO     | run_llm_and_tools         | [cfe0a6d7] ⚡ FIRST CHUNK received! Time-to-first-token: 1.862s
+2026-02-03 19:09:12.388 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #50 | Elapsed: 2.7s | Content chars: 250
+2026-02-03 19:09:14.468 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #100 | Elapsed: 4.8s | Content chars: 466
+2026-02-03 19:09:14.655 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #105 | Elapsed: 5.0s | Content chars: 494
+2026-02-03 19:09:14.698 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #106 | Elapsed: 5.1s | Content chars: 500
+2026-02-03 19:09:14.730 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #107 | Elapsed: 5.1s | Content chars: 509
+2026-02-03 19:09:14.767 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #108 | Elapsed: 5.1s | Content chars: 517
+2026-02-03 19:09:14.807 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #109 | Elapsed: 5.2s | Content chars: 525
+2026-02-03 19:09:14.843 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #110 | Elapsed: 5.2s | Content chars: 526
+2026-02-03 19:09:14.890 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #111 | Elapsed: 5.2s | Content chars: 527
+2026-02-03 19:09:14.918 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #112 | Elapsed: 5.3s | Content chars: 528
+2026-02-03 19:09:14.956 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #113 | Elapsed: 5.3s | Content chars: 538
+2026-02-03 19:09:14.991 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #114 | Elapsed: 5.3s | Content chars: 548
+2026-02-03 19:09:15.030 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #115 | Elapsed: 5.4s | Content chars: 552
+2026-02-03 19:09:15.065 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #116 | Elapsed: 5.4s | Content chars: 558
+2026-02-03 19:09:15.101 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #117 | Elapsed: 5.5s | Content chars: 559
+2026-02-03 19:09:15.138 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #118 | Elapsed: 5.5s | Content chars: 567
+2026-02-03 19:09:15.175 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #119 | Elapsed: 5.5s | Content chars: 568
+2026-02-03 19:09:15.213 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #120 | Elapsed: 5.6s | Content chars: 572
+2026-02-03 19:09:15.252 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #121 | Elapsed: 5.6s | Content chars: 578
+2026-02-03 19:09:15.285 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #122 | Elapsed: 5.6s | Content chars: 581
+2026-02-03 19:09:15.321 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #123 | Elapsed: 5.7s | Content chars: 586
+2026-02-03 19:09:15.357 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #124 | Elapsed: 5.7s | Content chars: 587
+2026-02-03 19:09:15.392 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #125 | Elapsed: 5.7s | Content chars: 588
+2026-02-03 19:09:15.428 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #126 | Elapsed: 5.8s | Content chars: 589
+2026-02-03 19:09:15.464 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #127 | Elapsed: 5.8s | Content chars: 599
+2026-02-03 19:09:15.499 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #128 | Elapsed: 5.9s | Content chars: 605
+2026-02-03 19:09:15.535 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #129 | Elapsed: 5.9s | Content chars: 613
+2026-02-03 19:09:15.571 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #130 | Elapsed: 5.9s | Content chars: 620
+2026-02-03 19:09:16.647 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #150 | Elapsed: 7.0s | Content chars: 717
+2026-02-03 19:09:58.329 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] New tool call detected at index 0
+2026-02-03 19:09:58.363 | INFO     | run_llm_and_tools         | [cfe0a6d7] ✓ Stream completed
+2026-02-03 19:09:58.363 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total chunks: 158
+2026-02-03 19:09:58.364 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total content chars: 762
+2026-02-03 19:09:58.364 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Stream duration: 48.72s
+2026-02-03 19:09:58.364 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Tool calls detected: 1
+2026-02-03 19:09:58.364 | INFO     | run_llm_and_tools         | [cfe0a6d7]     [0] write_file (args: 2760 chars)
+2026-02-03 19:09:58.364 | INFO     | run_llm_and_tools         | [cfe0a6d7] Executing 1 tool call(s)
+2026-02-03 19:09:58.364 | INFO     | run_llm_and_tools         | [cfe0a6d7] ┌─ TOOL: write_file
+2026-02-03 19:09:58.364 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  ID: call_e880
+2026-02-03 19:09:58.365 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Args: {"filename": "README.md", "content": "# Lagoon v1.3 (G-Test Edition)\n\n## Overview\nLagoon v1.3 is a Flask-based chat application designed to interface with multiple AI models, featuring dynamic context management and a modular architecture.\n\n## Key Architectural Components\n\n### 1. Web Application Framework\n*   **Framework:** Flask\n*   **Module:** `app.py`\n*   **Benefit:** Lightweight, flexible web framework with easy integration of blueprints for modular code organization.\n\n### 2. Con...
+2026-02-03 19:09:58.365 | DEBUG    | execute_tool              | Tool 'write_file' - parsed arguments from function object
+2026-02-03 19:09:58.365 | INFO     | execute_tool              | execute_tool: write_file
+2026-02-03 19:09:58.365 | DEBUG    | execute_tool              | Tool args: {"filename": "README.md"}
+2026-02-03 19:09:58.367 | INFO     | execute_tool              | Tool 'write_file' completed in 0.002s (success=True)
+2026-02-03 19:09:58.367 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Duration: 0.00s
+2026-02-03 19:09:58.368 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Result size: 49 chars
+2026-02-03 19:09:58.368 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Result: {"success": true, "action": "wrote", "lines": 64}
+2026-02-03 19:09:58.368 | INFO     | run_llm_and_tools         | [cfe0a6d7] └─ SUCCESS
+2026-02-03 19:09:58.368 | INFO     | run_llm_and_tools         | [cfe0a6d7] Turn 6 completed in 50.59s
+2026-02-03 19:09:58.368 | INFO     | run_llm_and_tools         | [cfe0a6d7] --- AGENT TURN 7 ---
+2026-02-03 19:09:58.369 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Context managed: 15 -> 15 messages
+2026-02-03 19:09:58.369 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Dynamic system prompt updated (9467 chars)
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╔══════════════════════════════════════════════════════════
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ API REQUEST TO VENICE
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╠══════════════════════════════════════════════════════════
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Model:          qwen3-235b-a22b-instruct-2507
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Max Tokens:     20000
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Stream Timeout: 120s
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Context Limit:  131000
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Pricing:        unknown
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ Messages:       15
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ║ HTTP Timeout:   180.0s (connect), 120s (read)
+2026-02-03 19:09:58.370 | INFO     | run_llm_and_tools         | [cfe0a6d7] ╚══════════════════════════════════════════════════════════
+2026-02-03 19:09:58.371 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Estimated payload size: 28546 bytes
+2026-02-03 19:09:58.371 | INFO     | run_llm_and_tools         | [cfe0a6d7] >>> Initiating API call at 2026-02-03T19:09:58.371229
+2026-02-03 19:10:00.168 | INFO     | run_llm_and_tools         | [cfe0a6d7] <<< Connection established in 1.797s
+2026-02-03 19:10:00.168 | INFO     | run_llm_and_tools         | [cfe0a6d7] Response status: 200
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] --- RESPONSE HEADERS ---
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   date: Wed, 04 Feb 2026 00:10:00 GMT
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-type: text/event-stream; charset=utf-8
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   transfer-encoding: chunked
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   connection: keep-alive
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-security-policy: default-src 'none'; frame-ancestors *; upgrade-insecure-requests
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-origin: *
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-allow-credentials: true
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   access-control-expose-headers: *
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cache-control: no-cache
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cdn-cache-control: no-store
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-version: outerface-api-server-us-east1-01412-pd7
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-venice-balance-usd: 20.25097348
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-requests: 150
+2026-02-03 19:10:00.168 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-requests: 146
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-requests: 1770163858698
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-limit-tokens: 10000000
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-remaining-tokens: 9955931
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-ratelimit-reset-tokens: 1770163858699
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   vary: Accept-Encoding
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-frame-options: SAMEORIGIN
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   server: cloudflare
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-cache-status: DYNAMIC
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   permissions-policy: geolocation=(), camera=()
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   strict-transport-security: max-age=31536000; includeSubDomains; preload
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   x-content-type-options: nosniff
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   referrer-policy: strict-origin
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   content-encoding: gzip
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7]   cf-ray: 9c85f13c88d8a6fa-BOS
+2026-02-03 19:10:00.169 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Content-Type: text/event-stream; charset=utf-8
+2026-02-03 19:10:00.170 | INFO     | run_llm_and_tools         | [cfe0a6d7] Starting SSE stream processing...
+2026-02-03 19:10:00.170 | INFO     | run_llm_and_tools         | [cfe0a6d7] ⚡ FIRST CHUNK received! Time-to-first-token: 1.799s
+2026-02-03 19:10:01.696 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #50 | Elapsed: 1.5s | Content chars: 253
+2026-02-03 19:10:07.452 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] Chunk #100 | Elapsed: 7.3s | Content chars: 571
+2026-02-03 19:10:07.614 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] New tool call detected at index 0
+2026-02-03 19:10:07.616 | INFO     | run_llm_and_tools         | [cfe0a6d7] ✓ Stream completed
+2026-02-03 19:10:07.616 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total chunks: 108
+2026-02-03 19:10:07.617 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Total content chars: 596
+2026-02-03 19:10:07.617 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Stream duration: 7.45s
+2026-02-03 19:10:07.617 | INFO     | run_llm_and_tools         | [cfe0a6d7]   Tool calls detected: 1
+2026-02-03 19:10:07.617 | INFO     | run_llm_and_tools         | [cfe0a6d7]     [0] done (args: 305 chars)
+2026-02-03 19:10:07.617 | INFO     | run_llm_and_tools         | [cfe0a6d7] Executing 1 tool call(s)
+2026-02-03 19:10:07.617 | INFO     | run_llm_and_tools         | [cfe0a6d7] ┌─ TOOL: done
+2026-02-03 19:10:07.617 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  ID: call_7a74
+2026-02-03 19:10:07.617 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Args: {"summary": "Updated README.md to reflect the current Lagoon v1.3 architecture, replacing the previous Necromancer Architecture description with an accurate overview of the Flask-based web application, configuration system, context window management, modular blueprint architecture, and API integration."}
+2026-02-03 19:10:07.617 | DEBUG    | execute_tool              | Tool 'done' - parsed arguments from function object
+2026-02-03 19:10:07.618 | INFO     | execute_tool              | execute_tool: done
+2026-02-03 19:10:07.618 | DEBUG    | execute_tool              | Tool args: {"summary": "Updated README.md to reflect the current Lagoon v1.3 architecture, replacing the previous Necromancer Architecture description with an accurate overview of the Flask-based web application, configuration system, context window management, modular blueprint architecture, and API integration."}
+2026-02-03 19:10:07.618 | INFO     | execute_tool              | Tool 'done' completed in 0.000s (success=True)
+2026-02-03 19:10:07.618 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Duration: 0.00s
+2026-02-03 19:10:07.618 | INFO     | run_llm_and_tools         | [cfe0a6d7] │  Result size: 322 chars
+2026-02-03 19:10:07.618 | DEBUG    | run_llm_and_tools         | [cfe0a6d7] │  Result: {"success": true, "summary": "Updated README.md to reflect the current Lagoon v1.3 architecture, replacing the previous Necromancer Architecture description with an accurate overview of the Flask-based web application, configuration system, context window management, modular blueprint architecture, ...
+2026-02-03 19:10:07.618 | INFO     | run_llm_and_tools         | [cfe0a6d7] └─ SUCCESS
+2026-02-03 19:10:07.619 | INFO     | run_llm_and_tools         | [cfe0a6d7] 'done' tool called - stopping agent loop
+2026-02-03 19:10:07.619 | INFO     | run_llm_and_tools         | [cfe0a6d7] Turn 7 completed in 9.25s
+2026-02-03 19:10:07.619 | INFO     | run_llm_and_tools         | [cfe0a6d7] ════════════════════════════════════════════════════════
+2026-02-03 19:10:07.619 | INFO     | run_llm_and_tools         | [cfe0a6d7] REQUEST COMPLETE
+2026-02-03 19:10:07.619 | INFO     | run_llm_and_tools         | [cfe0a6d7] Total time: 97.25s
+2026-02-03 19:10:07.619 | INFO     | run_llm_and_tools         | [cfe0a6d7] Agent turns: 7
+2026-02-03 19:10:07.619 | INFO     | run_llm_and_tools         | [cfe0a6d7] Final message count: 17
+2026-02-03 19:10:07.619 | INFO     | run_llm_and_tools         | [cfe0a6d7] ════════════════════════════════════════════════════════

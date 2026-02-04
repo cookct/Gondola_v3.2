@@ -1,0 +1,1971 @@
+#!/usr/bin/env python3
+"""
+Venice CLI v2 - Code Assistant with Plan-First Workflow
+Uses GLM 4.7 with comprehensive file system tools
+"""
+
+import os
+import sys
+import json
+import re
+import shutil
+import subprocess
+import difflib
+import ast
+import hashlib
+from datetime import datetime
+from pathlib import Path
+from openai import OpenAI
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+DEFAULT_MODEL = "zai-org-glm-4.7"
+DEFAULT_WORKSPACE = "." # Current directory by default
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Symlink handling modes
+SYMLINK_ALLOW = "allow"  # Allow symlinks without restrictions
+SYMLINK_DENY = "deny"   # Deny all symlinks
+SYMLINK_FOLLOW = "follow"  # Allow symlinks but validate target is within workspace
+DEFAULT_SYMLINK_MODE = SYMLINK_FOLLOW
+
+# Available models
+MODELS = {
+    "zai-org-glm-4.7": {
+        "name": "GLM 4.7",
+        "type": "text",
+        "description": "Code assistant - best for editing and planning"
+    },
+    "zai-org-glm-4.7-reasoning": {
+        "name": "GLM 4.7 Reasoning",
+        "type": "text",
+        "description": "Extended thinking for complex problems"
+    },
+    "qwen-image": {
+        "name": "Qwen Vision",
+        "type": "vision",
+        "description": "Analyze images and screenshots"
+    },
+}
+
+# ============================================================================
+# COLORS AND FORMATTING
+# ============================================================================
+
+class Colors:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+
+    # Foreground
+    BLACK = "\033[30m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    GREY = "\033[90m"
+
+    # Background
+    BG_RED = "\033[41m"
+    BG_GREEN = "\033[42m"
+    BG_YELLOW = "\033[43m"
+    BG_BLUE = "\033[44m"
+
+class UI:
+    """Clean CLI output formatting"""
+
+    # Box drawing
+    TOP_LEFT = "┌"
+    TOP_RIGHT = "┐"
+    BOT_LEFT = "└"
+    BOT_RIGHT = "┘"
+    HORIZONTAL = "─"
+    VERTICAL = "│"
+
+    @staticmethod
+    def header(text, color=Colors.CYAN):
+        width = 60
+        print(f"\n{color}{UI.TOP_LEFT}{UI.HORIZONTAL * (width-2)}{UI.TOP_RIGHT}{Colors.RESET}")
+        print(f"{color}{UI.VERTICAL}{Colors.RESET} {Colors.BOLD}{text}{Colors.RESET}{' ' * (width - len(text) - 4)}{color}{UI.VERTICAL}{Colors.RESET}")
+        print(f"{color}{UI.BOT_LEFT}{UI.HORIZONTAL * (width-2)}{UI.BOT_RIGHT}{Colors.RESET}")
+
+    @staticmethod
+    def plan_header():
+        print(f"\n{Colors.BLUE}{Colors.BOLD}📋 PLAN{Colors.RESET}")
+        print(f"{Colors.BLUE}{UI.HORIZONTAL * 50}{Colors.RESET}")
+
+    @staticmethod
+    def step_start(step_num, total, description):
+        print(f"\n{Colors.YELLOW}{UI.TOP_LEFT}{UI.HORIZONTAL} STEP {step_num}/{total}: {description}{Colors.RESET}")
+
+    @staticmethod
+    def step_detail(text):
+        print(f"{Colors.YELLOW}{UI.VERTICAL}{Colors.RESET}  {text}")
+
+    @staticmethod
+    def step_done(message="Done"):
+        print(f"{Colors.GREEN}{UI.BOT_LEFT}{UI.HORIZONTAL} ✓ {message}{Colors.RESET}")
+
+    @staticmethod
+    def step_error(message):
+        print(f"{Colors.RED}{UI.BOT_LEFT}{UI.HORIZONTAL} ✗ {message}{Colors.RESET}")
+
+    @staticmethod
+    def success(text):
+        print(f"\n{Colors.GREEN}{Colors.BOLD}✓ {text}{Colors.RESET}")
+
+    @staticmethod
+    def error(text):
+        print(f"\n{Colors.RED}{Colors.BOLD}✗ {text}{Colors.RESET}")
+
+    @staticmethod
+    def warning(text):
+        print(f"{Colors.YELLOW}⚠ {text}{Colors.RESET}")
+
+    @staticmethod
+    def info(text):
+        print(f"{Colors.CYAN}ℹ {text}{Colors.RESET}")
+
+    @staticmethod
+    def thinking():
+        print(f"{Colors.GREY}Thinking...{Colors.RESET}", end="", flush=True)
+
+    @staticmethod
+    def clear_thinking():
+        print("\r" + " " * 20 + "\r", end="", flush=True)
+
+    @staticmethod
+    def model_text(text):
+        print(f"{Colors.WHITE}{text}{Colors.RESET}")
+
+    @staticmethod
+    def reasoning(text):
+        print(f"{Colors.GREY}{text}{Colors.RESET}", end="", flush=True)
+
+    @staticmethod
+    def diff(old_lines, new_lines, filename=""):
+        """Show a colored diff"""
+        if filename:
+            print(f"{Colors.CYAN}  Diff for {filename}:{Colors.RESET}")
+
+        diff = difflib.unified_diff(old_lines, new_lines, lineterm='', n=2)
+        for line in diff:
+            if line.startswith('+++') or line.startswith('---'):
+                print(f"{Colors.BOLD}{line}{Colors.RESET}")
+            elif line.startswith('+'):
+                print(f"{Colors.GREEN}  {line}{Colors.RESET}")
+            elif line.startswith('-'):
+                print(f"{Colors.RED}  {line}{Colors.RESET}")
+            elif line.startswith('@@'):
+                print(f"{Colors.CYAN}  {line}{Colors.RESET}")
+            else:
+                print(f"  {line}")
+
+    @staticmethod
+    def file_tree(files, root=""):
+        """Display files as a tree"""
+        if not files:
+            print(f"{Colors.GREY}  (empty){Colors.RESET}")
+            return
+
+        # Sort and display
+        for f in sorted(files)[:50]:  # Limit to 50 files
+            indent = "  "
+            depth = f.count(os.sep)
+            icon = "📄" if "." in os.path.basename(f) else "📁"
+            print(f"{Colors.WHITE}{indent}{icon} {f}{Colors.RESET}")
+
+        if len(files) > 50:
+            print(f"{Colors.GREY}  ... and {len(files) - 50} more files{Colors.RESET}")
+
+    @staticmethod
+    def prompt():
+        return input(f"\n{Colors.CYAN}{Colors.BOLD}You:{Colors.RESET} ")
+
+    @staticmethod
+    def confirm(message="Proceed?"):
+        response = input(f"\n{Colors.YELLOW}{message} (y/n): {Colors.RESET}").strip().lower()
+        return response in ('y', 'yes')
+
+    @staticmethod
+    def model_selector(models, current_model):
+        """Interactive model selector with arrow keys"""
+        import sys
+        import tty
+        import termios
+
+        model_ids = list(models.keys())
+        current_idx = model_ids.index(current_model) if current_model in model_ids else 0
+
+        def get_key():
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                ch = sys.stdin.read(1)
+                if ch == '\x1b':  # Escape sequence
+                    ch2 = sys.stdin.read(1)
+                    ch3 = sys.stdin.read(1)
+                    if ch2 == '[':
+                        if ch3 == 'A': return 'up'
+                        if ch3 == 'B': return 'down'
+                return ch
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+        def render():
+            # Clear and redraw
+            print(f"\n{Colors.CYAN}{Colors.BOLD}Select Model:{Colors.RESET} (↑/↓ to move, Enter to select, q to cancel)\n")
+            for i, model_id in enumerate(model_ids):
+                model = models[model_id]
+                prefix = f"{Colors.GREEN}▶ " if i == current_idx else "  "
+                suffix = Colors.RESET
+                if i == current_idx:
+                    print(f"{prefix}{Colors.BOLD}{model['name']}{suffix} - {model['description']}")
+                    print(f"    {Colors.GREY}({model_id}){Colors.RESET}")
+                else:
+                    print(f"{prefix}{model['name']}{suffix} - {Colors.GREY}{model['description']}{Colors.RESET}")
+
+        render()
+
+        while True:
+            key = get_key()
+            if key == 'up' and current_idx > 0:
+                current_idx -= 1
+            elif key == 'down' and current_idx < len(model_ids) - 1:
+                current_idx += 1
+            elif key == '\r' or key == '\n':  # Enter
+                print(f"\n{Colors.GREEN}✓ Selected: {models[model_ids[current_idx]]['name']}{Colors.RESET}")
+                return model_ids[current_idx]
+            elif key == 'q' or key == '\x1b':  # q or Escape
+                print(f"\n{Colors.GREY}Cancelled{Colors.RESET}")
+                return None
+
+            # Move cursor up and redraw
+            lines_to_clear = len(model_ids) + 3  # models + header + spacing
+            print(f"\033[{lines_to_clear}A\033[J", end="")  # Move up and clear
+            render()
+
+
+# ============================================================================
+# WORKSPACE (SANDBOX)
+# ============================================================================
+
+class Workspace:
+    """Secure workspace for file operations"""
+
+    def __init__(self, root_dir, symlink_mode=DEFAULT_SYMLINK_MODE):
+        self.root_dir = os.path.abspath(root_dir)
+        self.symlink_mode = symlink_mode
+        if not os.path.exists(self.root_dir):
+            try:
+                os.makedirs(self.root_dir)
+            except PermissionError:
+                raise PermissionError(f"Cannot create workspace at '{self.root_dir}' - permission denied. Try a different path.")
+
+    def _resolve(self, path):
+        """Resolve path and ensure it's within workspace"""
+        if os.path.isabs(path):
+            full_path = os.path.abspath(path)
+        else:
+            full_path = os.path.abspath(os.path.join(self.root_dir, path))
+
+        # Security check
+        if not full_path.startswith(self.root_dir):
+            raise ValueError(f"Access denied: '{path}' is outside workspace")
+
+        # Handle symlinks based on mode
+        if os.path.islink(full_path):
+            if self.symlink_mode == SYMLINK_DENY:
+                raise ValueError(f"Access denied: Symlinks are not allowed (path: '{path}')")
+            elif self.symlink_mode == SYMLINK_FOLLOW:
+                # Follow symlink and validate target
+                real_path = os.path.realpath(full_path)
+                if not real_path.startswith(self.root_dir):
+                    raise ValueError(f"Access denied: Symlink target '{real_path}' is outside workspace")
+                return real_path
+            # SYMLINK_ALLOW: return path as-is without validation
+
+        return full_path
+
+    def _relative(self, full_path):
+        """Get path relative to workspace"""
+        return os.path.relpath(full_path, self.root_dir)
+
+
+# ============================================================================
+# MEMORY SYSTEM
+# ============================================================================
+
+class Memory:
+    """Persistent memory across sessions"""
+
+    def __init__(self, workspace_root):
+        self.memory_file = os.path.join(workspace_root, '.venice_memory.json')
+        self.data = self._load()
+
+    def _load(self):
+        """Load memory from file"""
+        if os.path.exists(self.memory_file):
+            try:
+                with open(self.memory_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                return self._default()
+        return self._default()
+
+    def _default(self):
+        return {
+            "project_notes": [],      # Important things to remember
+            "session_history": [],    # Summary of past sessions
+            "key_files": [],          # Files frequently worked on
+            "user_preferences": {},   # Learned preferences
+        }
+
+    def save(self):
+        """Save memory to file"""
+        with open(self.memory_file, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, indent=2)
+
+    def add_note(self, note):
+        """Add a project note"""
+        entry = {
+            "note": note,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.data["project_notes"].append(entry)
+        # Keep last 50 notes
+        self.data["project_notes"] = self.data["project_notes"][-50:]
+        self.save()
+
+    def add_session_summary(self, summary, files_touched):
+        """Record a session summary"""
+        entry = {
+            "summary": summary,
+            "files": files_touched,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.data["session_history"].append(entry)
+        # Keep last 20 sessions
+        self.data["session_history"] = self.data["session_history"][-20:]
+
+        # Update key files
+        for f in files_touched:
+            if f not in self.data["key_files"]:
+                self.data["key_files"].append(f)
+        self.data["key_files"] = self.data["key_files"][-30:]
+
+        self.save()
+
+    def set_preference(self, key, value):
+        """Set a user preference"""
+        self.data["user_preferences"][key] = value
+        self.save()
+
+    def get_context(self):
+        """Generate context string for system prompt"""
+        lines = []
+
+        if self.data["project_notes"]:
+            lines.append("## PROJECT NOTES (things to remember):")
+            for note in self.data["project_notes"][-10:]:
+                lines.append(f"- {note['note']}")
+            lines.append("")
+
+        if self.data["session_history"]:
+            lines.append("## RECENT SESSIONS:")
+            for session in self.data["session_history"][-5:]:
+                date = session['timestamp'][:10]
+                lines.append(f"- [{date}] {session['summary']}")
+                if session.get('files'):
+                    lines.append(f"  Files: {', '.join(session['files'][:5])}")
+            lines.append("")
+
+        if self.data["key_files"]:
+            lines.append(f"## KEY FILES: {', '.join(self.data['key_files'][-10:])}")
+            lines.append("")
+
+        if self.data["user_preferences"]:
+            lines.append("## USER PREFERENCES:")
+            for k, v in self.data["user_preferences"].items():
+                lines.append(f"- {k}: {v}")
+            lines.append("")
+
+        return "\n".join(lines) if lines else ""
+
+    def clear_notes(self):
+        """Clear all project notes"""
+        self.data["project_notes"] = []
+        self.save()
+
+
+# ============================================================================
+# TOOLS
+# ============================================================================
+
+class Tools:
+    """All available tools for the AI"""
+
+    def __init__(self, workspace: Workspace, memory: Memory = None):
+        self.workspace = workspace
+        self.memory = memory
+        self.step_count = 0
+        self.total_steps = 0
+        self.files_touched = set()  # Track files modified this session
+
+    def set_steps(self, total):
+        self.total_steps = total
+        self.step_count = 0
+
+    def next_step(self, description):
+        self.step_count += 1
+        UI.step_start(self.step_count, self.total_steps, description)
+
+    def _track_file(self, filename):
+        """Track a file as touched this session"""
+        self.files_touched.add(filename)
+
+    # ---- File Reading ----
+
+    def list_files(self, path=".", pattern=None, recursive=True):
+        """List files in directory"""
+        self.next_step(f"Listing files in {path}")
+
+        try:
+            target = self.workspace._resolve(path)
+            if not os.path.isdir(target):
+                UI.step_error(f"Not a directory: {path}")
+                return {"success": False, "error": f"'{path}' is not a directory"}
+
+            files = []
+            if recursive:
+                for root, dirs, filenames in os.walk(target):
+                    # Skip hidden directories
+                    dirs[:] = [d for d in dirs if not d.startswith('.')]
+                    for f in filenames:
+                        if not f.startswith('.'):
+                            rel = os.path.relpath(os.path.join(root, f), self.workspace.root_dir)
+                            if pattern is None or pattern in rel:
+                                files.append(rel)
+            else:
+                for item in os.listdir(target):
+                    if not item.startswith('.'):
+                        full = os.path.join(target, item)
+                        rel = os.path.relpath(full, self.workspace.root_dir)
+                        if os.path.isdir(full):
+                            rel += "/"
+                        if pattern is None or pattern in rel:
+                            files.append(rel)
+
+            UI.file_tree(files)
+            UI.step_done(f"{len(files)} items")
+            return {"success": True, "files": files, "count": len(files)}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def read_file(self, filename, start_line=None, end_line=None):
+        """Read file contents"""
+        self.next_step(f"Reading {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                UI.step_error(f"File not found: {filename}")
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            total_lines = len(lines)
+
+            # Handle line range
+            if start_line is not None or end_line is not None:
+                start = (start_line or 1) - 1
+                end = end_line or total_lines
+                lines = lines[start:end]
+                UI.step_detail(f"Lines {start+1}-{end} of {total_lines}")
+
+            content = ''.join(lines)
+            file_hash = self._calculate_file_hash(path)
+
+            # Preview
+            preview_lines = content.split('\n')[:10]
+            for line in preview_lines:
+                UI.step_detail(f"{Colors.GREY}{line[:80]}{Colors.RESET}")
+            if len(content.split('\n')) > 10:
+                UI.step_detail(f"{Colors.GREY}... ({total_lines} lines total){Colors.RESET}")
+
+            UI.step_done(f"{total_lines} lines")
+            return {"success": True, "content": content, "lines": total_lines, "hash": file_hash}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def get_file_info(self, filename):
+        """Get file metadata"""
+        self.next_step(f"Getting info for {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                UI.step_error(f"File not found: {filename}")
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            stat = os.stat(path)
+            info = {
+                "success": True,
+                "size": stat.st_size,
+                "size_human": self._human_size(stat.st_size),
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "is_file": os.path.isfile(path),
+                "is_dir": os.path.isdir(path),
+                "extension": os.path.splitext(filename)[1],
+            }
+
+            # Line count for text files
+            if os.path.isfile(path):
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        info["line_count"] = sum(1 for _ in f)
+                except:
+                    pass
+
+            UI.step_detail(f"Size: {info['size_human']}")
+            UI.step_detail(f"Modified: {info['modified']}")
+            if 'line_count' in info:
+                UI.step_detail(f"Lines: {info['line_count']}")
+
+            UI.step_done()
+            return info
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def search_content(self, pattern, path=".", file_pattern=None, ignore_case=True):
+        """Search for text in files"""
+        self.next_step(f"Searching for '{pattern}'")
+
+        try:
+            target = self.workspace._resolve(path)
+            results = []
+            flags = re.IGNORECASE if ignore_case else 0
+            regex = re.compile(pattern, flags)
+
+            for root, dirs, files in os.walk(target):
+                dirs[:] = [d for d in dirs if not d.startswith('.')]
+                for filename in files:
+                    if filename.startswith('.'):
+                        continue
+                    if file_pattern and file_pattern not in filename:
+                        continue
+
+                    filepath = os.path.join(root, filename)
+                    rel_path = os.path.relpath(filepath, self.workspace.root_dir)
+
+                    try:
+                        with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+                            for line_num, line in enumerate(f, 1):
+                                if regex.search(line):
+                                    results.append({
+                                        "file": rel_path,
+                                        "line": line_num,
+                                        "content": line.strip()[:100]
+                                    })
+                                    if len(results) >= 50:
+                                        break
+                    except:
+                        continue
+
+                    if len(results) >= 50:
+                        break
+                if len(results) >= 50:
+                    break
+
+            for r in results[:20]:
+                UI.step_detail(f"{Colors.CYAN}{r['file']}:{r['line']}{Colors.RESET} {r['content'][:60]}")
+
+            if len(results) > 20:
+                UI.step_detail(f"{Colors.GREY}... and {len(results) - 20} more matches{Colors.RESET}")
+
+            UI.step_done(f"{len(results)} matches")
+            return {"success": True, "matches": results, "count": len(results)}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    # ---- File Writing ----
+
+    def write_file(self, filename, content):
+        """Create or overwrite a file"""
+        self.next_step(f"Writing {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+
+            is_new = not os.path.exists(path)
+
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            lines = content.count('\n') + 1
+            action = "Created" if is_new else "Wrote"
+
+            UI.step_detail(f"{action} {lines} lines")
+            UI.step_done(f"{action} {filename}")
+            self._track_file(filename)
+            return {"success": True, "action": action.lower(), "lines": lines}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def _normalize_whitespace(self, text):
+        """Normalize whitespace for fuzzy matching"""
+        # Replace tabs with spaces, collapse multiple spaces
+        return re.sub(r'[ \t]+', ' ', text)
+
+    def _find_fuzzy_match(self, content, search_text):
+        """Find text with whitespace-normalized matching, return actual matched text"""
+        # First try exact match
+        if search_text in content:
+            return search_text, content.find(search_text)
+
+        # Try normalized matching
+        norm_search = self._normalize_whitespace(search_text)
+        lines = content.split('\n')
+        search_lines = search_text.split('\n')
+
+        # Slide through content looking for normalized match
+        for i in range(len(lines) - len(search_lines) + 1):
+            chunk = '\n'.join(lines[i:i + len(search_lines)])
+            if self._normalize_whitespace(chunk) == norm_search:
+                # Found it - return the actual text from the file
+                start_pos = len('\n'.join(lines[:i])) + (1 if i > 0 else 0)
+                return chunk, start_pos
+
+        return None, -1
+
+    def _backup_file(self, path):
+        """Create a backup of a file before editing"""
+        backup_dir = os.path.join(self.workspace.root_dir, '.venice_backups')
+        os.makedirs(backup_dir, exist_ok=True)
+
+        filename = os.path.basename(path)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_path = os.path.join(backup_dir, f"{filename}.{timestamp}.bak")
+
+        shutil.copy2(path, backup_path)
+        return backup_path
+
+    def edit_file(self, filename, old_text, new_text, occurrence=1, expected_hash=None, dry_run=False):
+        """Find and replace text in a file (with fuzzy whitespace matching)"""
+        self.next_step(f"Editing {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                UI.step_error(f"File not found: {filename}")
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            # Check hash if provided
+            if expected_hash:
+                current_hash = self._calculate_file_hash(path)
+                if current_hash != expected_hash:
+                    UI.step_error(f"Hash mismatch! Expected {expected_hash[:8]}..., got {current_hash[:8]}...")
+                    return {
+                        "success": False, 
+                        "error": "File changed since last read (hash mismatch). Please read again.",
+                        "current_hash": current_hash
+                    }
+
+            with open(path, 'r', encoding='utf-8') as f:
+                original = f.read()
+
+            # Try to find the text (exact first, then fuzzy)
+            actual_old_text, match_pos = self._find_fuzzy_match(original, old_text)
+
+            if actual_old_text is None:
+                UI.step_error("Text not found in file")
+                UI.step_detail(f"{Colors.GREY}Tip: Try using replace_lines with line numbers instead{Colors.RESET}")
+                # Show what we were looking for
+                preview = old_text[:100].replace('\n', '\\n')
+                UI.step_detail(f"{Colors.GREY}Looking for: {preview}...{Colors.RESET}")
+                return {"success": False, "error": "Old text not found in file (even with fuzzy whitespace matching)"}
+
+            fuzzy_match = (actual_old_text != old_text)
+            if fuzzy_match:
+                UI.step_detail(f"{Colors.YELLOW}Using fuzzy whitespace match{Colors.RESET}")
+
+            # Create backup before editing
+            backup_path = self._backup_file(path)
+            UI.step_detail(f"{Colors.GREY}Backup: {os.path.basename(backup_path)}{Colors.RESET}")
+
+            # Count occurrences
+            count = original.count(actual_old_text)
+
+            # Replace
+            if occurrence == 0:  # Replace all
+                new_content = original.replace(actual_old_text, new_text)
+                replaced = count
+            else:
+                # Replace specific occurrence
+                parts = original.split(actual_old_text)
+                if occurrence > count:
+                    UI.step_error(f"Only {count} occurrences found")
+                    return {"success": False, "error": f"Only {count} occurrences, requested #{occurrence}"}
+
+                new_content = actual_old_text.join(parts[:occurrence]) + new_text + actual_old_text.join(parts[occurrence:])
+                replaced = 1
+
+            # Show diff
+            UI.diff(original.splitlines(), new_content.splitlines(), filename)
+
+            if dry_run:
+                UI.step_done("Dry run completed (no changes made)")
+                return {"success": True, "dry_run": True, "replaced": replaced, "total_found": count}
+
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+
+            UI.step_done(f"Replaced {replaced} occurrence(s)")
+            self._track_file(filename)
+            return {"success": True, "replaced": replaced, "total_found": count, "fuzzy_match": fuzzy_match}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def replace_lines(self, filename, start_line, end_line, new_content, expected_hash=None, dry_run=False):
+        """Replace specific lines in a file (more reliable than text matching)"""
+        self.next_step(f"Replacing lines {start_line}-{end_line} in {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                UI.step_error(f"File not found: {filename}")
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            # Check hash if provided
+            if expected_hash:
+                current_hash = self._calculate_file_hash(path)
+                if current_hash != expected_hash:
+                    UI.step_error(f"Hash mismatch! Expected {expected_hash[:8]}..., got {current_hash[:8]}...")
+                    return {
+                        "success": False, 
+                        "error": "File changed since last read (hash mismatch). Please read again.",
+                        "current_hash": current_hash
+                    }
+
+            with open(path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            total_lines = len(lines)
+            if start_line < 1 or end_line > total_lines:
+                UI.step_error(f"Line range {start_line}-{end_line} out of bounds (file has {total_lines} lines)")
+                return {"success": False, "error": f"Line range out of bounds (1-{total_lines})"}
+
+            # Create backup
+            backup_path = self._backup_file(path)
+            UI.step_detail(f"{Colors.GREY}Backup: {os.path.basename(backup_path)}{Colors.RESET}")
+
+            # Show what's being replaced
+            old_content = ''.join(lines[start_line-1:end_line])
+            UI.step_detail(f"{Colors.RED}Removing lines {start_line}-{end_line}:{Colors.RESET}")
+            for i, line in enumerate(lines[start_line-1:end_line][:5], start=start_line):
+                UI.step_detail(f"  {Colors.RED}- {i}: {line.rstrip()[:60]}{Colors.RESET}")
+            if end_line - start_line + 1 > 5:
+                UI.step_detail(f"  {Colors.GREY}... and {end_line - start_line - 4} more lines{Colors.RESET}")
+
+            # Build new content
+            new_lines = new_content.split('\n')
+            # Ensure each line ends with newline
+            new_lines = [line + '\n' if not line.endswith('\n') else line for line in new_lines]
+            # Fix last line if original didn't have trailing newline
+            if new_lines and lines and not lines[-1].endswith('\n'):
+                new_lines[-1] = new_lines[-1].rstrip('\n')
+
+            UI.step_detail(f"{Colors.GREEN}Adding {len(new_lines)} new lines:{Colors.RESET}")
+            for i, line in enumerate(new_lines[:5], start=start_line):
+                UI.step_detail(f"  {Colors.GREEN}+ {i}: {line.rstrip()[:60]}{Colors.RESET}")
+            if len(new_lines) > 5:
+                UI.step_detail(f"  {Colors.GREY}... and {len(new_lines) - 5} more lines{Colors.RESET}")
+
+            # Perform replacement
+            result_lines = lines[:start_line-1] + new_lines + lines[end_line:]
+
+            if dry_run:
+                UI.diff([''.join(lines)], [''.join(result_lines)], filename)
+                UI.step_done("Dry run completed (no changes made)")
+                return {
+                    "success": True, 
+                    "dry_run": True,
+                    "lines_removed": end_line - start_line + 1,
+                    "lines_added": len(new_lines)
+                }
+
+            with open(path, 'w', encoding='utf-8') as f:
+                f.writelines(result_lines)
+
+            lines_removed = end_line - start_line + 1
+            lines_added = len(new_lines)
+            UI.step_done(f"Replaced {lines_removed} lines with {lines_added} lines")
+            self._track_file(filename)
+
+            return {
+                "success": True,
+                "lines_removed": lines_removed,
+                "lines_added": lines_added,
+                "new_total_lines": len(result_lines)
+            }
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def insert_at_line(self, filename, line_number, content):
+        """Insert content at a specific line"""
+        self.next_step(f"Inserting at line {line_number} in {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                UI.step_error(f"File not found: {filename}")
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            with open(path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            # Insert
+            idx = max(0, min(line_number - 1, len(lines)))
+            new_lines = content.split('\n')
+
+            original = lines.copy()
+            for i, new_line in enumerate(new_lines):
+                lines.insert(idx + i, new_line + '\n')
+
+            # Show diff
+            UI.diff([''.join(original)], [''.join(lines)], filename)
+
+            with open(path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+
+            UI.step_done(f"Inserted {len(new_lines)} lines")
+            return {"success": True, "inserted_lines": len(new_lines)}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def delete_lines(self, filename, start_line, end_line=None):
+        """Delete lines from a file"""
+        end_line = end_line or start_line
+        self.next_step(f"Deleting lines {start_line}-{end_line} from {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                UI.step_error(f"File not found: {filename}")
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            with open(path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            original = lines.copy()
+            del lines[start_line-1:end_line]
+
+            # Show diff
+            UI.diff([''.join(original)], [''.join(lines)], filename)
+
+            with open(path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+
+            deleted = end_line - start_line + 1
+            UI.step_done(f"Deleted {deleted} lines")
+            return {"success": True, "deleted_lines": deleted}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def append_to_file(self, filename, content):
+        """Append content to end of file"""
+        self.next_step(f"Appending to {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+
+            with open(path, 'a', encoding='utf-8') as f:
+                f.write(content)
+
+            lines = content.count('\n') + 1
+            UI.step_detail(f"Added {lines} lines to end of file")
+            UI.step_done()
+            return {"success": True, "appended_lines": lines}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    # ---- File Management ----
+
+    def delete_file(self, filename):
+        """Delete a file"""
+        self.next_step(f"Deleting {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                UI.step_error(f"File not found: {filename}")
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            if os.path.isdir(path):
+                UI.step_error("Use delete_directory for directories")
+                return {"success": False, "error": "Path is a directory, use delete_directory"}
+
+            os.remove(path)
+            UI.step_done(f"Deleted {filename}")
+            return {"success": True}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def move_file(self, source, destination):
+        """Move or rename a file"""
+        self.next_step(f"Moving {source} → {destination}")
+
+        try:
+            src_path = self.workspace._resolve(source)
+            dst_path = self.workspace._resolve(destination)
+
+            if not os.path.exists(src_path):
+                UI.step_error(f"Source not found: {source}")
+                return {"success": False, "error": f"Source '{source}' does not exist"}
+
+            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+            shutil.move(src_path, dst_path)
+
+            UI.step_done(f"Moved to {destination}")
+            return {"success": True}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def copy_file(self, source, destination):
+        """Copy a file"""
+        self.next_step(f"Copying {source} → {destination}")
+
+        try:
+            src_path = self.workspace._resolve(source)
+            dst_path = self.workspace._resolve(destination)
+
+            if not os.path.exists(src_path):
+                UI.step_error(f"Source not found: {source}")
+                return {"success": False, "error": f"Source '{source}' does not exist"}
+
+            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+
+            if os.path.isdir(src_path):
+                shutil.copytree(src_path, dst_path)
+            else:
+                shutil.copy2(src_path, dst_path)
+
+            UI.step_done(f"Copied to {destination}")
+            return {"success": True}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def make_directory(self, path):
+        """Create a directory"""
+        self.next_step(f"Creating directory {path}")
+
+        try:
+            full_path = self.workspace._resolve(path)
+            os.makedirs(full_path, exist_ok=True)
+
+            UI.step_done(f"Created {path}")
+            return {"success": True}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def delete_directory(self, path, recursive=False):
+        """Delete a directory"""
+        self.next_step(f"Deleting directory {path}")
+
+        try:
+            full_path = self.workspace._resolve(path)
+
+            if not os.path.isdir(full_path):
+                UI.step_error("Not a directory")
+                return {"success": False, "error": "Path is not a directory"}
+
+            if recursive:
+                shutil.rmtree(full_path)
+            else:
+                os.rmdir(full_path)  # Only works if empty
+
+            UI.step_done(f"Deleted {path}")
+            return {"success": True}
+
+        except OSError as e:
+            if "not empty" in str(e).lower() or "directory not empty" in str(e).lower():
+                UI.step_error("Directory not empty. Use recursive=true to delete contents.")
+            else:
+                UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    # ---- Shell Commands ----
+
+    def run_command(self, command, timeout=30):
+        """Run a shell command"""
+        self.next_step(f"Running: {command}")
+
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=self.workspace.root_dir
+            )
+
+            output = result.stdout
+            error = result.stderr
+
+            if output:
+                for line in output.split('\n')[:20]:
+                    UI.step_detail(line)
+                if len(output.split('\n')) > 20:
+                    UI.step_detail(f"{Colors.GREY}... (truncated){Colors.RESET}")
+
+            if error:
+                for line in error.split('\n')[:10]:
+                    UI.step_detail(f"{Colors.RED}{line}{Colors.RESET}")
+
+            if result.returncode == 0:
+                UI.step_done(f"Exit code: {result.returncode}")
+            else:
+                UI.step_error(f"Exit code: {result.returncode}")
+
+            return {
+                "success": result.returncode == 0,
+                "exit_code": result.returncode,
+                "stdout": output,
+                "stderr": error
+            }
+
+        except subprocess.TimeoutExpired:
+            UI.step_error(f"Command timed out after {timeout}s")
+            return {"success": False, "error": "Command timed out"}
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    # ---- Backup Recovery ----
+
+    def list_backups(self, filename=None):
+        """List available backups"""
+        self.next_step("Listing backups")
+
+        try:
+            backup_dir = os.path.join(self.workspace.root_dir, '.venice_backups')
+            if not os.path.exists(backup_dir):
+                UI.step_detail("No backups found")
+                UI.step_done()
+                return {"success": True, "backups": []}
+
+            backups = []
+            for f in sorted(os.listdir(backup_dir), reverse=True):
+                if f.endswith('.bak'):
+                    if filename is None or filename in f:
+                        full_path = os.path.join(backup_dir, f)
+                        stat = os.stat(full_path)
+                        backups.append({
+                            "name": f,
+                            "size": self._human_size(stat.st_size),
+                            "modified": datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        })
+
+            for b in backups[:10]:
+                UI.step_detail(f"{b['name']} ({b['size']}, {b['modified']})")
+            if len(backups) > 10:
+                UI.step_detail(f"{Colors.GREY}... and {len(backups) - 10} more{Colors.RESET}")
+
+            UI.step_done(f"{len(backups)} backups")
+            return {"success": True, "backups": backups}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def restore_backup(self, backup_name, target_filename=None):
+        """Restore a file from backup"""
+        self.next_step(f"Restoring {backup_name}")
+
+        try:
+            backup_dir = os.path.join(self.workspace.root_dir, '.venice_backups')
+            backup_path = os.path.join(backup_dir, backup_name)
+
+            if not os.path.exists(backup_path):
+                UI.step_error(f"Backup not found: {backup_name}")
+                return {"success": False, "error": f"Backup '{backup_name}' does not exist"}
+
+            # Parse original filename from backup name (format: filename.timestamp.bak)
+            if target_filename is None:
+                # Extract original filename: "app.py.20240115_143022.bak" -> "app.py"
+                parts = backup_name.rsplit('.', 2)
+                if len(parts) >= 3:
+                    target_filename = parts[0]
+                else:
+                    UI.step_error("Could not determine target filename from backup name")
+                    return {"success": False, "error": "Specify target_filename"}
+
+            target_path = self.workspace._resolve(target_filename)
+
+            # Show what we're restoring
+            UI.step_detail(f"Restoring to: {target_filename}")
+
+            shutil.copy2(backup_path, target_path)
+
+            UI.step_done(f"Restored {target_filename}")
+            return {"success": True, "restored_to": target_filename}
+
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    # ---- Memory ----
+
+    def remember(self, note):
+        """Save a note to persistent memory"""
+        self.next_step("Saving to memory")
+
+        if not self.memory:
+            UI.step_error("Memory not available")
+            return {"success": False, "error": "Memory not initialized"}
+
+        self.memory.add_note(note)
+        UI.step_detail(f"Saved: {note[:60]}...")
+        UI.step_done("Note saved")
+        return {"success": True, "note": note}
+
+    def recall(self):
+        """Recall all stored memories"""
+        self.next_step("Recalling memories")
+
+        if not self.memory:
+            UI.step_error("Memory not available")
+            return {"success": False, "error": "Memory not initialized"}
+
+        context = self.memory.get_context()
+        if context:
+            UI.step_detail("Memory contents:")
+            for line in context.split('\n')[:20]:
+                UI.step_detail(f"  {line}")
+            UI.step_done()
+            return {"success": True, "memory": context}
+        else:
+            UI.step_detail("No memories stored yet")
+            UI.step_done()
+            return {"success": True, "memory": ""}
+
+    def forget(self, clear_all=False):
+        """Clear stored memories"""
+        self.next_step("Clearing memories")
+
+        if not self.memory:
+            UI.step_error("Memory not available")
+            return {"success": False, "error": "Memory not initialized"}
+
+        if clear_all:
+            self.memory.data = self.memory._default()
+            self.memory.save()
+            UI.step_done("All memories cleared")
+        else:
+            self.memory.clear_notes()
+            UI.step_done("Project notes cleared")
+
+        return {"success": True}
+
+    def set_preference(self, key, value):
+        """Set a user preference"""
+        self.next_step(f"Setting preference: {key}")
+
+        if not self.memory:
+            UI.step_error("Memory not available")
+            return {"success": False, "error": "Memory not initialized"}
+
+        self.memory.set_preference(key, value)
+        UI.step_detail(f"{key} = {value}")
+        UI.step_done()
+        return {"success": True, "key": key, "value": value}
+
+    # ---- Task Completion ----
+
+    def done(self, summary):
+        """Signal task is complete"""
+        UI.success(f"COMPLETE: {summary}")
+        return {"success": True, "summary": summary}
+
+    # ---- Code Analysis & Maintenance ----
+
+    def validate_syntax(self, filename):
+        """Check if file has valid syntax (Python, JSON)"""
+        self.next_step(f"Validating syntax of {filename}")
+
+        try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            ext = os.path.splitext(filename)[1].lower()
+
+            if ext == '.py':
+                with open(path, 'r', encoding='utf-8') as f:
+                    source = f.read()
+                ast.parse(source)
+                UI.step_done("Python syntax is valid")
+                return {"success": True, "valid": True, "type": "python"}
+
+            elif ext == '.json':
+                with open(path, 'r', encoding='utf-8') as f:
+                    json.load(f)
+                UI.step_done("JSON syntax is valid")
+                return {"success": True, "valid": True, "type": "json"}
+
+            else:
+                UI.step_detail(f"No validator for {ext}")
+                return {"success": True, "valid": True, "type": "unknown", "message": "No validator available"}
+
+        except SyntaxError as e:
+            UI.step_error(f"Syntax Error: {e}")
+            return {"success": False, "valid": False, "error": str(e), "line": e.lineno, "offset": e.offset}
+        except json.JSONDecodeError as e:
+            UI.step_error(f"JSON Error: {e}")
+            return {"success": False, "valid": False, "error": str(e), "line": e.lineno, "column": e.colno}
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def normalize_indentation(self, filename, to_spaces=True, tab_size=4):
+        """Convert mixed indentation to spaces"""
+        self.next_step(f"Normalizing indentation in {filename}")
+        try:
+            path = self.workspace._resolve(filename)
+            # Backup
+            self._backup_file(path)
+            
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            if to_spaces:
+                new_content = content.expandtabs(tab_size)
+            else:
+                # Naive spaces->tabs
+                new_content = content.replace(' ' * tab_size, '\\t')
+
+            if content != new_content:
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                UI.step_done("Indentation normalized")
+                self._track_file(filename)
+                return {"success": True, "converted": True}
+            else:
+                UI.step_done("No changes needed")
+                return {"success": True, "converted": False}
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def find_functions(self, filename):
+        """List all functions in a Python file"""
+        self.next_step(f"Finding functions in {filename}")
+        try:
+            path = self.workspace._resolve(filename)
+            with open(path, 'r', encoding='utf-8') as f:
+                tree = ast.parse(f.read())
+            
+            functions = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    functions.append({
+                        "name": node.name,
+                        "line": node.lineno,
+                        "end_line": node.end_lineno,
+                    })
+            
+            # Sort by line number
+            functions.sort(key=lambda x: x['line'])
+            
+            for f in functions[:10]:
+                UI.step_detail(f"def {f['name']}(...): lines {f['line']}-{f['end_line']}")
+            if len(functions) > 10:
+                UI.step_detail(f"... {len(functions)-10} more")
+
+            UI.step_done(f"Found {len(functions)} functions")
+            return {"success": True, "functions": functions}
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def find_classes(self, filename):
+        """List all classes in a Python file"""
+        self.next_step(f"Finding classes in {filename}")
+        try:
+            path = self.workspace._resolve(filename)
+            with open(path, 'r', encoding='utf-8') as f:
+                tree = ast.parse(f.read())
+            
+            classes = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    classes.append({
+                        "name": node.name,
+                        "line": node.lineno,
+                        "end_line": node.end_lineno,
+                    })
+            
+            classes.sort(key=lambda x: x['line'])
+            
+            for c in classes[:10]:
+                UI.step_detail(f"class {c['name']}: lines {c['line']}-{c['end_line']}")
+
+            UI.step_done(f"Found {len(classes)} classes")
+            return {"success": True, "classes": classes}
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def undo_edit(self, filename):
+        """Restore the most recent backup of a file"""
+        self.next_step(f"Undoing last edit to {filename}")
+        try:
+            # Get backups
+            result = self.list_backups(filename)
+            if not result["success"] or not result["backups"]:
+                return {"success": False, "error": "No backups found"}
+            
+            # Latest is first
+            latest = result["backups"][0]["name"]
+            return self.restore_backup(latest, filename)
+        except Exception as e:
+             UI.step_error(str(e))
+             return {"success": False, "error": str(e)}
+
+    # ---- Helpers ----
+
+    def _calculate_file_hash(self, path):
+        """Calculate SHA-256 hash of a file"""
+        sha256_hash = hashlib.sha256()
+        with open(path, "rb") as f:
+            # Read and update hash string value in blocks of 4K
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
+    def _human_size(self, size):
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024:
+                return f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} TB"
+
+
+# ============================================================================
+# SYSTEM PROMPT
+# ============================================================================
+
+SYSTEM_PROMPT = """You are a precise code assistant with direct access to the file system.
+
+## WORKFLOW - ALWAYS FOLLOW THIS:
+
+1. **ANALYZE** - Understand what the user wants
+2. **PLAN** - Present a numbered list of steps you will take
+3. **WAIT** - The user must confirm before you execute
+4. **EXECUTE** - Only after confirmation, use tools one by one
+5. **REPORT** - Summarize what was done
+
+## PRESENTING YOUR PLAN:
+
+When you have a plan, format it like this:
+
+```
+I'll help you [goal]. Here's my plan:
+
+1. [First action]
+2. [Second action]
+3. [Third action]
+
+Ready to proceed?
+```
+
+DO NOT use any tools until the user confirms with "y", "yes", "go", "do it", or similar.
+
+## AVAILABLE TOOLS:
+
+To execute a tool, output a JSON object in <tool_code> tags:
+
+### File Reading:
+- list_files: `<tool_code>{"tool": "list_files", "path": ".", "recursive": true}</tool_code>`
+- read_file: `<tool_code>{"tool": "read_file", "filename": "app.py", "start_line": 1, "end_line": 50}</tool_code>`
+- get_file_info: `<tool_code>{"tool": "get_file_info", "filename": "app.py"}</tool_code>`
+- search_content: `<tool_code>{"tool": "search_content", "pattern": "def main", "path": ".", "file_pattern": ".py"}</tool_code>`
+
+### File Writing:
+- write_file: `<tool_code>{"tool": "write_file", "filename": "new.py", "content": "print('hello')"}</tool_code>`
+- edit_file: `<tool_code>{"tool": "edit_file", "filename": "app.py", "old_text": "old code", "new_text": "new code", "occurrence": 1, "dry_run": false}</tool_code>`
+  - Has fuzzy whitespace matching (tabs/spaces normalized)
+  - occurrence=0 replaces ALL occurrences
+  - occurrence=1 replaces first only (default)
+  - dry_run=true returns the diff without modifying the file (use for preview)
+  - expected_hash (optional): "sha256..." - fails if file hash doesn't match
+  - Creates automatic backup before editing
+- replace_lines: `<tool_code>{"tool": "replace_lines", "filename": "app.py", "start_line": 10, "end_line": 15, "new_content": "new code here", "dry_run": false}</tool_code>`
+  - MORE RELIABLE than edit_file - use when text matching fails
+  - Replaces lines start_line through end_line with new_content
+  - dry_run=true returns the diff without modifying the file
+  - expected_hash (optional): "sha256..." - fails if file hash doesn't match
+  - Creates automatic backup before editing
+- insert_at_line: `<tool_code>{"tool": "insert_at_line", "filename": "app.py", "line_number": 10, "content": "new line"}</tool_code>`
+- delete_lines: `<tool_code>{"tool": "delete_lines", "filename": "app.py", "start_line": 5, "end_line": 10}</tool_code>`
+- append_to_file: `<tool_code>{"tool": "append_to_file", "filename": "log.txt", "content": "new entry"}</tool_code>`
+
+### File Management:
+- delete_file: `<tool_code>{"tool": "delete_file", "filename": "old.py"}</tool_code>`
+- move_file: `<tool_code>{"tool": "move_file", "source": "old.py", "destination": "new.py"}</tool_code>`
+- copy_file: `<tool_code>{"tool": "copy_file", "source": "template.py", "destination": "new.py"}</tool_code>`
+- make_directory: `<tool_code>{"tool": "make_directory", "path": "src/utils"}</tool_code>`
+- delete_directory: `<tool_code>{"tool": "delete_directory", "path": "old_folder", "recursive": true}</tool_code>`
+
+### Shell:
+- run_command: `<tool_code>{"tool": "run_command", "command": "python app.py", "timeout": 30}</tool_code>`
+
+### Backup & Recovery:
+- list_backups: `<tool_code>{"tool": "list_backups", "filename": "app.py"}</tool_code>`
+  - Lists available backups (omit filename to see all)
+- restore_backup: `<tool_code>{"tool": "restore_backup", "backup_name": "app.py.20240115_143022.bak"}</tool_code>`
+  - Restores a file from backup
+- undo_edit: `<tool_code>{"tool": "undo_edit", "filename": "app.py"}</tool_code>`
+  - Instantly reverts the last edit to a file
+
+### Code Analysis & Maintenance:
+- validate_syntax: `<tool_code>{"tool": "validate_syntax", "filename": "app.py"}</tool_code>`
+  - Checks if file has valid syntax (Python/JSON)
+- normalize_indentation: `<tool_code>{"tool": "normalize_indentation", "filename": "app.py", "to_spaces": true}</tool_code>`
+  - Fixes mixed tabs/spaces (defaults to spaces)
+- find_functions: `<tool_code>{"tool": "find_functions", "filename": "app.py"}</tool_code>`
+  - Lists all functions with line numbers
+- find_classes: `<tool_code>{"tool": "find_classes", "filename": "app.py"}</tool_code>`
+  - Lists all classes with line numbers
+
+### Memory (persists across sessions):
+- remember: `<tool_code>{"tool": "remember", "note": "User prefers tabs over spaces"}</tool_code>`
+  - Save important info for future sessions
+- recall: `<tool_code>{"tool": "recall"}</tool_code>`
+  - View all stored memories
+- forget: `<tool_code>{"tool": "forget", "clear_all": false}</tool_code>`
+  - Clear notes (clear_all=true clears everything)
+- set_preference: `<tool_code>{"tool": "set_preference", "key": "indent_style", "value": "tabs"}</tool_code>`
+  - Save a user preference
+
+### Completion:
+- done: `<tool_code>{"tool": "done", "summary": "Added login feature to app.py"}</tool_code>`
+
+## RULES:
+
+1. ALWAYS present a plan first and wait for confirmation
+2. Use edit_file for changes to existing files (NOT write_file)
+3. Use write_file only for NEW files
+4. **READ FULL FILES:** Do not use start_line/end_line unless the file is massive (> 2000 lines). You need full context.
+5. If edit_file fails to find text, use replace_lines with line numbers instead
+6. One tool at a time - wait for results before next tool
+7. End every completed task with the done tool
+8. If something fails, check list_backups and offer to restore if needed
+9. Backups are automatic - every edit creates one in .venice_backups/
+
+## STYLE:
+
+- Be concise and direct
+- Don't apologize or over-explain
+- Focus on getting the job done
+- When showing code changes, be specific about what's changing and why"""
+
+
+# ============================================================================
+# MAIN CLI
+# ============================================================================
+
+def get_api_key():
+    """Get API key from environment or config file (checks multiple locations)"""
+    # 1. Environment variable (highest priority)
+    key = os.getenv("VENICE_API_KEY")
+    if key:
+        return key
+
+    # 2. Check multiple config file locations
+    config_locations = [
+        os.path.join(SCRIPT_DIR, "app_config.json"),  # Same dir as script
+        os.path.expanduser("~/.venice_config.json"),   # Home directory
+        os.path.expanduser("~/.config/venice/config.json"),  # XDG config
+        "app_config.json",  # Current directory
+    ]
+
+    for config_path in config_locations:
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                key = config.get("venice_api_key")
+                if key:
+                    return key
+        except FileNotFoundError:
+            continue
+        except Exception as e:
+            UI.warning(f"Error reading {config_path}: {e}")
+            continue
+
+    return None
+
+
+def parse_tool_call(response_content):
+    """Extract tool call from response"""
+    if "<tool_code>" not in response_content:
+        return None
+
+    try:
+        start = response_content.find("<tool_code>") + len("<tool_code>")
+        end = response_content.find("</tool_code>")
+        json_str = response_content[start:end].strip()
+
+        # Clean up markdown formatting if present
+        if json_str.startswith("```json"):
+            json_str = json_str[7:]
+        if json_str.startswith("```"):
+            json_str = json_str[3:]
+        if json_str.endswith("```"):
+            json_str = json_str[:-3]
+        json_str = json_str.strip()
+
+        return json.loads(json_str)
+    except Exception as e:
+        return {"error": f"Failed to parse tool call: {e}"}
+
+
+def execute_tool(tools: Tools, tool_call: dict):
+    """Execute a tool and return result"""
+    tool_name = tool_call.get("tool") or tool_call.get("name")
+
+    if not tool_name:
+        return {"success": False, "error": "No tool name specified"}
+
+    # Map tool names to methods
+    tool_map = {
+        "list_files": lambda: tools.list_files(
+            tool_call.get("path", "."),
+            tool_call.get("pattern"),
+            tool_call.get("recursive", True)
+        ),
+        "read_file": lambda: tools.read_file(
+            tool_call.get("filename"),
+            tool_call.get("start_line"),
+            tool_call.get("end_line")
+        ),
+        "get_file_info": lambda: tools.get_file_info(tool_call.get("filename")),
+        "search_content": lambda: tools.search_content(
+            tool_call.get("pattern"),
+            tool_call.get("path", "."),
+            tool_call.get("file_pattern"),
+            tool_call.get("ignore_case", True)
+        ),
+        "write_file": lambda: tools.write_file(
+            tool_call.get("filename"),
+            tool_call.get("content")
+        ),
+        "edit_file": lambda: tools.edit_file(
+            tool_call.get("filename"),
+            tool_call.get("old_text"),
+            tool_call.get("new_text"),
+            tool_call.get("occurrence", 1),
+            tool_call.get("expected_hash"),
+            tool_call.get("dry_run", False)
+        ),
+        "replace_lines": lambda: tools.replace_lines(
+            tool_call.get("filename"),
+            tool_call.get("start_line"),
+            tool_call.get("end_line"),
+            tool_call.get("new_content"),
+            tool_call.get("expected_hash"),
+            tool_call.get("dry_run", False)
+        ),
+        "insert_at_line": lambda: tools.insert_at_line(
+            tool_call.get("filename"),
+            tool_call.get("line_number"),
+            tool_call.get("content")
+        ),
+        "delete_lines": lambda: tools.delete_lines(
+            tool_call.get("filename"),
+            tool_call.get("start_line"),
+            tool_call.get("end_line")
+        ),
+        "append_to_file": lambda: tools.append_to_file(
+            tool_call.get("filename"),
+            tool_call.get("content")
+        ),
+        "delete_file": lambda: tools.delete_file(tool_call.get("filename")),
+        "move_file": lambda: tools.move_file(
+            tool_call.get("source"),
+            tool_call.get("destination")
+        ),
+        "copy_file": lambda: tools.copy_file(
+            tool_call.get("source"),
+            tool_call.get("destination")
+        ),
+        "make_directory": lambda: tools.make_directory(tool_call.get("path")),
+        "delete_directory": lambda: tools.delete_directory(
+            tool_call.get("path"),
+            tool_call.get("recursive", False)
+        ),
+        "run_command": lambda: tools.run_command(
+            tool_call.get("command"),
+            tool_call.get("timeout", 30)
+        ),
+        "list_backups": lambda: tools.list_backups(tool_call.get("filename")),
+        "restore_backup": lambda: tools.restore_backup(
+            tool_call.get("backup_name"),
+            tool_call.get("target_filename")
+        ),
+        "validate_syntax": lambda: tools.validate_syntax(tool_call.get("filename")),
+        "normalize_indentation": lambda: tools.normalize_indentation(
+            tool_call.get("filename"),
+            tool_call.get("to_spaces", True),
+            tool_call.get("tab_size", 4)
+        ),
+        "find_functions": lambda: tools.find_functions(tool_call.get("filename")),
+        "find_classes": lambda: tools.find_classes(tool_call.get("filename")),
+        "undo_edit": lambda: tools.undo_edit(tool_call.get("filename")),
+        "remember": lambda: tools.remember(tool_call.get("note")),
+        "recall": lambda: tools.recall(),
+        "forget": lambda: tools.forget(tool_call.get("clear_all", False)),
+        "set_preference": lambda: tools.set_preference(
+            tool_call.get("key"),
+            tool_call.get("value")
+        ),
+        "done": lambda: tools.done(tool_call.get("summary", "Task complete")),
+    }
+
+    if tool_name not in tool_map:
+        return {"success": False, "error": f"Unknown tool: {tool_name}"}
+
+    return tool_map[tool_name]()
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Venice CLI v2 - Code Assistant")
+    parser.add_argument("-w", "--workspace", default=DEFAULT_WORKSPACE, help="Workspace directory")
+    parser.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model to use")
+    parser.add_argument("--symlink-mode", default=DEFAULT_SYMLINK_MODE, 
+                        choices=[SYMLINK_ALLOW, SYMLINK_DENY, SYMLINK_FOLLOW],
+                        help=f"Symlink handling mode: {SYMLINK_ALLOW} (allow), {SYMLINK_DENY} (deny), {SYMLINK_FOLLOW} (follow and validate)")
+    args = parser.parse_args()
+
+    # Get API key
+    api_key = get_api_key()
+    if not api_key:
+        UI.error("Venice API Key not found. Set VENICE_API_KEY env var or configure app_config.json")
+        sys.exit(1)
+
+    # Initialize
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://api.venice.ai/api/v1",
+        timeout=120.0
+    )
+
+    try:
+        workspace = Workspace(args.workspace, symlink_mode=args.symlink_mode)
+    except PermissionError as e:
+        UI.error(str(e))
+        sys.exit(1)
+
+    # Initialize memory
+    memory = Memory(workspace.root_dir)
+    tools = Tools(workspace, memory)
+
+    # Build system prompt with memory context
+    memory_context = memory.get_context()
+    if memory_context:
+        full_prompt = SYSTEM_PROMPT + f"\n\n## MEMORY FROM PREVIOUS SESSIONS:\n\n{memory_context}"
+    else:
+        full_prompt = SYSTEM_PROMPT
+
+    # Initialize current model
+    current_model = args.model if args.model in MODELS else DEFAULT_MODEL
+
+    # Welcome
+    UI.header("Venice CLI v2", Colors.CYAN)
+    print(f"{Colors.GREY}Workspace: {workspace.root_dir}{Colors.RESET}")
+    print(f"{Colors.GREY}Model: {MODELS[current_model]['name']} ({current_model}){Colors.RESET}")
+    if memory_context:
+        print(f"{Colors.GREEN}Memory loaded from previous sessions{Colors.RESET}")
+    print(f"{Colors.GREY}Type /help for commands, 'exit' to quit{Colors.RESET}")
+
+    messages = [{"role": "system", "content": full_prompt}]
+    session_summaries = []  # Track what was done this session
+
+    # Loop protection
+    MAX_AGENT_TURNS = 10  # Max tool calls before requiring user input
+    recent_edits = []  # Track recent edits to detect loops
+
+    while True:
+        try:
+            user_input = UI.prompt()
+
+            if not user_input.strip():
+                continue
+
+            if user_input.lower() in ('exit', 'quit'):
+                # Save session summary before exit
+                if session_summaries or tools.files_touched:
+                    summary = "; ".join(session_summaries) if session_summaries else "Session with file edits"
+                    memory.add_session_summary(summary, list(tools.files_touched))
+                    UI.info(f"Session saved to memory ({len(tools.files_touched)} files touched)")
+                UI.info("Goodbye!")
+                break
+
+            if user_input.lower() == 'clear':
+                messages = [{"role": "system", "content": full_prompt}]
+                UI.info("Conversation cleared")
+                continue
+
+            if user_input.lower() in ('/model', '/models'):
+                new_model = UI.model_selector(MODELS, current_model)
+                if new_model:
+                    current_model = new_model
+                    model_info = MODELS[current_model]
+                    UI.info(f"Now using: {model_info['name']} ({model_info['type']})")
+                continue
+
+            if user_input.lower().startswith('/image '):
+                # Image analysis with vision model
+                image_path = user_input[7:].strip()
+                if not os.path.exists(image_path):
+                    # Try relative to workspace
+                    image_path = os.path.join(workspace.root_dir, image_path)
+
+                if not os.path.exists(image_path):
+                    UI.error(f"Image not found: {user_input[7:].strip()}")
+                    continue
+
+                # Switch to vision model if not already
+                if MODELS[current_model]['type'] != 'vision':
+                    old_model = current_model
+                    current_model = "qwen-image"
+                    UI.info(f"Switched to {MODELS[current_model]['name']} for image analysis")
+
+                # Read and encode image
+                import base64
+                with open(image_path, 'rb') as f:
+                    image_data = base64.b64encode(f.read()).decode('utf-8')
+
+                # Determine mime type
+                ext = os.path.splitext(image_path)[1].lower()
+                mime_types = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp'}
+                mime_type = mime_types.get(ext, 'image/png')
+
+                UI.info(f"Analyzing: {os.path.basename(image_path)}")
+
+                # Add image message
+                messages.append({
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_data}"}},
+                        {"type": "text", "text": "Describe this image in detail. What do you see?"}
+                    ]
+                })
+                # Continue to the API call below
+                user_input = None  # Skip normal message append
+
+            if user_input and user_input.lower() == '/help':
+                print(f"\n{Colors.CYAN}Commands:{Colors.RESET}")
+                print(f"  /model       - Switch between models")
+                print(f"  /image PATH  - Analyze an image (auto-switches to vision model)")
+                print(f"  /help        - Show this help")
+                print(f"  clear        - Clear conversation")
+                print(f"  exit         - Exit and save session")
+                print(f"\n{Colors.CYAN}Current model:{Colors.RESET} {MODELS[current_model]['name']}")
+                continue
+
+            if user_input:  # Skip if already added (e.g., /image command)
+                messages.append({"role": "user", "content": user_input})
+
+            # Agent loop with protection
+            agent_turns = 0
+            consecutive_edit_failures = 0
+            while True:
+                UI.thinking()
+
+                try:
+                    stream = client.chat.completions.create(
+                        model=current_model,
+                        messages=messages,
+                        temperature=0.3,
+                        max_tokens=4000,
+                        stream=True
+                    )
+                except Exception as e:
+                    UI.clear_thinking()
+                    UI.error(f"API Error: {e}")
+                    break
+
+                UI.clear_thinking()
+
+                response_content = ""
+                print()  # New line before response
+
+                for chunk in stream:
+                    # Handle reasoning content
+                    if hasattr(chunk.choices[0].delta, 'reasoning_content') and chunk.choices[0].delta.reasoning_content:
+                        UI.reasoning(chunk.choices[0].delta.reasoning_content)
+
+                    # Handle standard content
+                    if chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+
+                        # Don't print tool_code tags
+                        if "<tool_code>" not in response_content and "<tool_code>" not in content:
+                            print(content, end="", flush=True)
+                        elif "<tool_code>" in response_content and "</tool_code>" in content:
+                            # End of tool code, continue printing after
+                            pass
+
+                        response_content += content
+
+                print()  # New line after response
+
+                if not response_content.strip():
+                    UI.warning("Empty response from model")
+                    break
+
+                messages.append({"role": "assistant", "content": response_content})
+
+                # Check for tool call
+                tool_call = parse_tool_call(response_content)
+
+                if tool_call:
+                    if "error" in tool_call:
+                        UI.error(tool_call["error"])
+                        messages.append({
+                            "role": "user",
+                            "content": f"Tool parse error: {tool_call['error']}. Please fix the JSON syntax."
+                        })
+                        continue
+
+                    # Increment turn counter
+                    agent_turns += 1
+                    tool_name = tool_call.get("tool") or tool_call.get("name")
+
+                    # Check for max turns
+                    if agent_turns >= MAX_AGENT_TURNS:
+                        UI.warning(f"Reached {MAX_AGENT_TURNS} tool calls. Pausing for your input.")
+                        messages.append({
+                            "role": "user",
+                            "content": "SYSTEM: Reached maximum automatic tool calls. Please summarize what you've done and what remains, then wait for user input."
+                        })
+                        break
+
+                    # Detect edit loops - track edit attempts
+                    if tool_name in ("edit_file", "replace_lines"):
+                        edit_sig = f"{tool_name}:{tool_call.get('filename')}:{tool_call.get('start_line', '')}:{tool_call.get('old_text', '')[:50]}"
+                        if edit_sig in recent_edits:
+                            UI.warning("Detected repeated edit attempt - breaking loop")
+                            messages.append({
+                                "role": "user",
+                                "content": "SYSTEM: You're attempting the same edit again. This suggests a loop. Stop and explain what's going wrong."
+                            })
+                            break
+                        recent_edits.append(edit_sig)
+                        # Keep only last 10 edits
+                        recent_edits = recent_edits[-10:]
+
+                    # Execute tool
+                    tools.set_steps(1)  # Single step for now
+                    result = execute_tool(tools, tool_call)
+
+                    # Check if task is done
+                    if tool_name == "done":
+                        # Capture summary for session history
+                        done_summary = tool_call.get("summary", "Task completed")
+                        session_summaries.append(done_summary)
+                        break
+
+                    # Handle edit failures - don't auto-retry
+                    if tool_name in ("edit_file", "replace_lines") and not result.get("success"):
+                        consecutive_edit_failures += 1
+                        if consecutive_edit_failures >= 2:
+                            UI.warning("Multiple edit failures - stopping for user guidance")
+                            messages.append({
+                                "role": "user",
+                                "content": f"SYSTEM: Edit failed: {result.get('error')}. You've had {consecutive_edit_failures} consecutive edit failures. Stop and ask the user for guidance instead of retrying."
+                            })
+                            break
+                    else:
+                        consecutive_edit_failures = 0  # Reset on success
+
+                    # Validate syntax after code edits
+                    if tool_name in ("edit_file", "replace_lines", "write_file") and result.get("success"):
+                        filename = tool_call.get("filename")
+                        if filename and filename.endswith(".py"):
+                            syntax_result = tools.validate_syntax(filename)
+                            if not syntax_result.get("valid", True):
+                                UI.warning(f"Edit created syntax error at line {syntax_result.get('line')}")
+                                result["syntax_error"] = syntax_result.get("error")
+                                result["syntax_line"] = syntax_result.get("line")
+
+                    # Feed result back (but don't encourage continuation on failure)
+                    if result.get("success"):
+                        messages.append({
+                            "role": "user",
+                            "content": f"Tool result:\n```json\n{json.dumps(result, indent=2)}\n```\nContinue with next step or respond to user."
+                        })
+                    else:
+                        messages.append({
+                            "role": "user",
+                            "content": f"Tool FAILED:\n```json\n{json.dumps(result, indent=2)}\n```\nAnalyze what went wrong. If you're unsure how to proceed, ask the user for help."
+                        })
+                    continue
+
+                # No tool call - wait for user input
+                break
+
+        except KeyboardInterrupt:
+            print()
+            UI.info("Interrupted. Type 'exit' to quit.")
+            continue
+        except Exception as e:
+            UI.error(f"Error: {e}")
+            continue
+
+
+if __name__ == "__main__":
+    main()

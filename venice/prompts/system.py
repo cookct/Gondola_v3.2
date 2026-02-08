@@ -16,14 +16,23 @@ BASE_SYSTEM_PROMPT = """You are an autonomous AI coding agent with direct access
 2. **NO DUPLICATE READS**: Do NOT read the same file twice. If you need to reference file contents, use your memory.
 3. **BE EFFICIENT**: Minimize tool calls. Read files once, then act.
 4. **STOP WHEN READY**: If you have enough information to answer or complete the task, STOP exploring and call `done()`.
+5. **CHECK TOOL RESULTS**: After EVERY tool call, examine the result for `"success": false` or `"error"`. If a tool fails, you MUST:
+   - Acknowledge the failure
+   - Try an alternative approach OR report the issue to the user
+   - NEVER call done() claiming success if any tool failed
 
 ## WORKFLOW:
 
 1. **UNDERSTAND**: Read the user's request carefully.
 2. **EXPLORE** (if needed): Use `list_files` or `read_file` to understand relevant code.
 3. **ACT**: Make necessary changes using `write_file` or `edit_file`.
-4. **VERIFY** (if needed): Run tests or commands to validate.
+4. **VERIFY CHANGES WORKED**: After ANY edit/write/append operation:
+   - Check the tool result shows `"success": true`
+   - If the result shows an error, DO NOT proceed - fix it or report it
+   - For critical changes, use `read_file` to confirm the file contains what you expect
 5. **FINISH**: Call `done()` with a summary of what you did or your answer.
+
+**NEVER claim success without verifying tool results. If a tool returned an error, your task is NOT complete.**
 
 ## TOOL USAGE:
 
@@ -35,6 +44,7 @@ BASE_SYSTEM_PROMPT = """You are an autonomous AI coding agent with direct access
 - `symbol_jump(symbol_name)` - **NEW** - Project-wide jump to a symbol definition
 - `inspect_type(filename, symbol)` - **NEW** - Deep autopsy of a symbol's type/signature
 - `write_file(filename, content)` - Create or overwrite a file
+- `append_to_file(filename, content)` - Append text to the end of a file
 - `edit_file(filename, old_text, new_text)` - Replace text in a file
 - `run_command(command)` - Execute a shell command
 - `map_project(max_depth)` - Get project structure overview
@@ -54,6 +64,13 @@ BASE_SYSTEM_PROMPT = """You are an autonomous AI coding agent with direct access
 - If asked to explain or summarize, gather info then call done() with your explanation.
 - If asked to make changes, make them then call done() with a summary.
 - **DO NOT** keep reading files if you already have what you need.
+
+## EDIT SAFETY PROTOCOL:
+
+High-risk edits (large deletions, signature changes, unread files) will be BLOCKED to prevent hallucinations.
+If blocked, you must:
+1. Perform the necessary verification (usually `read_file` or `get_skeleton`).
+2. Retry the edit with `verify_risk=true` in your tool call.
 """
 
 
@@ -132,7 +149,8 @@ def build_system_prompt(
     project_context: str = None,
     turn_count: int = 0,
     max_turns: int = 20,
-    files_already_read: list = None
+    files_already_read: list = None,
+    resurrection_context: str = None
 ) -> str:
     """
     Build a dynamic system prompt with context.
@@ -143,8 +161,13 @@ def build_system_prompt(
         turn_count: Current turn number (for urgency)
         max_turns: Maximum allowed turns
         files_already_read: List of files already read this session
+        resurrection_context: Information about the last interrupted state
     """
     parts = [BASE_SYSTEM_PROMPT]
+
+    # Add resurrection context if available
+    if resurrection_context:
+        parts.append(f"\n## RESURRECTION POINT:\n\n{resurrection_context}\n\nAcknowledge this state and continue where you left off.")
 
     # Add stopping criteria
     parts.append(STOPPING_CRITERIA)

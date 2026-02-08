@@ -1,5 +1,14 @@
-import tree_sitter
-from tree_sitter import Language, Parser
+# Tree-sitter is optional - graceful fallback if not installed
+try:
+    import tree_sitter
+    from tree_sitter import Language, Parser
+    HAS_TREE_SITTER = True
+except ImportError:
+    HAS_TREE_SITTER = False
+    tree_sitter = None
+    Language = None
+    Parser = None
+
 import subprocess
 import json
 from pathlib import Path
@@ -51,17 +60,17 @@ class UndeadOpsMixin(Tools):
                     
                     self._parsers['python'] = Parser(self.PY_LANGUAGE)
                     self._parsers['javascript'] = Parser(self.JS_LANGUAGE)
-                except:
-                    print("Tree-sitter languages not available. Install tree-sitter-python package or build languages manually.")
+                except (ImportError, OSError) as e:
+                    UI.step_detail(f"Tree-sitter languages not available: {e}")
                     
         except Exception as e:
             print(f"Failed to initialize Tree-sitter parsers: {e}")
             self._parsers = {}
 
     def get_skeleton(self, filename: str) -> dict:
-        """Return AST structure with line ranges using Tree-sitter"""
-        if not self.parsers:  # This triggers lazy initialization
-            return {"error": "Tree-sitter not initialized"}
+        """Return AST structure with line ranges, imports and timestamps using Tree-sitter"""
+        if not HAS_TREE_SITTER:
+            return {"error": "Tree-sitter not installed. Install with: pip install tree-sitter"}
             
         path = self.workspace._resolve(filename)
         if not os.path.exists(path):
@@ -84,11 +93,62 @@ class UndeadOpsMixin(Tools):
                 source_code = f.read()
                 
             tree = parser.parse(bytes(source_code, 'utf8'))
+            
+            # Extract basic skeleton
             skeleton = self._extract_skeleton(tree.root_node, source_code)
+            
+            # Augment with imports
+            skeleton["imports"] = self._extract_imports(tree.root_node, source_code, lang)
+            
+            # Augment with last modified (from git if possible)
+            skeleton["last_modified"] = self._get_last_modified(path)
+            
             return skeleton
             
         except Exception as e:
             return {"error": str(e)}
+
+    def _extract_imports(self, node, source_code, lang):
+        """Extract import statements from AST"""
+        imports = []
+        
+        # Simple query for imports
+        if lang == 'python':
+            # Look for import_from and import_statement
+            def find_py_imports(n):
+                if n.type in ['import_statement', 'import_from_statement']:
+                    imports.append(source_code[n.start_byte:n.end_byte].strip())
+                for child in n.children:
+                    find_py_imports(child)
+            find_py_imports(node)
+        elif lang == 'javascript':
+            def find_js_imports(n):
+                if n.type == 'import_declaration':
+                    imports.append(source_code[n.start_byte:n.end_byte].strip())
+                for child in n.children:
+                    find_js_imports(child)
+            find_js_imports(node)
+            
+        return imports
+
+    def _get_last_modified(self, path):
+        """Get last modified timestamp using git blame if available, else os"""
+        try:
+            # Try git first for more precision
+            import subprocess
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%cd", "--", str(path)],
+                capture_output=True, text=True, cwd=os.path.dirname(path)
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except (subprocess.SubprocessError, OSError):
+            pass  # Git not available or failed, use fallback
+        
+        # Fallback to OS stats
+        mtime = os.path.getmtime(path)
+        from datetime import datetime
+        return datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
     
     def _extract_skeleton(self, node, source_code: str, depth=0) -> dict:
         """Recursively extract class/method structure"""

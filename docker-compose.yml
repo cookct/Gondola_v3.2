@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  gondola:
+    build: .
+    container_name: gondola
+    ports:
+      - "5040:5040"
+    environment:
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+      - VENICE_API_KEY=${VENICE_API_KEY}
+    volumes:
+      # Mount your workspace
+      - ./workspace:/workspace
+      # Persist conversation history
+      - gondola_memory:/app/.gondola_knowledge
+      # Persist logs
+      - ./logs:/app/logs
+    working_dir: /workspace
+    restart: unless-stopped
+
+volumes:
+  gondola_memory:

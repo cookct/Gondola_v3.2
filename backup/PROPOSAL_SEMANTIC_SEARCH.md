@@ -1,4 +1,4 @@
-# Proposal: Semantic Search Integration for Gondola v2.1
+# Proposal: Semantic Search Integration for Gondola v2.2
 
 ## Overview
 Gondola currently relies on keyword-based matching and file structure analysis to understand codebases. While effective for direct lookups, it struggles with "conceptual" searches (e.g., finding where UI logic is registered when the files don't use the word 'registry').

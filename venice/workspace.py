@@ -19,20 +19,37 @@ class Workspace:
                 raise PermissionError(f"Cannot create workspace at '{self.root_dir}' - permission denied. Try a different path.")
 
     def _default_symlink_prompt(self, link_path, real_target, inside_workspace):
-        """Default handler: allow internal, prompt for external in CLI"""
-        from venice.core import UI
+        """Default handler: allow internal, BLOCK external (security first)"""
         if inside_workspace:
             return True
-        return UI.confirm(f"Security: Tool tried to access symlink pointing outside workspace: {real_target}. Allow?")
+        # SECURITY: Never allow symlinks outside workspace
+        # Interactive prompts can be bypassed in automated environments
+        return False
 
     def _resolve(self, path):
         """Resolve path and ensure it's within workspace, with symlink protection"""
+        # Expand user home directory (~)
+        path = os.path.expanduser(path)
+        
         if os.path.isabs(path):
             full_path = os.path.abspath(path)
         else:
             full_path = os.path.abspath(os.path.join(self.root_dir, path))
 
+        # Normalize path to handle .. and . 
+        full_path = os.path.normpath(full_path)
+        
+        # SECURITY: Check for path traversal attempts
+        # If path still contains .. after normalization, it's a traversal attempt
+        if '..' in full_path.split(os.sep):
+            raise ValueError(f"Access denied: Path traversal detected in '{path}'")
+        
+        # SECURITY: Reject Windows-style paths on Unix (backslash = literal char, but suspicious)
+        if os.sep == '/' and '\\' in path:
+            raise ValueError(f"Access denied: Windows-style paths not allowed: '{path}'")
+        
         # Basic security check - path must be within workspace
+        # Use os.sep to handle both Unix and Windows paths
         if not full_path.startswith(self.root_dir + os.sep) and full_path != self.root_dir:
             raise ValueError(f"Access denied: '{path}' is outside workspace")
 

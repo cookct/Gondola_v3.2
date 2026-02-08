@@ -8,11 +8,12 @@ from venice.core import UI
 class Tools:
     """Base class for all tools"""
 
-    def __init__(self, workspace, memory=None, project_index=None, **kwargs):
+    def __init__(self, workspace, memory=None, project_index=None, agent_state=None, **kwargs):
         super().__init__(**kwargs)
         self.workspace = workspace
         self.memory = memory
         self.project_index = project_index
+        self.agent_state = agent_state
         self.step_count = 0
         self.total_steps = 0
         self.files_touched = set()  # Track files modified this session

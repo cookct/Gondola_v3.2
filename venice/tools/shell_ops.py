@@ -144,7 +144,7 @@ class ShellOpsMixin(Tools):
             env = os.environ.copy()
 
             # 2. Inject Venv if it exists in the project root
-            venv_path = "/home/anonymous/gemini-workspace/litellm_venv"
+            venv_path = os.path.expanduser("~/.venice/litellm_venv")
             if os.path.exists(venv_path):
                 venv_bin = os.path.join(venv_path, "bin")
                 env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")

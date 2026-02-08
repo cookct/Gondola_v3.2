@@ -11,66 +11,68 @@ class PersistenceManager:
     checking out the shadow branch and clobbering the working directory.
     """
     
-    def __init__(self, branch_name="_gondola_shadow"):
+    def __init__(self, branch_name="_gondola_shadow", project_root=None):
         self.branch_name = branch_name
-        self.project_root = Path.cwd()
+        self.project_root = Path(project_root).resolve() if project_root else Path.cwd()
         self._init_branch()
     
     def _init_branch(self):
         """Create hidden branch for state storage if it doesn't exist"""
         try:
+            # Check if we're in a git repository
+            result = subprocess.run([
+                "git", "rev-parse", "--is-inside-work-tree"
+            ], capture_output=True, text=True, cwd=self.project_root)
+            
+            if result.returncode != 0:
+                # Not a git repo, don't auto-init to avoid cluttering user space
+                # unless explicitly allowed? For now, just skip.
+                return
+
             # Check if branch already exists
             result = subprocess.run([
                 "git", "show-ref", "--verify", f"refs/heads/{self.branch_name}"
-            ], capture_output=True)
+            ], capture_output=True, text=True, cwd=self.project_root)
             
             if result.returncode == 0:
                 # Branch exists, we're good
                 return
                 
         except FileNotFoundError:
-            print("Git not available. Persistence disabled.")
             return
-        except Exception as e:
-            print(f"Git check failed: {e}")
+        except Exception:
             return
         
         # Branch doesn't exist, create it with low-level commands
         try:
-            # Create initial commit with hash-object and commit-tree
-            
             # 1. Create blob for marker file
             marker_content = "This branch stores Gondola's cognitive state\n"
             result = subprocess.run([
                 "git", "hash-object", "-w", "--stdin"
-            ], input=marker_content.encode(), capture_output=True, check=True)
-            blob_hash = result.stdout.decode().strip()
+            ], input=marker_content, capture_output=True, text=True, check=True, cwd=self.project_root)
+            blob_hash = result.stdout.strip()
             
             # 2. Create tree object
             result = subprocess.run([
                 "git", "mktree"
-            ], input=f"100644 blob {blob_hash}	.gondola_necromancer".encode(), 
-               capture_output=True, check=True)
-            tree_hash = result.stdout.decode().strip()
+            ], input=f"100644 blob {blob_hash}\t.gondola_necromancer", 
+               capture_output=True, text=True, check=True, cwd=self.project_root)
+            tree_hash = result.stdout.strip()
             
             # 3. Create commit object
-            timestamp = str(int(datetime.now().timestamp()))
             commit_msg = "INIT: Necromancer architecture"
             result = subprocess.run([
                 "git", "commit-tree", tree_hash, "-m", commit_msg
-            ], capture_output=True, check=True)
-            commit_hash = result.stdout.decode().strip()
+            ], capture_output=True, text=True, check=True, cwd=self.project_root)
+            commit_hash = result.stdout.strip()
             
             # 4. Create branch reference
             subprocess.run([
                 "git", "update-ref", f"refs/heads/{self.branch_name}", commit_hash
-            ], check=True)
+            ], check=True, text=True, cwd=self.project_root)
             
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr.decode() if e.stderr else "No error output"
-            print(f"Failed to create shadow branch: {error_msg}")
-        except Exception as e:
-            print(f"Unexpected error creating branch: {e}")
+        except Exception:
+            pass
 
     def checkpoint(self, thought: str, task: str):
         """Create an empty commit with cognitive state using low-level git commands"""
@@ -78,34 +80,48 @@ class PersistenceManager:
             timestamp = datetime.now().isoformat()
             commit_msg = f"RESURRECT: {thought} | PENDING: {task} | TIMESTAMP: {timestamp}"
             
-            # Get current branch's HEAD commit
+            # Check if branch exists
             result = subprocess.run([
-                "git", "rev-parse", "HEAD"
-            ], capture_output=True, check=True)
-            current_commit = result.stdout.decode().strip()
+                "git", "rev-parse", "--verify", self.branch_name
+            ], capture_output=True, text=True, cwd=self.project_root)
             
-            # Get the current tree
-            result = subprocess.run([
-                "git", "rev-parse", "HEAD^{tree}"
-            ], capture_output=True, check=True)
-            current_tree = result.stdout.decode().strip()
+            if result.returncode != 0:
+                # Branch doesn't exist, try to init
+                self._init_branch()
+                # Re-verify
+                result = subprocess.run([
+                    "git", "rev-parse", "--verify", self.branch_name
+                ], capture_output=True, text=True, cwd=self.project_root)
+                if result.returncode != 0:
+                    return
+
+            # Get current HEAD tree to snapshot the actual project state
+            # This allows "git diff" to actually measure divergence later
+            try:
+                result = subprocess.run([
+                    "git", "rev-parse", "HEAD^{tree}"
+                ], capture_output=True, text=True, check=True, cwd=self.project_root)
+                current_tree = result.stdout.strip()
+            except subprocess.CalledProcessError:
+                # Fallback if no HEAD (empty repo), use the branch's existing tree
+                result = subprocess.run([
+                    "git", "rev-parse", f"{self.branch_name}^{{tree}}"
+                ], capture_output=True, text=True, check=True, cwd=self.project_root)
+                current_tree = result.stdout.strip()
             
-            # Create new commit object pointing to same tree
+            # Create new commit object pointing to same tree but with shadow branch as parent
             result = subprocess.run([
                 "git", "commit-tree", current_tree, "-p", self.branch_name, "-m", commit_msg
-            ], capture_output=True, check=True)
-            new_commit = result.stdout.decode().strip()
+            ], capture_output=True, text=True, check=True, cwd=self.project_root)
+            new_commit = result.stdout.strip()
             
             # Update the shadow branch to point to new commit
             subprocess.run([
                 "git", "update-ref", f"refs/heads/{self.branch_name}", new_commit
-            ], check=True)
+            ], check=True, text=True, cwd=self.project_root)
             
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr.decode() if e.stderr else "No error output"
-            print(f"Checkpoint failed: {error_msg}")
-        except Exception as e:
-            print(f"Failed to create checkpoint: {e}")
+        except Exception:
+            pass
 
     def get_last_checkpoint(self) -> dict:
         """Parse the last commit message from the shadow branch without checking it out"""
@@ -113,13 +129,13 @@ class PersistenceManager:
             # Get the commit hash of the shadow branch
             result = subprocess.run([
                 "git", "rev-parse", self.branch_name
-            ], capture_output=True, check=True)
-            commit_hash = result.stdout.decode().strip()
+            ], capture_output=True, text=True, check=True, cwd=self.project_root)
+            commit_hash = result.stdout.strip()
             
             # Get the commit message
             result = subprocess.run([
                 "git", "show", "-s", "--format=%B", commit_hash
-            ], capture_output=True, check=True)
+            ], capture_output=True, text=True, check=True, cwd=self.project_root)
             message = result.stdout.strip()
             
             # Parse message
@@ -135,9 +151,10 @@ class PersistenceManager:
             return {"thought": "", "task": "", "message": message}
             
         except subprocess.CalledProcessError as e:
-            error_output = e.stderr.decode() if e.stderr else "No error output"
-            print(f"Git operation failed: {error_output}")
+            # If text=True, e.stderr is already a string
+            error_output = e.stderr if e.stderr else "No error output"
+            # Silently fail if branch doesn't exist yet
             return {"thought": "", "task": "", "message": ""}
         except Exception as e:
-            print(f"Failed to get checkpoint: {e}")
+            # print(f"Failed to get checkpoint: {e}")
             return {"thought": "", "task": "", "message": ""}

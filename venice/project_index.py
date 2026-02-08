@@ -215,22 +215,25 @@ class ProjectIndex:
         return f"{suffix[1:].upper()} file"
 
     def _analyze_python(self, rel_path: str, content: str):
-        """Extract Python symbols and imports."""
+        """Extract Python symbols and imports with line numbers."""
         symbols = {'functions': [], 'classes': []}
         imports = set()
 
         # Extract classes
         for match in re.finditer(r'^class\s+(\w+)', content, re.MULTILINE):
-            symbols['classes'].append(match.group(1))
+            # Calculate line number
+            line_no = content.count('\n', 0, match.start()) + 1
+            symbols['classes'].append({'name': match.group(1), 'line': line_no})
 
         # Extract top-level functions
         for match in re.finditer(r'^def\s+(\w+)', content, re.MULTILINE):
-            symbols['functions'].append(match.group(1))
+            line_no = content.count('\n', 0, match.start()) + 1
+            symbols['functions'].append({'name': match.group(1), 'line': line_no})
 
         # Extract imports (simplified - just local imports)
         for match in re.finditer(r'^from\s+(\S+)\s+import|^import\s+(\S+)', content, re.MULTILINE):
             module = match.group(1) or match.group(2)
-            if not module.startswith('.') and '.' not in module:
+            if module and not module.startswith('.') and '.' not in module:
                 # Could be a local module
                 imports.add(module)
 
@@ -239,23 +242,26 @@ class ProjectIndex:
             self.dependencies[rel_path] = imports
 
     def _analyze_javascript(self, rel_path: str, content: str):
-        """Extract JavaScript/TypeScript symbols and imports."""
+        """Extract JavaScript/TypeScript symbols and imports with line numbers."""
         symbols = {'functions': [], 'classes': [], 'exports': []}
         imports = set()
 
         # Extract classes
         for match in re.finditer(r'class\s+(\w+)', content):
-            symbols['classes'].append(match.group(1))
+            line_no = content.count('\n', 0, match.start()) + 1
+            symbols['classes'].append({'name': match.group(1), 'line': line_no})
 
         # Extract functions (named and arrow)
         for match in re.finditer(r'(?:function\s+(\w+)|const\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)', content):
             name = match.group(1) or match.group(2)
             if name:
-                symbols['functions'].append(name)
+                line_no = content.count('\n', 0, match.start()) + 1
+                symbols['functions'].append({'name': name, 'line': line_no})
 
         # Extract exports
         for match in re.finditer(r'export\s+(?:default\s+)?(?:function|class|const|let|var)\s+(\w+)', content):
-            symbols['exports'].append(match.group(1))
+            line_no = content.count('\n', 0, match.start()) + 1
+            symbols['exports'].append({'name': match.group(1), 'line': line_no})
 
         # Extract imports
         for match in re.finditer(r"(?:import|from)\s+['\"]\.?\.?/?([^'\"]+)['\"]", content):
@@ -289,9 +295,11 @@ class ProjectIndex:
                 if rel_path in self.symbols:
                     syms = self.symbols[rel_path]
                     if syms.get('functions'):
-                        text += f"\nfunctions: {', '.join(syms['functions'][:10])}"
+                        func_names = [f['name'] if isinstance(f, dict) else f for f in syms['functions'][:10]]
+                        text += f"\nfunctions: {', '.join(func_names)}"
                     if syms.get('classes'):
-                        text += f"\nclasses: {', '.join(syms['classes'][:5])}"
+                        class_names = [c['name'] if isinstance(c, dict) else c for c in syms['classes'][:5]]
+                        text += f"\nclasses: {', '.join(class_names)}"
                 
                 files_to_embed.append(rel_path)
                 texts_to_embed.append(text)
@@ -302,9 +310,40 @@ class ProjectIndex:
                 self.vectors[rel_path] = embeddings[i].tolist()
 
     def semantic_search(self, query: str, max_results: int = 5) -> List[Tuple[str, float]]:
-        """Perform semantic search using vector similarity."""
+        """Perform semantic search using vector similarity. Falls back to keyword search if vectors unavailable."""
         if not HAS_EMBEDDINGS or not self.vectors:
-            return []
+            # Fallback to keyword-based relevance scoring
+            results = []
+            query_words = set(re.findall(r'\w+', query.lower()))
+            
+            for filepath, summary in self.file_summaries.items():
+                score = 0.0
+                filepath_lower = filepath.lower()
+                summary_lower = summary.lower()
+                
+                # Match in filepath
+                for word in query_words:
+                    if word in filepath_lower:
+                        score += 0.4
+                    if word in summary_lower:
+                        score += 0.2
+                
+                # Match in symbols
+                if filepath in self.symbols:
+                    syms = self.symbols[filepath]
+                    for sym_type in ['functions', 'classes']:
+                        if sym_type in syms:
+                            for sym in syms[sym_type]:
+                                name = sym['name'] if isinstance(sym, dict) else sym
+                                if any(word in name.lower() for word in query_words):
+                                    score += 0.3
+                
+                if score > 0:
+                    # Normalize score to 0.0-1.0 range (rough estimate)
+                    results.append((filepath, min(0.95, score)))
+            
+            results.sort(key=lambda x: x[1], reverse=True)
+            return results[:max_results]
 
         if self._model is None:
             self._model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -359,7 +398,9 @@ class ProjectIndex:
                 for sym_type in ['functions', 'classes', 'exports']:
                     if sym_type in syms:
                         for sym in syms[sym_type]:
-                            if any(word in sym.lower() for word in task_words):
+                            # sym can be a dict {'name': '...', 'line': ...} or a string
+                            name = sym['name'] if isinstance(sym, dict) else sym
+                            if any(word in name.lower() for word in task_words):
                                 score += 1.5
 
             if score > 0:
@@ -448,12 +489,15 @@ class ProjectIndex:
                 if filepath in self.symbols:
                     syms = self.symbols[filepath]
                     if syms.get('classes'):
-                        lines.append(f"\n  Classes: {', '.join(syms['classes'][:5])}")
+                        class_names = [f"{c['name']} (line {c['line']})" if isinstance(c, dict) else c for c in syms['classes'][:5]]
+                        lines.append(f"\n  Classes: {', '.join(class_names)}")
                     if syms.get('functions'):
                         funcs = syms['functions'][:8]
-                        lines.append(f"\n  Functions: {', '.join(funcs)}")
+                        func_names = [f"{f['name']} (line {f['line']})" if isinstance(f, dict) else f for f in funcs]
+                        lines.append(f"\n  Functions: {', '.join(func_names)}")
                     if syms.get('exports'):
-                        lines.append(f"\n  Exports: {', '.join(syms['exports'][:5])}")
+                        export_names = [e['name'] if isinstance(e, dict) else e for e in syms['exports'][:5]]
+                        lines.append(f"\n  Exports: {', '.join(export_names)}")
                 lines.append("\n")
 
         return ''.join(lines)
@@ -507,6 +551,13 @@ class ProjectIndex:
     def file_count(self) -> int:
         """Return total number of indexed files."""
         return len(self.file_summaries)
+
+    def add_manual_knowledge(self, key: str, content: str):
+        """Add manual knowledge to the index."""
+        if not hasattr(self, 'manual_knowledge'):
+            self.manual_knowledge = {}
+        self.manual_knowledge[key] = content
+        self._save_cache()
 
     def __repr__(self):
         return f"ProjectIndex({self.project_path}, {self.file_count()} files)"

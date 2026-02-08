@@ -27,20 +27,11 @@ from pathlib import Path
 from openai import OpenAI
 import httpx
 
-# Initialize persistence first
+# NEW: Import persistence manager
 try:
     from venice.persistence import PersistenceManager
-    persistence = PersistenceManager()
-    
-    # Get last checkpoint and display resurrection message
-    checkpoint = persistence.get_last_checkpoint()
-    if checkpoint["thought"]:
-        print(f"\n🧠 RESURRECTION POINT: Your last thought was '{checkpoint['thought']}'")
-        print(f"➡️  You were about to '{checkpoint['task']}'")
-        print(f"🔄 Resuming workflow...\n")
-except Exception as e:
-    print(f"\n⚠️  Persistence system not available: {e}\n")
-    persistence = None
+except ImportError:
+    PersistenceManager = None
 
 # ============================================================================
 # COMPREHENSIVE DEBUG LOGGING CONFIGURATION FOR CLI
@@ -102,25 +93,8 @@ def main():
  parser = argparse.ArgumentParser(description="Venice CLI v2 - Code Assistant")
  parser.add_argument("-w", "--workspace", default=DEFAULT_WORKSPACE, help="Workspace directory")
  parser.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model to use")
+ parser.add_argument("--forget", action="store_true", help="Clear project notes and session history")
  args = parser.parse_args()
-
- # Get API key
- api_key = get_api_key()
- if not api_key:
-  UI.error("Venice API Key not found. Set VENICE_API_KEY env var or configure app_config.json")
-  sys.exit(1)
-
- # Initialize
- client = OpenAI(
-  api_key=api_key,
-  base_url="https://api.venice.ai/api/v1",
-  timeout=300.0,  # Increased from 120s to 300s (5 minutes)
-  max_retries=2,
-  http_client=httpx.Client(
-    timeout=httpx.Timeout(300.0, connect=60.0),
-    limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
-  )
- )
 
  try:
   workspace = Workspace(args.workspace)
@@ -128,11 +102,17 @@ def main():
   UI.error(str(e))
   sys.exit(1)
 
- # Initialize persistence (Necromancer Phase 1)
- persistence = PersistenceManager()
- last_checkpoint = persistence.get_last_checkpoint()
-
  # Initialize memory
+ memory = Memory(workspace.root_dir)
+
+ if args.forget:
+  memory.clear_notes()
+  memory.data["session_history"] = []
+  memory.save()
+  UI.success("Memory cleared (project notes and session history).")
+  sys.exit(0)
+
+ # Get API key
  memory = Memory(workspace.root_dir)
   
  # NEW: Build project index for smart context
@@ -147,12 +127,16 @@ def main():
         "ctags", "-R", "--fields=+l", "--languages=Python,JavaScript", 
         "-f", os.path.join(workspace.root_dir, ".gondola_tags")
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
- except:
-    pass
+ except (OSError, subprocess.SubprocessError):
+    pass  # ctags not installed or failed, that's ok
 
- tools = Tools(workspace, memory, project_index)
  # NEW: Initialize agent state tracker
  agent_state = AgentState()
+
+ tools = Tools(workspace, memory, project_index, agent_state=agent_state)
+ 
+ # Initialize persistence if available
+ persistence = PersistenceManager(workspace.root_dir) if PersistenceManager else None
 
  # Build system prompt with memory context
  memory_context = memory.get_context()
@@ -161,17 +145,40 @@ def main():
  else:
   full_prompt = SYSTEM_PROMPT
 
- # Inject Resurrection Point (Phase 1)
- if last_checkpoint.get("thought"):
-     resurrection_msg = f"\n\n## RESURRECTION POINT:\nYou were interrupted. Your last state was:\nThought: {last_checkpoint['thought']}\nPending Task: {last_checkpoint['task']}\nContinue where you left off."
-     full_prompt += resurrection_msg
-     UI.info("Resurrected cognitive state from shadow branch")
+ # Inject Resurrection Point if available
+ if persistence:
+     last_checkpoint = persistence.get_last_checkpoint()
+     if last_checkpoint and last_checkpoint.get("thought"):
+         # Step 7: Divergence Detection
+         try:
+             # Check how many files changed between shadow branch and current workspace
+             # We use the marker file to find the base tree of the shadow branch
+             result = subprocess.run(
+                 ["git", "diff", "--name-only", "HEAD", persistence.branch_name],
+                 capture_output=True, text=True, cwd=workspace.root_dir
+             )
+             changed_files = [f for f in result.stdout.splitlines() if f]
+             
+             if len(changed_files) > 5:
+                 UI.warning(f"RESURRECTION WARNING: Workspace diverged significantly ({len(changed_files)} files changed).")
+                 UI.step_detail("The codebase has changed since your last session. Resurrecting state with caution.")
+                 
+             resurrection_msg = f"\n\n## RESURRECTION POINT:\nYou were interrupted. Your last state was:\nThought: {last_checkpoint['thought']}\nPending Task: {last_checkpoint['task']}\nContinue where you left off."
+             full_prompt += resurrection_msg
+             UI.info("Resurrected cognitive state from shadow branch")
+             if changed_files:
+                 UI.info(f"Divergence detected ({len(changed_files)} files changed)")
+         except Exception as e:
+             # Fallback if git diff fails
+             resurrection_msg = f"\n\n## RESURRECTION POINT:\nYou were interrupted. Your last state was:\nThought: {last_checkpoint['thought']}\nPending Task: {last_checkpoint['task']}\nContinue where you left off."
+             full_prompt += resurrection_msg
+             UI.info("Resurrected cognitive state (divergence check failed)")
 
  # Initialize current model
  current_model = args.model if args.model in MODELS else DEFAULT_MODEL
 
  # Welcome
- UI.header("Venice CLI v2", Colors.CYAN)
+ UI.header("Venice CLI v2.2", Colors.CYAN)
  print(f"{Colors.GREY}Workspace: {workspace.root_dir}{Colors.RESET}")
  print(f"{Colors.GREY}Model: {MODELS[current_model]['name']} ({current_model}){Colors.RESET}")
  if memory_context:
@@ -323,8 +330,8 @@ def main():
                 messages.append({"role": "user", "content": diag_msg})
                 # Clear after reading to avoid repeated alerts
                 os.remove(diag_path)
-        except:
-            pass
+        except (IOError, OSError, json.JSONDecodeError):
+            pass  # Diagnostics file missing or corrupt, that's ok
 
     # Sanitize messages to prevent API errors
     sanitized_messages = []
@@ -405,15 +412,21 @@ def main():
      logger.info(f"[{session_id}] >>> API call attempt {attempt + 1}/{max_retries} at {datetime.now().isoformat()}")
 
      try:
+      # Build Venice-specific parameters
+      venice_params = {
+          "include_venice_system_prompt": False
+      }
+
       stream = client.chat.completions.create(
        model=current_model,
        messages=sanitized_messages,
        temperature=0.4,
-       max_tokens=max_tokens,
+       max_completion_tokens=max_tokens,
        stream=True,
        tools=TOOL_SCHEMAS,
        tool_choice="auto",
-       timeout=300.0
+       timeout=300.0,
+       extra_body={"venice_parameters": venice_params}
       )
       api_connect_time = time.time() - api_call_start
       logger.info(f"[{session_id}] <<< Stream created in {api_connect_time:.3f}s")
@@ -526,6 +539,10 @@ def main():
          native_tool_calls[idx]["function"]["name"] = tc.function.name
         if hasattr(tc.function, 'arguments') and tc.function.arguments:
          native_tool_calls[idx]["function"]["arguments"] += tc.function.arguments
+         # Visual feedback for tool generation
+         curr_len = len(native_tool_calls[idx]["function"]["arguments"])
+         t_name = native_tool_calls[idx]["function"]["name"] or "tool"
+         print(f"\r{Colors.DIM}Generating {t_name} args... {curr_len} chars{Colors.RESET}", end="", flush=True)
 
      # Handle standard content
      if choice.delta.content:
@@ -709,7 +726,8 @@ def main():
       # NEW: Track file reads
       if tool_name == 'read_file' and isinstance(result, dict) and result.get('success'):
        content = result.get('content', '')
-       agent_state.record_file_read(tool_args.get('filename', ''), content)
+       full_hash = result.get('hash')
+       agent_state.record_file_read(tool_args.get('filename', ''), content, full_hash=full_hash)
 
       # NEW: Track file writes/edits
       if tool_name == 'write_file':

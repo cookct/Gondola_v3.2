@@ -59,7 +59,7 @@ from venice.workspace import Workspace
 from venice.memory import Memory
 from venice.tools import CombinedTools
 from venice.prompts.system import SYSTEM_PROMPT, build_system_prompt, get_checkpoint_message
-from venice.api import get_api_key, execute_tool, parse_tool_call
+from venice.api import get_api_key, get_together_api_key, execute_tool, parse_tool_call
 from venice.tools.schema import TOOL_SCHEMAS
 
 # NEW: Import smart context management modules
@@ -123,7 +123,7 @@ def web_symlink_handler(link_path, real_target, inside_workspace):
     print(f"SYMLINK BLOCKED: {link_path} -> {real_target} (outside workspace)")
     return False
 
-def initialize():
+def initialize(clear_messages=False):
     global workspace, memory, tools, client, messages, interrupt_flag
     global project_index, context_manager, agent_state
 
@@ -136,8 +136,8 @@ def initialize():
         workspace = Workspace(WORKSPACE_DIR, symlink_handler=web_symlink_handler)
         logger.debug("Workspace initialized")
 
-        memory = Memory(workspace.root_dir)
-        logger.debug(f"Memory initialized, root: {workspace.root_dir}")
+        memory = Memory(workspace.root_dir, conversation_dir=sandbox_dir)
+        logger.debug(f"Memory initialized, root: {workspace.root_dir}, conversation_dir: {sandbox_dir}")
 
         tools = CombinedTools(workspace, memory)
         logger.debug("Tools initialized")
@@ -176,7 +176,18 @@ def initialize():
             full_prompt += f"\n\n## MEMORY FROM PREVIOUS SESSIONS:\n\n{memory_context}"
             logger.debug(f"Memory context added ({len(memory_context)} chars)")
 
-        messages = [{"role": "system", "content": full_prompt}]
+        # Restore conversation from last session if available (unless clearing)
+        if clear_messages:
+            messages = [{"role": "system", "content": full_prompt}]
+            logger.info("Starting fresh conversation (workspace switched)")
+        else:
+            saved_messages = memory.load_conversation()
+            if saved_messages:
+                messages = [{"role": "system", "content": full_prompt}] + saved_messages
+                logger.info(f"Restored {len(saved_messages)} messages from previous session")
+            else:
+                messages = [{"role": "system", "content": full_prompt}]
+
         logger.info(f"System prompt initialized ({len(full_prompt)} chars)")
         logger.info("INITIALIZATION COMPLETE")
 
@@ -292,124 +303,67 @@ def get_balance():
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/image/edit', methods=['POST'])
-def edit_image():
-    try:
-        data = request.json
-        prompt = data.get('prompt')
-        image_b64 = data.get('image') # Base64 encoded string
-        model = data.get('model', 'qwen-image')  # Default to qwen-image
-
-        if not prompt:
-            return jsonify({"success": False, "error": "No prompt provided"}), 400
-
-        api_key = get_api_key()
-        if not api_key:
-            return jsonify({"success": False, "error": "API Key not found"}), 500
-
-        import httpx
-
-        # Determine mode: Text-to-Image or Image-to-Image (Edit)
-        if image_b64:
-            endpoint = "https://api.venice.ai/api/v1/image/edit"
-            # Payload for Edit endpoint with model and image
-            payload = {
-                "model": model,  # e.g., "grok-imagine-edit"
-                "prompt": prompt,
-                "image": image_b64  # Frontend sends raw base64 (split(',')[1])
-            }
-        else:
-            endpoint = "https://api.venice.ai/api/v1/image/generate"
-            payload = {
-                "model": model,  # e.g., "grok-imagine" or "qwen-image"
-                "prompt": prompt,
-                "width": 1024,
-                "height": 1024,
-                "steps": 4,
-                "hide_watermark": False,
-                "return_binary": False
-            }
-
-        with httpx.Client(timeout=60.0) as client:
-            response = client.post(
-                endpoint,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json=payload
-            )
-            
-            if response.status_code != 200:
-                print(f"DEBUG IMAGE ERROR: {response.text}")
-                return jsonify({"success": False, "error": f"Venice API Error ({response.status_code}): {response.text}"}), response.status_code
-            
-            # Handle Binary Response (image/png)
-            content_type = response.headers.get("Content-Type", "")
-            if "image" in content_type:
-                filename = f"edit_{int(time.time())}.png"
-                filepath = os.path.join(IMAGES_DIR, filename)
-                with open(filepath, "wb") as f:
-                    f.write(response.content)
-                return jsonify({"success": True, "image_url": f"/images/{filename}"})
-
-            # Handle JSON Response
-            try:
-                result = response.json()
-            except json.JSONDecodeError:
-                return jsonify({"success": False, "error": f"Invalid response: {response.text[:200]}"}), 500
-            
-            # DEBUG: Print raw response if something is wrong
-            if "images" not in result and "data" not in result:
-                print(f"DEBUG IMAGE RESPONSE: {json.dumps(result, indent=2)}")
-            
-            # Handle new format: {"images": ["base64string..."]}
-            if "images" in result and len(result["images"]) > 0:
-                output_b64 = result["images"][0]
-                
-                filename = f"edit_{int(time.time())}.png"
-                filepath = os.path.join(IMAGES_DIR, filename)
-                
-                with open(filepath, "wb") as f:
-                    f.write(base64.b64decode(output_b64))
-                return jsonify({"success": True, "image_url": f"/images/{filename}"})
-
-            # Handle old/OpenAI format: {"data": [{"b64_json": "..."}]}
-            elif "data" in result and len(result["data"]) > 0:
-                img_data = result["data"][0]
-                output_b64 = img_data.get("b64_json")
-                output_url = img_data.get("url")
-                
-                filename = f"edit_{int(time.time())}.png"
-                filepath = os.path.join(IMAGES_DIR, filename)
-                
-                if output_b64:
-                    with open(filepath, "wb") as f:
-                        f.write(base64.b64decode(output_b64))
-                    return jsonify({"success": True, "image_url": f"/images/{filename}"})
-                elif output_url:
-                    img_resp = client.get(output_url)
-                    with open(filepath, "wb") as f:
-                        f.write(img_resp.content)
-                    return jsonify({"success": True, "image_url": f"/images/{filename}"})
-            
-            return jsonify({"success": False, "error": "No image data in response"}), 500
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
-
 @app.route('/api/interrupt', methods=['POST'])
 def interrupt():
     global interrupt_flag
     interrupt_flag.set()
     return jsonify({"success": True, "message": "Interrupt signal sent"})
 
+@app.route('/api/save-session', methods=['POST'])
+def save_session():
+    """Manually save the current session to memory"""
+    global memory, agent_state
+    try:
+        data = request.json
+        history = data.get('history', [])
+
+        # Generate a simple summary from the conversation
+        user_messages = [m.get('content', '') for m in history if m.get('role') == 'user' and isinstance(m.get('content'), str)]
+
+        if user_messages:
+            # Take first few user messages as summary
+            summary = ' | '.join(user_messages[:3])
+            if len(summary) > 200:
+                summary = summary[:197] + '...'
+        else:
+            summary = f"Session saved at {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+        # Get files touched from agent state if available
+        files_touched = []
+        if agent_state:
+            files_touched = list(agent_state.files_written.union(agent_state.files_edited))
+
+        # Save to memory
+        memory.add_session_summary(summary, files_touched)
+        logger.info(f"Manual session save: {summary[:50]}... ({len(files_touched)} files)")
+
+        return jsonify({
+            "success": True,
+            "summary": summary,
+            "files_count": len(files_touched)
+        })
+    except Exception as e:
+        logger.error(f"Failed to save session: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/conversation', methods=['GET'])
+def get_conversation():
+    """Get current conversation for frontend restore"""
+    global messages
+    # Return all non-system messages
+    conversation = [m for m in messages if m.get('role') != 'system']
+    return jsonify({
+        "success": True,
+        "messages": conversation,
+        "count": len(conversation)
+    })
+
 @app.route('/api/models', methods=['GET'])
 def get_models():
     return jsonify({
         "models": MODELS,
-        "current": "qwen3-235b-a22b-instruct-2507"
+        "current": "moonshotai/Kimi-K2.5"
     })
 
 @app.route('/api/models', methods=['POST'])
@@ -436,7 +390,7 @@ def handle_workspace():
         try:
             WORKSPACE_DIR = new_path
             save_workspace(new_path)  # Persist for restarts
-            initialize()
+            initialize(clear_messages=True)  # Clear conversation when switching workspaces
             return jsonify({"success": True, "path": WORKSPACE_DIR})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
@@ -533,7 +487,7 @@ def chat():
     user_message = data.get('message')
     image_data = data.get('image')
     image_mime = data.get('image_mime', 'image/png')
-    model_id = data.get('model', 'qwen3-235b-a22b-instruct-2507')
+    model_id = data.get('model', 'moonshotai/Kimi-K2.5')
 
     logger.info(f"[{request_id}] Model: {model_id}")
     logger.info(f"[{request_id}] Message length: {len(user_message) if user_message else 0} chars")
@@ -546,6 +500,7 @@ def chat():
 
     if user_message and user_message.lower() == 'clear':
         logger.info(f"[{request_id}] Clear command received - reinitializing")
+        memory.clear_conversation()  # Clear saved conversation
         initialize()
         return jsonify({"response": "Conversation cleared."})
 
@@ -629,7 +584,24 @@ def chat():
 
                     try:
                         import httpx
-                        api_key = get_api_key()
+                        
+                        # Determine Provider and Endpoint
+                        is_together = model_id.startswith("moonshotai/")
+                        
+                        if is_together:
+                            api_key = get_together_api_key()
+                            api_base = "https://api.together.xyz/v1/chat/completions"
+                            if not api_key:
+                                logger.error(f"[{request_id}] Together API Key missing for {model_id}")
+                                event_queue.put({"type": "error", "data": "Together API Key not configured."})
+                                break
+                        else:
+                            api_key = get_api_key()
+                            api_base = "https://api.venice.ai/api/v1/chat/completions"
+                            if not api_key:
+                                logger.error(f"[{request_id}] Venice API Key missing")
+                                event_queue.put({"type": "error", "data": "Venice API Key not configured."})
+                                break
 
                         # NEW: Rebuild system prompt dynamically with project context
                         if project_index and agent_state:
@@ -656,7 +628,7 @@ def chat():
                         pricing = model_info.get("pricing", "unknown")
 
                         logger.info(f"[{request_id}] ╔══════════════════════════════════════════════════════════")
-                        logger.info(f"[{request_id}] ║ API REQUEST TO VENICE")
+                        logger.info(f"[{request_id}] ║ API REQUEST TO {'TOGETHER' if is_together else 'VENICE'}")
                         logger.info(f"[{request_id}] ╠══════════════════════════════════════════════════════════")
                         logger.info(f"[{request_id}] ║ Model:          {model_id}")
                         logger.info(f"[{request_id}] ║ Max Tokens:     {max_tokens}")
@@ -677,23 +649,29 @@ def chat():
                         # Generous timeouts: connect=60s, read=180s (time between chunks), write=60s, pool=60s
                         # The read timeout is high because some models take a long time to produce the first token
                         with httpx.Client(timeout=httpx.Timeout(connect=60.0, read=180.0, write=60.0, pool=60.0)) as http_client:
+                            
+                            # Construct payload
+                            api_payload = {
+                                "model": model_id,
+                                "messages": messages,
+                                "temperature": 0.4,
+                                "max_tokens": max_tokens,
+                                "stream": True,
+                                "tools": TOOL_SCHEMAS,
+                                "tool_choice": "auto"
+                            }
+                            # Only add venice_parameters for Venice
+                            if not is_together:
+                                api_payload["venice_parameters"] = {"include_venice_system_prompt": False}
+
                             with http_client.stream(
                                 "POST",
-                                "https://api.venice.ai/api/v1/chat/completions",
+                                api_base,
                                 headers={
                                     "Authorization": f"Bearer {api_key}",
                                     "Content-Type": "application/json"
                                 },
-                                json={
-                                    "model": model_id,
-                                    "messages": messages,
-                                    "temperature": 0.4,
-                                    "max_tokens": max_tokens,
-                                    "stream": True,
-                                    "tools": TOOL_SCHEMAS,
-                                    "tool_choice": "auto",
-                                    "venice_parameters": {"include_venice_system_prompt": False}
-                                }
+                                json=api_payload
                                     ) as response:
                                 connection_time = time.time() - api_call_start
                                 logger.info(f"[{request_id}] <<< Connection established in {connection_time:.3f}s")
@@ -1059,11 +1037,24 @@ def chat():
                                 "content": result_str
                             })
 
+                            # Emit tool_done event for frontend UI
+                            event_queue.put({
+                                "type": "tool_done",
+                                "data": {
+                                    "tool": tool_name,
+                                    "success": True
+                                }
+                            })
+
                             if tool_name == "done":
                                 logger.info(f"[{request_id}] 'done' tool called - stopping agent loop")
                                 # NEW: Record done in agent state
                                 summary = args_dict.get('summary', '')
                                 agent_state.record_done(summary)
+                                # NEW: Save session to persistent memory
+                                files_touched = list(agent_state.files_written.union(agent_state.files_edited))
+                                memory.add_session_summary(summary, files_touched)
+                                logger.info(f"[{request_id}] Session saved to memory ({len(files_touched)} files touched)")
                                 stop_signal = True
                                 break
                         except Exception as e:
@@ -1075,6 +1066,15 @@ def chat():
                             logger.error(f"[{request_id}] Traceback:\n{traceback.format_exc()}")
                             messages.append({"role": "tool", "tool_call_id": tc["id"], "name": tool_name, "content": error_msg})
                             event_queue.put({"type": "error", "data": error_msg})
+                            # Emit tool_done event with error for frontend UI
+                            event_queue.put({
+                                "type": "tool_done",
+                                "data": {
+                                    "tool": tool_name,
+                                    "success": False,
+                                    "error": str(e)
+                                }
+                            })
 
                     agent_turns += 1
                     agent_state.record_turn()
@@ -1152,6 +1152,8 @@ def chat():
                 yield f"event: error\ndata: {json.dumps(str(e))}\n\n"
                 break
         logic_thread.join()
+        # Auto-save conversation for crash recovery
+        memory.save_conversation(messages)
         yield f"event: done\ndata: {json.dumps({'history_length': len(messages)})}\n\n"
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
@@ -1161,12 +1163,12 @@ if __name__ == '__main__':
 
     logger.info("STARTING GONDOLA SERVER")
 
-    logger.info(f"Port: 5040")
+    logger.info(f"Port: 5050")
 
     logger.info(f"Log file: {LOG_FILE}")
 
     logger.info("=" * 70)
 
-    print("Starting Gondola Server (Modular) on port 5040...")
+    print("Starting Gondola Server (Modular) on port 5050...")
 
-    app.run(host='0.0.0.0', port=5040, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5050, debug=True, use_reloader=False)

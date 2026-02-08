@@ -21,6 +21,8 @@ class FileReadRecord:
     content_hash: str
     timestamp: float
     line_count: int
+    turn: int = 0
+    full_hash: Optional[str] = None
 
 
 @dataclass
@@ -70,12 +72,38 @@ class AgentState:
     task_phase: str = "exploring"  # exploring, planning, acting, completing
     done_called: bool = False
 
+    # Failed tool tracking
+    failed_tools: List[Dict[str, Any]] = field(default_factory=list)  # Track tools that returned errors
+
+    # Staging area for multi-file transactions
+    staged_changes: Dict[str, str] = field(default_factory=dict)  # filepath -> new_content
+    transaction_active: bool = False
+
+    def start_transaction(self):
+        """Start a new multi-file transaction."""
+        self.staged_changes.clear()
+        self.transaction_active = True
+
+    def stage_change(self, filepath: str, content: str):
+        """Stage a change to a file."""
+        self.staged_changes[filepath] = content
+
+    def commit_transaction(self):
+        """Commit all staged changes."""
+        self.staged_changes.clear()
+        self.transaction_active = False
+
+    def rollback_transaction(self):
+        """Rollback all staged changes."""
+        self.staged_changes.clear()
+        self.transaction_active = False
+
     def record_turn(self) -> int:
         """Increment and return turn count."""
         self.turn_count += 1
         return self.turn_count
 
-    def record_file_read(self, filepath: str, content: str) -> Optional[str]:
+    def record_file_read(self, filepath: str, content: str, full_hash: str = None) -> Optional[str]:
         """
         Record a file read. Returns cached content hash if file was already read.
         """
@@ -85,14 +113,16 @@ class AgentState:
             prev = self.files_read[filepath]
             if prev.content_hash == content_hash:
                 # Same file, same content - this is a duplicate read
-                return f"DUPLICATE: You already read this file at turn {self.turn_count - 1}. Content unchanged."
+                return f"DUPLICATE: You already read this file at turn {prev.turn}. Content unchanged."
             else:
                 # File changed since last read
                 self.files_read[filepath] = FileReadRecord(
                     filepath=filepath,
                     content_hash=content_hash,
                     timestamp=time.time(),
-                    line_count=len(content.split('\n'))
+                    line_count=len(content.split('\n')),
+                    turn=self.turn_count,
+                    full_hash=full_hash
                 )
                 return None
 
@@ -100,9 +130,28 @@ class AgentState:
             filepath=filepath,
             content_hash=content_hash,
             timestamp=time.time(),
-            line_count=len(content.split('\n'))
+            line_count=len(content.split('\n')),
+            turn=self.turn_count,
+            full_hash=full_hash
         )
         return None
+
+    def get_last_read_turn(self, filepath: str) -> Optional[int]:
+        """Get the turn number when a file was last read."""
+        if filepath in self.files_read:
+            return self.files_read[filepath].turn
+        return None
+
+    def file_modified_externally(self, filepath: str, current_hash: Optional[str]) -> bool:
+        """Check if a file was modified externally since it was last read."""
+        if filepath not in self.files_read:
+            return False
+            
+        last_read = self.files_read[filepath]
+        if not last_read.full_hash or not current_hash:
+            return False
+            
+        return last_read.full_hash != current_hash
 
     def record_file_write(self, filepath: str):
         """Record a file write."""
@@ -153,11 +202,128 @@ class AgentState:
         self.done_called = True
         self.task_phase = "completed"
 
+    def record_tool_failure(self, tool_name: str, args: Dict[str, Any], error: str):
+        """Record a tool that returned an error."""
+        self.failed_tools.append({
+            "tool": tool_name,
+            "args": args,
+            "error": error,
+            "turn": self.turn_count,
+            "timestamp": time.time()
+        })
+
+    def get_unaddressed_failures(self) -> List[Dict[str, Any]]:
+        """Get list of tool failures from the current session."""
+        return self.failed_tools
+
+    def has_recent_failures(self) -> bool:
+        """Check if there are any tool failures this session."""
+        return len(self.failed_tools) > 0
+
+    def clear_failures(self):
+        """Clear failure tracking (e.g., after user acknowledges)."""
+        self.failed_tools.clear()
+
+    def generate_learning(self, done_summary: str) -> Optional[Dict[str, Any]]:
+        """
+        Generate knowledge from a completed task for auto-learning.
+        Returns None if not worth saving (no file changes, or too simple).
+        """
+        # Only learn from tasks that made file changes
+        if not self.files_written and not self.files_edited:
+            return None
+
+        # Skip trivial tasks (less than 2 turns)
+        if self.turn_count < 2:
+            return None
+
+        # Extract keywords from task description and file paths
+        keywords = set()
+
+        # Keywords from task description
+        if self.task_description:
+            # Extract meaningful words (skip common words)
+            stop_words = {'a', 'an', 'the', 'to', 'in', 'for', 'of', 'and', 'or', 'is', 'it', 'this', 'that', 'with', 'on', 'at', 'by', 'from', 'as', 'be', 'was', 'are', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'i', 'you', 'we', 'they', 'he', 'she', 'me', 'my', 'your', 'our', 'their', 'add', 'make', 'create', 'update', 'change', 'please', 'want', 'need', 'like', 'help'}
+            words = self.task_description.lower().replace(',', ' ').replace('.', ' ').split()
+            for word in words:
+                if len(word) > 2 and word not in stop_words:
+                    keywords.add(word)
+
+        # Keywords from file paths
+        all_files = list(self.files_written) + list(self.files_edited)
+        for filepath in all_files:
+            # Extract directory names and file name parts
+            parts = filepath.replace('\\', '/').split('/')
+            for part in parts:
+                # Get name without extension
+                name = part.rsplit('.', 1)[0] if '.' in part else part
+                if len(name) > 2:
+                    keywords.add(name.lower())
+                # Also add extension type
+                if '.' in part:
+                    ext = part.rsplit('.', 1)[1].lower()
+                    keywords.add(ext)
+
+        # Generate a title from the task
+        title_words = []
+        if self.task_description:
+            # Take first few meaningful words
+            for word in self.task_description.split()[:6]:
+                clean = ''.join(c for c in word if c.isalnum())
+                if clean and len(clean) > 1:
+                    title_words.append(clean.lower())
+        title = '_'.join(title_words[:4]) if title_words else f"task_{int(time.time())}"
+
+        # Build the knowledge content
+        content_lines = [
+            f"## Task",
+            f"{self.task_description}",
+            "",
+            f"## Files Modified",
+        ]
+        for f in sorted(all_files):
+            content_lines.append(f"- `{f}`")
+
+        content_lines.extend([
+            "",
+            f"## What Was Done",
+            done_summary,
+            "",
+            f"## Navigation Hints",
+            f"- This task involved {len(all_files)} file(s)",
+            f"- Completed in {self.turn_count} turns",
+        ])
+
+        # Add file-type specific hints
+        css_files = [f for f in all_files if f.endswith('.css')]
+        js_files = [f for f in all_files if f.endswith('.js')]
+        py_files = [f for f in all_files if f.endswith('.py')]
+        html_files = [f for f in all_files if f.endswith('.html')]
+
+        if css_files:
+            content_lines.append(f"- CSS styling in: {', '.join(css_files)}")
+        if js_files:
+            content_lines.append(f"- JavaScript logic in: {', '.join(js_files)}")
+        if py_files:
+            content_lines.append(f"- Python code in: {', '.join(py_files)}")
+        if html_files:
+            content_lines.append(f"- HTML templates in: {', '.join(html_files)}")
+
+        return {
+            "title": title,
+            "keywords": list(keywords),
+            "content": '\n'.join(content_lines),
+            "files": all_files,
+            "turns": self.turn_count
+        }
+
     def detect_loop_pattern(self) -> Optional[str]:
         """
         Detect if the agent is stuck in a loop pattern.
         Returns warning message if loop detected.
         """
+        return None  # TEMP DISABLED
+        
         # Check for exploration loops earlier (after just 4 calls)
         if len(self.tool_calls) >= 4:
             # Check if last 2 calls repeat a pattern from earlier
@@ -190,8 +356,8 @@ class AgentState:
         write_count = self.tool_call_counts.get('write_file', 0) + self.tool_call_counts.get('edit_file', 0)
         done_count = self.tool_call_counts.get('done', 0)
 
-        # If we've done 5+ exploration actions without any writes or done, warn
-        if exploration_count >= 5 and write_count == 0 and done_count == 0:
+        # If we've done 15+ exploration actions without any writes or done, warn
+        if exploration_count >= 15 and write_count == 0 and done_count == 0:
             return (
                 f"EXPLORATION LOOP: You've done {exploration_count} exploration actions "
                 f"(reads/searches/lists) without making changes or completing. "

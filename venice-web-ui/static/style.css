@@ -222,6 +222,66 @@ body {
     font-weight: bold;
 }
 
+/* Save Session Button */
+.save-session-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #0e639c 0%, #1177bb 100%);
+    border: 1px solid #1177bb;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.save-session-btn:hover {
+    background: linear-gradient(135deg, #1177bb 0%, #2196f3 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(14, 99, 156, 0.4);
+}
+
+.save-session-btn:active {
+    transform: translateY(0);
+}
+
+.save-session-btn.saving {
+    background: #666;
+    cursor: wait;
+}
+
+.save-session-btn.saved {
+    background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+    border-color: #4caf50;
+}
+
+/* Toggle Row */
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 8px 0;
+}
+
+.toggle-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.toggle-row:hover {
+    color: var(--text-main);
+}
+
 /* Git Log */
 .git-log {
     background-color: rgba(0, 0, 0, 0.4);
@@ -1163,7 +1223,6 @@ textarea:focus {
     box-shadow: 0 0 0 2px rgba(14, 99, 156, 0.3);
 }
 
-
 /* Session History */
 .session-history {
     border-top: 1px solid var(--border);
@@ -1207,4 +1266,229 @@ textarea:focus {
     font-size: 10px;
     margin-top: 4px;
     opacity: 0.7;
+}
+
+/* ============================================
+   UNIFIED CHAT STREAM - TURN GROUPING
+   ============================================ */
+
+.turn-container {
+    margin-bottom: 16px;
+    padding-left: 12px;
+    border-left: 2px solid transparent;
+    transition: border-color 0.3s ease;
+}
+
+.turn-container.active {
+    border-left-color: var(--accent);
+}
+
+/* ============================================
+   THINKING BLOCK (Collapsible)
+   ============================================ */
+
+.thinking-block {
+    margin: 8px 0;
+    font-size: 0.9em;
+}
+
+.thinking-block summary {
+    cursor: pointer;
+    color: var(--text-dim);
+    padding: 8px 12px;
+    background: rgba(100, 100, 100, 0.15);
+    border-radius: 4px;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.thinking-block summary::-webkit-details-marker {
+    display: none;
+}
+
+.thinking-block summary::before {
+    content: '▶';
+    font-size: 10px;
+    transition: transform 0.2s;
+}
+
+.thinking-block[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.thinking-block summary:hover {
+    background: rgba(100, 100, 100, 0.25);
+}
+
+.thinking-block .thinking-content {
+    padding: 10px 12px;
+    color: var(--text-dim);
+    font-style: italic;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    background: rgba(50, 50, 50, 0.3);
+    border-radius: 0 0 4px 4px;
+    margin-top: 2px;
+    line-height: 1.5;
+}
+
+/* ============================================
+   TOOL BLOCK (Collapsible with status)
+   ============================================ */
+
+.tool-block {
+    margin: 8px 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: 'Consolas', 'Monaco', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    background: rgba(30, 30, 30, 0.5);
+}
+
+.tool-block.success {
+    border-left: 3px solid #4caf50;
+}
+
+.tool-block.error {
+    border-left: 3px solid #f44336;
+}
+
+.tool-block.running {
+    border-left: 3px solid var(--accent);
+    animation: pulse-border 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+    0%, 100% { border-left-color: var(--accent); }
+    50% { border-left-color: #4fc1ff; }
+}
+
+.tool-block-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    user-select: none;
+    gap: 8px;
+}
+
+.tool-block-header:hover {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.tool-block-name {
+    font-weight: bold;
+    flex: 1;
+    color: var(--text-main);
+}
+
+.tool-block-status {
+    color: var(--text-dim);
+    font-size: 11px;
+}
+
+.tool-block.success .tool-block-status {
+    color: #4caf50;
+}
+
+.tool-block.error .tool-block-status {
+    color: #f44336;
+}
+
+.tool-block-toggle {
+    color: var(--text-dim);
+    font-size: 10px;
+    transition: transform 0.2s;
+}
+
+.tool-block-content {
+    display: none;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.5);
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #d4d4d4;
+    line-height: 1.4;
+}
+
+.tool-block.expanded .tool-block-content {
+    display: block;
+}
+
+.tool-block.expanded .tool-block-toggle {
+    transform: rotate(180deg);
+}
+
+/* Tool block scrollbar */
+.tool-block-content::-webkit-scrollbar,
+.thinking-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tool-block-content::-webkit-scrollbar-track,
+.thinking-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tool-block-content::-webkit-scrollbar-thumb,
+.thinking-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.tool-block-content::-webkit-scrollbar-thumb:hover,
+.thinking-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+/* Smart Auto-Scroll Indicator */
+.scroll-indicator {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+}
+
+.scroll-indicator.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.scroll-indicator:hover {
+    background: var(--accent-hover);
+}
+
+.scroll-indicator::before {
+    content: '';
+    display: inline-block;
+    margin-right: 6px;
+    animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+/* Chat history needs relative positioning for indicator */
+#chat-history {
+    position: relative;
 }

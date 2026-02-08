@@ -6,12 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const stopBtn = document.getElementById('stop-btn');
     const agentStatus = document.getElementById('agent-status');
     
-    // Terminal elements
-    const terminalLog = document.getElementById('terminal-log');
-    const clearTerminalBtn = document.getElementById('clear-terminal');
+    // Model select
     const modelSelect = document.getElementById('model-select');
-    const splitter = document.getElementById('splitter');
-    const previewSection = document.getElementById('preview-section');
 
     // Sidebar elements
     const sidebarLeft = document.querySelector('.sidebar-left');
@@ -30,11 +26,66 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentImageMime = null;
     let conversationHistory = [];
     let pendingContent = '';
-    let pendingTerminal = [];
     let currentContentDiv = null;
     let updateInterval = null;
 
     let modelMap = {}; // Cache model info
+
+    // Unified Chat Stream State
+    let currentBlockType = null;  // 'text' | 'thinking' | 'tool'
+    let currentBlockElement = null;
+    let currentTurnContainer = null;
+    let currentToolBlock = null;
+
+    // Tool visibility preference
+    let autoExpandTools = localStorage.getItem('autoExpandTools') === 'true';
+
+    // Block creation functions for unified chat stream
+    function createTurnContainer() {
+        const container = document.createElement('div');
+        container.className = 'turn-container active';
+        chatHistory.appendChild(container);
+        return container;
+    }
+
+    function createThinkingBlock(parent) {
+        const details = document.createElement('details');
+        details.className = 'thinking-block';
+        details.innerHTML = `<summary>Thinking...</summary><div class="thinking-content"></div>`;
+        parent.appendChild(details);
+        return details.querySelector('.thinking-content');
+    }
+
+    function createToolBlock(parent, toolName) {
+        const block = document.createElement('div');
+        block.className = 'tool-block running' + (autoExpandTools ? ' expanded' : '');
+        block.innerHTML = `
+            <div class="tool-block-header" onclick="this.parentElement.classList.toggle('expanded')">
+                <span class="tool-block-name">🔧 ${escapeHtml(toolName)}</span>
+                <span class="tool-block-status">running...</span>
+                <span class="tool-block-toggle">▼</span>
+            </div>
+            <div class="tool-block-content"></div>
+        `;
+        parent.appendChild(block);
+        return block;
+    }
+
+    function createTextBlock(parent) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message assistant';
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'content-block';
+        msgDiv.appendChild(contentDiv);
+        parent.appendChild(msgDiv);
+        return contentDiv;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
     // Initial load
     fetchModels();
@@ -43,6 +94,39 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchWorkspace();
     fetchBalance();
     initSidebar();
+    restoreConversation();
+
+    // Restore conversation from server on page load
+    async function restoreConversation() {
+        try {
+            const res = await fetch('/api/conversation');
+            const data = await res.json();
+            if (data.success && data.messages && data.messages.length > 0) {
+                // Clear default welcome message
+                chatHistory.innerHTML = '';
+
+                // Render each message
+                data.messages.forEach(msg => {
+                    if (msg.role === 'user') {
+                        const content = typeof msg.content === 'string' ? msg.content : '[Image message]';
+                        appendMessage('user', content);
+                        conversationHistory.push(msg);
+                    } else if (msg.role === 'assistant') {
+                        if (msg.content) {
+                            appendMessage('assistant', msg.content);
+                            conversationHistory.push(msg);
+                        }
+                    }
+                    // Skip tool messages for display
+                });
+
+                console.log(`Restored ${data.count} messages from server`);
+                updateContextPulse(conversationHistory);
+            }
+        } catch (e) {
+            console.error('Failed to restore conversation:', e);
+        }
+    }
 
     // Event Listeners
     modelSelect.addEventListener('change', async () => {
@@ -126,6 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (data.success) {
+                // Clear conversation history on workspace switch
+                conversationHistory = [];
+                chatHistory.innerHTML = '';
                 appendMessage('system', `Workspace changed to: ${workspaceSelect.options[workspaceSelect.selectedIndex].text}`);
             } else {
                 alert('Error: ' + data.error);
@@ -178,6 +265,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Git Refresh
         document.getElementById('git-refresh')?.addEventListener('click', refreshGitStatus);
+
+        // Auto-expand tools toggle
+        const autoExpandToggle = document.getElementById('auto-expand-tools');
+        if (autoExpandToggle) {
+            autoExpandToggle.checked = autoExpandTools;
+            autoExpandToggle.addEventListener('change', () => {
+                autoExpandTools = autoExpandToggle.checked;
+                localStorage.setItem('autoExpandTools', autoExpandTools);
+            });
+        }
+
+        // Save Session Button
+        const saveSessionBtn = document.getElementById('save-session-btn');
+        if (saveSessionBtn) {
+            saveSessionBtn.addEventListener('click', async () => {
+                saveSessionBtn.classList.add('saving');
+                saveSessionBtn.textContent = 'Saving...';
+
+                try {
+                    const res = await fetch('/api/save-session', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            history: conversationHistory
+                        })
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        saveSessionBtn.classList.remove('saving');
+                        saveSessionBtn.classList.add('saved');
+                        saveSessionBtn.innerHTML = '<span class="macro-icon">✓</span> Saved!';
+                        appendMessage('system', `Session saved: ${data.summary || 'No summary'}`);
+                        fetchSessionHistory(); // Refresh the session list
+
+                        setTimeout(() => {
+                            saveSessionBtn.classList.remove('saved');
+                            saveSessionBtn.innerHTML = '<span class="macro-icon">💾</span> Save Session';
+                        }, 2000);
+                    } else {
+                        throw new Error(data.error || 'Save failed');
+                    }
+                } catch (e) {
+                    saveSessionBtn.classList.remove('saving');
+                    saveSessionBtn.innerHTML = '<span class="macro-icon">💾</span> Save Session';
+                    alert('Failed to save session: ' + e.message);
+                }
+            });
+        }
 
         // Lagoon-style Upload Button
         const uploadBtn = document.getElementById('upload-btn');
@@ -299,16 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Splitter Logic (Horizontal)
-        let isDragging = false;
-        splitter.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            document.body.style.cursor = 'row-resize';
-            splitter.classList.add('dragging');
-            e.preventDefault();
-        });
-
-        // Vertical Splitter Logic
+        // Vertical Splitter Logic (sidebar resizing)
         let isDraggingVertical = false;
         let activeVerticalSplitter = null;
         const splitterLeft = document.getElementById('splitter-left');
@@ -335,13 +462,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         document.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                const containerHeight = document.querySelector('.main-content').offsetHeight;
-                const newHeight = containerHeight - e.clientY;
-                if (newHeight > 50 && newHeight < containerHeight * 0.8) {
-                    previewSection.style.height = `${newHeight}px`;
-                }
-            }
             if (isDraggingVertical && activeVerticalSplitter) {
                 const containerWidth = document.querySelector('.app-container').offsetWidth;
                 if (activeVerticalSplitter === splitterLeft) {
@@ -355,11 +475,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.addEventListener('mouseup', () => {
-            isDragging = false;
             isDraggingVertical = false;
             activeVerticalSplitter = null;
             document.body.style.cursor = 'default';
-            splitter.classList.remove('dragging');
             if (splitterLeft) splitterLeft.classList.remove('dragging');
             if (splitterRight) splitterRight.classList.remove('dragging');
         });
@@ -478,14 +596,12 @@ document.addEventListener('DOMContentLoaded', () => {
         setButtonState(true);
         agentStatus.textContent = 'Processing...';
 
-        let assistantMsgDiv = createMessageDiv('assistant');
-        let contentDiv = document.createElement('div');
-        contentDiv.className = 'content-block';
-        assistantMsgDiv.appendChild(contentDiv);
-        chatHistory.appendChild(assistantMsgDiv);
+        // Create turn container for unified chat stream
+        currentTurnContainer = createTurnContainer();
+        currentBlockType = null;
+        currentBlockElement = null;
+        currentToolBlock = null;
         scrollToBottom();
-
-        startBuffering(contentDiv);
 
         try {
             const response = await fetch('/api/chat', {
@@ -531,45 +647,108 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function finalizeCurrentBlock() {
+        // Finalize any active block before switching to a new type
+        if (currentBlockType === 'text' && currentBlockElement) {
+            flushBuffers();
+            stopBuffering();
+        }
+        // For thinking and tool blocks, just clear the references
+        currentBlockElement = null;
+        currentBlockType = null;
+    }
+
     function handleSSEEvent(event, data) {
         switch (event) {
             case 'metadata':
                 if (data.usd_balance !== undefined) updateBalanceDisplay(data.usd_balance);
-                // Only update cost if it's non-zero/valid, to allow persistence
                 if (data.usd_cost !== undefined && parseFloat(data.usd_cost) > 0) {
                      document.getElementById('balance-vcu').textContent = '$' + data.usd_cost;
                      const unitLabel = document.querySelector('#balance-display .balance-label:last-child');
-                     if(unitLabel) unitLabel.textContent = ''; 
+                     if(unitLabel) unitLabel.textContent = '';
                 } else if (data.vcu_cost !== undefined && parseFloat(data.vcu_cost) > 0) {
                     document.getElementById('balance-vcu').textContent = data.vcu_cost;
                     const unitLabel = document.querySelector('#balance-display .balance-label:last-child');
                     if(unitLabel) unitLabel.textContent = ' VCU';
                 }
                 break;
+
             case 'reasoning':
-                const rLine = document.createElement('span');
-                rLine.className = 'terminal-line';
-                rLine.style.color = '#888';
-                rLine.textContent = data;
-                terminalLog.appendChild(rLine);
-                scrollTerminalToBottom();
+                // Switch to thinking block if not already
+                if (currentBlockType !== 'thinking') {
+                    finalizeCurrentBlock();  // Close any previous block
+                    currentBlockElement = createThinkingBlock(currentTurnContainer);
+                    currentBlockType = 'thinking';
+                }
+                currentBlockElement.textContent += data;
+                scrollToBottom();
                 break;
+
             case 'content':
+                // Switch to text block if not already
+                if (currentBlockType !== 'text') {
+                    finalizeCurrentBlock();  // Close any previous block
+                    currentBlockElement = createTextBlock(currentTurnContainer);
+                    currentBlockType = 'text';
+                    startBuffering(currentBlockElement);
+                }
                 pendingContent += data;
                 break;
+
             case 'terminal':
-                pendingTerminal.push(data);
+                // Tool output goes to current tool block
+                if (currentToolBlock) {
+                    const content = currentToolBlock.querySelector('.tool-block-content');
+                    content.innerHTML += ansiToHtml(data);
+                }
                 break;
+
             case 'status':
+                // Status updates can indicate tool execution
+                if (data.startsWith('Executing ')) {
+                    const toolName = data.replace('Executing ', '').replace('...', '');
+                    finalizeCurrentBlock();  // Close any previous block before tool
+                    currentToolBlock = createToolBlock(currentTurnContainer, toolName);
+                    currentBlockType = 'tool';
+                }
                 agentStatus.textContent = data;
                 break;
+
+            case 'tool_done':
+                // Mark tool as complete
+                if (currentToolBlock) {
+                    const success = data.success !== false;
+                    currentToolBlock.classList.remove('running');
+                    currentToolBlock.classList.add(success ? 'success' : 'error');
+                    const statusEl = currentToolBlock.querySelector('.tool-block-status');
+                    statusEl.textContent = success ? '✓' : '✗ ' + (data.error || 'failed');
+                    // Auto-collapse successful (unless auto-expand on), always expand errors
+                    if (!success) {
+                        currentToolBlock.classList.add('expanded');
+                    } else if (!autoExpandTools) {
+                        currentToolBlock.classList.remove('expanded');
+                    }
+                    currentToolBlock = null;
+                }
+                // Clear block tracking after tool completes
+                currentBlockType = null;
+                currentBlockElement = null;
+                break;
+
             case 'error':
                 appendMessage('system', 'Backend Error: ' + data);
                 break;
+
             case 'done':
-                if (currentContentDiv) {
+                flushBuffers();
+                stopBuffering();
+                if (currentTurnContainer) currentTurnContainer.classList.remove('active');
+                if (currentContentDiv && currentContentDiv.dataset.raw) {
                     conversationHistory.push({ role: 'assistant', content: currentContentDiv.dataset.raw });
                 }
+                currentBlockType = null;
+                currentBlockElement = null;
+                currentToolBlock = null;
                 updateContextPulse(conversationHistory);
                 break;
         }
@@ -580,7 +759,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function startBuffering(contentDiv) {
         currentContentDiv = contentDiv;
         pendingContent = '';
-        pendingTerminal = [];
         if (updateInterval) clearInterval(updateInterval);
         updateInterval = setInterval(flushBuffers, 50);
     }
@@ -593,26 +771,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function flushBuffers() {
-        let changed = false;
         if (pendingContent && currentContentDiv) {
             currentContentDiv.dataset.raw = (currentContentDiv.dataset.raw || '') + pendingContent;
             currentContentDiv.innerHTML = marked.parse(currentContentDiv.dataset.raw);
             pendingContent = '';
-            changed = true;
+            scrollToBottom();
         }
-        if (pendingTerminal.length > 0) {
-            const fragment = document.createDocumentFragment();
-            pendingTerminal.forEach(data => {
-                const span = document.createElement('span');
-                span.className = 'terminal-line';
-                span.innerHTML = ansiToHtml(data);
-                fragment.appendChild(span);
-            });
-            terminalLog.appendChild(fragment);
-            pendingTerminal = [];
-            scrollTerminalToBottom();
-        }
-        if (changed) scrollToBottom();
     }
 
     function updateContextPulse(history) {
@@ -693,12 +857,83 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
 
-    // Auto-scroll logic
-    let chatAutoScroll = true, terminalAutoScroll = true;
-    chatHistory.addEventListener('scroll', () => chatAutoScroll = (chatHistory.scrollHeight - chatHistory.scrollTop - chatHistory.clientHeight < 50));
-    terminalLog.addEventListener('scroll', () => terminalAutoScroll = (terminalLog.scrollHeight - terminalLog.scrollTop - terminalLog.clientHeight < 30));
-    function scrollToBottom() { if (chatAutoScroll) chatHistory.scrollTop = chatHistory.scrollHeight; }
-    function scrollTerminalToBottom() { if (terminalAutoScroll) terminalLog.scrollTop = terminalLog.scrollHeight; }
+    // SMART AUTO-SCROLL LOGIC
+    let chatAutoScroll = true;
+    let userScrolledUp = false;
+    const SCROLL_THRESHOLD = 100; // pixels from bottom to trigger auto-scroll
+    
+    // Check if user is near bottom
+    function isNearBottom() {
+        const scrollBottom = chatHistory.scrollHeight - chatHistory.scrollTop - chatHistory.clientHeight;
+        return scrollBottom < SCROLL_THRESHOLD;
+    }
+    
+    // Smart scroll handler - detects user intent
+    chatHistory.addEventListener('scroll', () => {
+        const wasNearBottom = chatAutoScroll;
+        const nearBottom = isNearBottom();
+        
+        // Update auto-scroll state
+        chatAutoScroll = nearBottom;
+        
+        // Detect if user scrolled up (manually)
+        if (!nearBottom && wasNearBottom) {
+            userScrolledUp = true;
+            showScrollIndicator();
+        }
+        
+        // Detect if user scrolled back to bottom
+        if (nearBottom && userScrolledUp) {
+            userScrolledUp = false;
+            hideScrollIndicator();
+        }
+    });
+    
+    // Mouse wheel handler - pause auto-scroll on wheel up
+    chatHistory.addEventListener('wheel', (e) => {
+        if (e.deltaY < 0) {
+            // Scrolling up - pause auto-scroll
+            userScrolledUp = true;
+            chatAutoScroll = false;
+            showScrollIndicator();
+        } else if (e.deltaY > 0 && isNearBottom()) {
+            // Scrolling down and near bottom - resume auto-scroll
+            userScrolledUp = false;
+            chatAutoScroll = true;
+            hideScrollIndicator();
+        }
+    });
+    
+    // Scroll indicator element
+    let scrollIndicator = null;
+    function showScrollIndicator() {
+        if (!scrollIndicator) {
+            scrollIndicator = document.createElement('div');
+            scrollIndicator.className = 'scroll-indicator';
+            scrollIndicator.innerHTML = '↓ New messages';
+            scrollIndicator.onclick = () => {
+                chatAutoScroll = true;
+                userScrolledUp = false;
+                scrollToBottom(true);
+                hideScrollIndicator();
+            };
+            chatHistory.parentElement.appendChild(scrollIndicator);
+        }
+        scrollIndicator.classList.add('visible');
+    }
+    
+    function hideScrollIndicator() {
+        if (scrollIndicator) {
+            scrollIndicator.classList.remove('visible');
+        }
+    }
+    
+    // Enhanced scroll to bottom with force option
+    function scrollToBottom(force = false) {
+        if (chatAutoScroll || force) {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+    }
 
     function clearImageUpload() {
         currentImageData = null; currentImageMime = null;
@@ -723,7 +958,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     removeImageBtn.addEventListener('click', clearImageUpload);
     clearBtn.addEventListener('click', () => { if(confirm('Clear history?')) { fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: 'clear'}) }).then(() => { chatHistory.innerHTML = '<div class="message system">Cleared.</div>'; conversationHistory = []; updateContextPulse([]); }); } });
-    clearTerminalBtn.addEventListener('click', () => terminalLog.innerHTML = '');
     if (stopBtn) stopBtn.addEventListener('click', () => fetch('/api/interrupt', { method: 'POST' }));
 
     // Backups/History Functions

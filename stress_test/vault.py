@@ -1,2 +1,2 @@
-# Corrupted: Constant renamed, breaking main.py
-SECRET_TOKEN = 'WRONG_KEY'
+ACCESS_CODE = 'NECROMANCER_99'
+SECRET_KEY = ACCESS_CODE

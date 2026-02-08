@@ -42,6 +42,31 @@ def get_api_key():
     return None
 
 
+def get_together_api_key():
+    key = os.getenv("TOGETHER_API_KEY")
+    if key:
+        return key
+    config_locations = [
+        os.path.join(SCRIPT_DIR, "app_config.json"),
+        os.path.expanduser("~/.venice_config.json"),
+        os.path.expanduser("~/.config/venice/config.json"),
+        "app_config.json",
+    ]
+    for config_path in config_locations:
+        try:
+            with open(config_path, "r") as f:
+                config = json.load(f)
+            key = config.get("together_api_key")
+            if key:
+                return key
+        except FileNotFoundError:
+            continue
+        except Exception as e:
+            # UI.warning(f"Error reading {config_path}: {e}")
+            continue
+    return None
+
+
 def _clean_and_parse_json(json_str):
     if json_str.startswith("```json"):
         json_str = json_str[7:]
@@ -378,12 +403,101 @@ def execute_tool(tools: CombinedTools, tool_call: dict):
             args.get("variable_name"),
             args.get("value")
         ),
+        "make_directory": lambda: tools.make_directory(args.get("path")),
+        "delete_directory": lambda: tools.delete_directory(
+            args.get("path"), 
+            args.get("recursive", False)
+        ),
+        "delete_file": lambda: tools.delete_file(args.get("filename")),
+        "move_file": lambda: tools.move_file(
+            args.get("source"), 
+            args.get("destination")
+        ),
+        "copy_file": lambda: tools.copy_file(
+            args.get("source"), 
+            args.get("destination")
+        ),
+        "list_backups": lambda: tools.list_backups(args.get("filename")),
+        "restore_backup": lambda: tools.restore_backup(
+            args.get("backup_name"), 
+            args.get("target_filename")
+        ),
+        "undo_edit": lambda: tools.undo_edit(args.get("filename")),
+        "set_preference": lambda: tools.set_preference(
+            args.get("key"), 
+            args.get("value")
+        ),
+        "begin_transaction": lambda: tools.begin_transaction(),
+        "commit_transaction": lambda: tools.commit_transaction(
+            dry_run=args.get("dry_run", False)
+        ),
+        "get_symbol_coordinates": lambda: tools.get_symbol_coordinates(
+            args.get("filename"),
+            args.get("symbol_name")
+        ),
         "done": lambda: tools.done(args.get("summary", "Task complete")),
+        # --- Previously missing tools ---
+        "append_to_file": lambda: tools.append_to_file(
+            args.get("filename"),
+            args.get("content")
+        ),
+        "replace_lines": lambda: tools.replace_lines(
+            args.get("filename"),
+            args.get("start_line"),
+            args.get("end_line"),
+            args.get("new_content"),
+            args.get("expected_hash"),
+            args.get("dry_run", False),
+            args.get("thought"),
+            args.get("verify_risk", False)
+        ),
+        "insert_at_line": lambda: tools.insert_at_line(
+            args.get("filename"),
+            args.get("line_number"),
+            args.get("content")
+        ),
+        "delete_lines": lambda: tools.delete_lines(
+            args.get("filename"),
+            args.get("start_line"),
+            args.get("end_line")
+        ),
+        "validate_syntax": lambda: tools.validate_syntax(args.get("filename")),
+        "find_functions": lambda: tools.find_functions(args.get("filename")),
+        "find_classes": lambda: tools.find_classes(args.get("filename")),
+        "remember": lambda: tools.remember(args.get("note")),
+        "recall": lambda: tools.recall(),
+        "forget": lambda: tools.forget(args.get("clear_all", False)),
+        "save_knowledge": lambda: tools.save_knowledge(
+            args.get("keywords", []),
+            args.get("content"),
+            args.get("title")
+        ),
+        "search_file_content": lambda: tools.search_file_content(
+            args.get("pattern"),
+            args.get("path", "."),
+            args.get("include"),
+            args.get("ignore_case", True),
+            args.get("context", 0),
+            args.get("before", 0),
+            args.get("after", 0)
+        ),
     }
 
     if name not in tool_map:
-        logger.error(f"Unknown tool: {name}")
-        return {"success": False, "error": f"Unknown tool: {name}"}
+        # Fuzzy match to suggest correct tool name
+        from difflib import get_close_matches
+        suggestions = get_close_matches(name, tool_map.keys(), n=3, cutoff=0.6)
+
+        if suggestions:
+            suggestion_str = ", ".join(suggestions)
+            logger.error(f"Unknown tool: {name}. Did you mean: {suggestion_str}?")
+            return {
+                "success": False,
+                "error": f"❌ Unknown tool: '{name}'. Did you mean: {suggestion_str}? Use the EXACT tool name from the schema."
+            }
+        else:
+            logger.error(f"Unknown tool: {name}")
+            return {"success": False, "error": f"❌ Unknown tool: '{name}'. Check the tool schema for valid tool names."}
 
     try:
         result = tool_map[name]()

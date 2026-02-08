@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Gondola specific
+app_config.json
+.venice_memory.json
+.venice_conversation.json
+.workspace_config
+.gondola_index.json
+.gondola_diagnostics.json
+logs/
+*.log
+
+# Secrets (never commit these)
+.env
+.env.local
+*.key
+*.pem
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary files
+tmp/
+temp/

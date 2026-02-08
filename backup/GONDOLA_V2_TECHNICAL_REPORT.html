@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gondola v2.2: Full Technical Audit & Architecture Report</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --sidebar: #161b22;
+            --card: #21262d;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-dim: #8b949e;
+            --accent: #58a6ff;
+            --code-bg: #000000;
+            --keyword: #ff7b72;
+            --string: #a5d6ff;
+            --func: #d2a8ff;
+            --type: #ffa657;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            margin: 0;
+            display: flex;
+        }
+
+        nav {
+            width: 280px;
+            height: 100vh;
+            background: var(--sidebar);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            position: fixed;
+            overflow-y: auto;
+        }
+
+        main {
+            margin-left: 320px;
+            padding: 40px;
+            max-width: 1000px;
+        }
+
+        h1, h2, h3 { color: var(--accent); }
+        h1 { font-size: 2.2rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        h2 { font-size: 1.6rem; margin-top: 40px; border-left: 4px solid var(--accent); padding-left: 15px; }
+
+        .module-block {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .file-path {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        pre {
+            background: var(--code-bg);
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+        }
+
+        code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.85rem; }
+
+        .method { color: var(--func); font-weight: bold; }
+        .param { color: var(--type); }
+        .comment { color: var(--text-dim); font-style: italic; }
+
+        .pipeline-step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .step-num {
+            background: var(--accent);
+            color: #000;
+            width: 24px;
+            height: 24px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid var(--border); padding: 10px; text-align: left; }
+        th { background: var(--sidebar); }
+
+        .tag {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: var(--border);
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <h3 style="color: #fff">Technical Index</h3>
+        <ul style="list-style: none; padding: 0; font-size: 0.9rem;">
+            <li><a href="#architecture" style="color: var(--text); text-decoration: none;">1. System Architecture</a></li>
+            <li><a href="#data-flow" style="color: var(--text); text-decoration: none; margin-top: 10px; display: block;">2. End-to-End Data Flow</a></li>
+            <li><a href="#tool-pipeline" style="color: var(--text); text-decoration: none; margin-top: 10px; display: block;">3. Tool Execution Pipeline</a></li>
+            <li><a href="#persistence" style="color: var(--text); text-decoration: none; margin-top: 10px; display: block;">4. Cognitive Persistence (Git)</a></li>
+            <li><a href="#analysis" style="color: var(--text); text-decoration: none; margin-top: 10px; display: block;">5. Structural Analysis Engine</a></li>
+            <li><a href="#autopsy" style="color: var(--text); text-decoration: none; margin-top: 10px; display: block;">6. Surgical Autopsy (Jedi)</a></li>
+            <li><a href="#diagnostics" style="color: var(--text); text-decoration: none; margin-top: 10px; display: block;">7. Diagnostics Loop</a></li>
+            <li><a href="#dependencies" style="color: var(--text); text-decoration: none; margin-top: 10px; display: block;">8. Critical Dependencies</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1>Gondola v2.2 Technical Report</h1>
+        <p style="color: var(--text-dim)">A deep-dive analysis of the Necromancer Architecture.</p>
+
+        <section id="architecture">
+            <h2>1. System Architecture</h2>
+            <div class="module-block">
+                <span class="file-path">Modular Interaction Model</span>
+                <p>Gondola v2.2 uses a <strong>Hybrid Core</strong> pattern where the CLI and Web UI are thin wrappers around a heavy Logic Layer.</p>
+                <ul>
+                    <li><strong>Entry Points:</strong> <code>cli.py</code> (CLI) and <code>venice-web-ui/server.py</code> (Flask).</li>
+                    <li><strong>Logic Core:</strong> <code>venice/api.py</code> (Tool Resolution) and <code>venice/core.py</code> (UI/Model definitions).</li>
+                    <li><strong>State Management:</strong> <code>venice/agent_state.py</code> (Turn-level tracking) and <code>venice/memory.py</code> (Persistent JSON notes).</li>
+                    <li><strong>Toolbox:</strong> <code>venice/tools/CombinedTools</code> (A multi-inheritance class merging 5 functional mixins).</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="data-flow">
+            <h2>2. End-to-End Data Flow</h2>
+            <div class="pipeline-step">
+                <div class="step-num">1</div>
+                <div><strong>Ingestion:</strong> User input is received via Flask (POST /api/chat) or CLI input().</div>
+            </div>
+            <div class="pipeline-step">
+                <div class="step-num">2</div>
+                <div><strong>Resurrection Check:</strong> <code>PersistenceManager</code> queries <code>git log _gondola_shadow</code> to retrieve the last <code>RESURRECT: {thought}</code>.</div>
+            </div>
+            <div class="pipeline-step">
+                <div class="step-num">3</div>
+                <div><strong>Context Assembly:</strong> <code>ContextManager.build_messages()</code> combines System Prompt, Project Index Overview (~1000 tokens), and a sliding window of recent conversation history.</div>
+            </div>
+            <div class="pipeline-step">
+                <div class="step-num">4</div>
+                <div><strong>LLM Dispatch:</strong> Payload sent to Venice API via <code>httpx.stream</code>. Native tool calls are accumulated in <code>tool_calls_buffer</code>.</div>
+            </div>
+        </section>
+
+        <section id="tool-pipeline">
+            <h2>3. Tool Execution Pipeline</h2>
+            <div class="module-block">
+                <span class="file-path">venice/api.py -> execute_tool()</span>
+                <pre><code><span class="method">execute_tool</span>(tools: <span class="param">CombinedTools</span>, tool_call: <span class="param">dict</span>):
+    <span class="comment"># 1. Signature Resolution</span>
+    name = tool_call.function.name
+    args = json.loads(tool_call.function.arguments)
+
+    <span class="comment"># 2. Validation Wrapper (Example: write_file)</span>
+    <span class="comment"># Detects placeholders like "// code from above" before disk I/O</span>
+    <span class="keyword">if</span> name == <span class="string">"write_file"</span>:
+        <span class="keyword">return</span> <span class="method">_validate_and_write_file</span>(tools, args)
+
+    <span class="comment"># 3. Dispatch to Mixin</span>
+    <span class="keyword">return</span> tool_map[name]()</code></pre>
+            </div>
+        </section>
+
+        <section id="persistence">
+            <h2>4. Cognitive Persistence (Git Plumbing)</h2>
+            <div class="module-block">
+                <span class="file-path">venice/persistence.py</span>
+                <p>The <strong>Shadow Branch</strong> mechanism uses raw Git objects to avoid state corruption.</p>
+                <table>
+                    <tr><th>Action</th><th>Command</th><th>Purpose</th></tr>
+                    <tr><td>Init</td><td><code>git show-ref</code></td><td>Verify <code>_gondola_shadow</code> existence.</td></tr>
+                    <tr><td>Commit</td><td><code>git commit-tree {tree} -p {branch} -m "{payload}"</code></td><td>Create persistent thought without checking out branch.</td></tr>
+                    <tr><td>Update</td><td><code>git update-ref refs/heads/_gondola_shadow {hash}</code></td><td>Atomic pointer update.</td></tr>
+                </table>
+            </div>
+        </section>
+
+        <section id="analysis">
+            <h2>5. Structural Analysis Engine</h2>
+            <div class="module-block">
+                <span class="file-path">venice/tools/undead_ops.py</span>
+                <p><strong>Tree-sitter Bindings:</strong> Uses <code>tree-sitter-python</code> and <code>tree-sitter-javascript</code>.</p>
+                <pre><code><span class="comment"># AST Parsing Logic</span>
+tree = parser.parse(<span class="keyword">bytes</span>(source_code, <span class="string">'utf8'</span>))
+skeleton = <span class="method">_extract_skeleton</span>(tree.root_node, source_code)
+<span class="comment"># Returns dict with "type", "start_line", "end_line"</span></code></pre>
+                <p><strong>Ctags Strategy:</strong> Background process <code>ctags -R --fields=+l -f .gondola_tags</code>. <code>symbol_jump</code> performs a high-speed grep on this file to find definitions.</p>
+            </div>
+        </section>
+
+        <section id="autopsy">
+            <h2>6. Surgical Autopsy (Jedi)</h2>
+            <div class="module-block">
+                <span class="file-path">venice/undead_manager.py</span>
+                <p>Manages ephemeral <code>jedi.Script</code> instances for deep type inference.</p>
+                <ul>
+                    <li><strong>Input:</strong> Filename + Symbol + (Tree-sitter Coordinates).</li>
+                    <li><strong>Process:</strong> 
+                        1. Resolve file path.
+                        2. Load source into memory.
+                        3. <code>script.infer(line, column)</code>.
+                        4. Extract <code>definition.docstring()</code> and <code>definition.type</code>.
+                    </li>
+                    <li><strong>Cleanup:</strong> No long-running daemon. Memory is reclaimed by Python GC immediately after tool completion.</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="diagnostics">
+            <h2>7. Passive Diagnostics Loop</h2>
+            <div class="module-block">
+                <span class="file-path">The Sentry Mechanism</span>
+                <p><strong>Trigger:</strong> Inside <code>file_ops.py</code>, every successful write spawns:</p>
+                <code>ruff check --format json {path} > .gondola_diagnostics.json 2>/dev/null &</code>
+                <p><strong>Injection:</strong> At <code>turn_start</code> in <code>cli.py</code>/<code>server.py</code>:</p>
+                <pre><code><span class="keyword">if</span> os.path.exists(<span class="string">".gondola_diagnostics.json"</span>):
+    diags = json.load(f)
+    messages.append({<span class="string">"role"</span>: <span class="string">"user"</span>, <span class="string">"content"</span>: <span class="string">"SYSTEM ALERT: ..."</span>})</code></pre>
+            </div>
+        </section>
+
+        <section id="dependencies">
+            <h2>8. Critical Dependencies</h2>
+            <table>
+                <tr><th>Library</th><th>Version</th><th>Role</th></tr>
+                <tr><td><code>tree-sitter</code></td><td>0.25.2</td><td>Structural AST parsing.</td></tr>
+                <tr><td><code>jedi</code></td><td>Latest</td><td>Python semantic analysis.</td></tr>
+                <tr><td><code>sentence-transformers</code></td><td>Latest</td><td>Local vector embeddings (all-MiniLM-L6-v2).</td></tr>
+                <tr><td><code>openai/httpx</code></td><td>Latest</td><td>Venice API communication & Streaming.</td></tr>
+                <tr><td><code>ruff</code></td><td>Latest</td><td>External diagnostic engine.</td></tr>
+            </table>
+        </section>
+
+        <footer style="margin-top: 60px; text-align: center; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 20px;">
+            Gondola v2.2 Technical Audit Report | Finalized Feb 3, 2026
+        </footer>
+    </main>
+</body>
+</html>

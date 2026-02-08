@@ -1,8 +1,5 @@
-class Authenticator:
-    def __init__(self):
-        pass
-    def check_user(self):
-        # Corrupted: Missing return and unbalanced brace
-        if True:
-            print("Checking...")
-            return True
+from .lib.core import Authenticator
+
+def helper():
+    """Helper function for authentication utilities."""
+    pass

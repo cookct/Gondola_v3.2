@@ -8,6 +8,7 @@ import shutil
 import ast
 import json
 from datetime import datetime
+from venice.risk_analyzer import RiskAnalyzer
 
 from venice.core import UI, Colors
 from venice.tools.base import Tools
@@ -272,6 +273,68 @@ class FileOpsMixin(Tools):
 
     # ---- File Writing ----
 
+    def begin_transaction(self):
+        """Start a multi-file atomic transaction. All subsequent edits will be buffered."""
+        if not self.agent_state:
+            return {"success": False, "error": "Agent state not available"}
+        
+        self.agent_state.start_transaction()
+        UI.info("Started multi-file transaction. Changes will be buffered until commit_transaction() is called.")
+        return {"success": True, "message": "Transaction started"}
+
+    def commit_transaction(self, dry_run=False):
+        """Apply all buffered changes from the current transaction."""
+        if not self.agent_state or not self.agent_state.transaction_active:
+            return {"success": False, "error": "No active transaction"}
+        
+        if not self.agent_state.staged_changes:
+            self.agent_state.commit_transaction()
+            return {"success": True, "message": "Transaction committed (no changes)"}
+
+        # 1. Verification Phase - check syntax for all files before applying ANY
+        for filename, content in self.agent_state.staged_changes.items():
+            syntax_error = self._verify_syntax(filename, content)
+            if syntax_error:
+                UI.error(f"Transaction aborted! Syntax error in {filename}: {syntax_error}")
+                self.agent_state.rollback_transaction()
+                return {
+                    "success": False, 
+                    "error": f"Transaction ROLLED BACK. Syntax error in {filename}: {syntax_error}. Fix the error and retry the whole batch."
+                }
+
+        if dry_run:
+            UI.info("Dry run: Transaction would apply changes to:")
+            for filename in self.agent_state.staged_changes:
+                UI.step_detail(f"- {filename}")
+            return {"success": True, "dry_run": True}
+
+        # 2. Application Phase - apply all changes
+        files_count = 0
+        try:
+            for filename, content in self.agent_state.staged_changes.items():
+                path = self.workspace._resolve(filename)
+                
+                # Backup before first apply in transaction?
+                # Actually, edit_file and replace_lines already do backups.
+                # But write_file doesn't always.
+                self._backup_file(path) if os.path.exists(path) else None
+                
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                self._track_file(filename)
+                files_count += 1
+                UI.step_detail(f"Committed {filename}")
+        except Exception as e:
+            # Catastrophic failure during write - hard to perfectly rollback without full snapshots
+            # but we've verified syntax, so this should be rare.
+            return {"success": False, "error": f"Failed during commit: {str(e)}"}
+
+        self.agent_state.commit_transaction()
+        UI.success(f"Transaction committed successfully! {files_count} files updated.")
+        return {"success": True, "files_updated": files_count}
+
     def _verify_syntax(self, filename, content):
         """Internal helper to verify syntax before saving"""
         ext = os.path.splitext(filename)[1].lower()
@@ -288,10 +351,16 @@ class FileOpsMixin(Tools):
         return None
 
     def write_file(self, filename, content):
-        """Create or overwrite a file with automatic syntax verification"""
+        """Create or overwrite a file with automatic syntax verification. Buffers if transaction is active."""
         self.next_step(f"Writing {filename}")
 
         try:
+            # Check for transaction
+            if self.agent_state and self.agent_state.transaction_active:
+                self.agent_state.stage_change(filename, content)
+                UI.step_done(f"Staged {filename} (buffered)")
+                return {"success": True, "action": "staged", "buffered": True}
+
             path = self.workspace._resolve(filename)
             
             # Verify syntax before writing
@@ -354,11 +423,72 @@ class FileOpsMixin(Tools):
 
         return None, -1
 
-    def edit_file(self, filename, old_text, new_text, occurrence=1, expected_hash=None, dry_run=False):
+    def _verify_context(self, filename):
+        """Verify that the file hasn't changed since the agent last read it."""
+        if not self.agent_state or filename not in self.agent_state.files_read:
+            return None # No record, can't verify
+
+        path = self.workspace._resolve(filename)
+        if not os.path.exists(path):
+            return None
+
+        last_read = self.agent_state.files_read[filename]
+        if not last_read.full_hash:
+            return None # No hash stored
+
+        current_hash = self._calculate_file_hash(path)
+        if current_hash != last_read.full_hash:
+            return f"WARNING: File '{filename}' has changed on disk since you last read it. Your mental model is stale. You MUST call read_file('{filename}') again to see the latest version before applying this edit."
+        
+        return None
+
+    def edit_file(self, filename, old_text, new_text, occurrence=1, expected_hash=None, dry_run=False, thought=None, verify_risk=False):
         """Laser-targeted edit with strict matching and automatic verification"""
         self.next_step(f"Editing {filename}")
 
         try:
+            # 0. Risk Assessment
+            if not verify_risk and self.agent_state:
+                # Update agent state modification tracking (needed for RiskAnalyzer)
+                path = self.workspace._resolve(filename)
+                current_hash = self._calculate_file_hash(path) if os.path.exists(path) else None
+                
+                # Mock a call to file_modified_externally that actually works
+                original_check = self.agent_state.file_modified_externally
+                self.agent_state.file_modified_externally = lambda fp: original_check(fp, current_hash)
+                
+                model_id = getattr(self.agent_state, 'model_id', None)
+                risk_analysis = RiskAnalyzer().score_edit(filename, old_text, new_text, self.agent_state, model_id=model_id)
+                
+                # Restore original method
+                self.agent_state.file_modified_externally = original_check
+
+                if risk_analysis["requires_verification"]:
+                    block_threshold = risk_analysis.get('block_threshold', 100)
+                    verification_msg = f"""
+⚠️  HIGH-RISK EDIT BLOCKED
+Risk: {risk_analysis['risk_level']} ({risk_analysis['risk_score']}/{block_threshold})
+Issues: {', '.join(risk_analysis['flags'])}
+
+Required: Read the file first, then retry with verify_risk=true
+"""
+                    # UI.step_error(f"High-risk edit blocked ({risk_analysis['risk_level']})")
+                    # return {
+                    #     "success": False,
+                    #     "error": "HIGH_RISK_EDIT_BLOCKED",
+                    #     "message": verification_msg,
+                    #     "risk_analysis": risk_analysis,
+                    #     "suggested_action": f"read_file(filename='{filename}')"
+                    # }
+                    UI.warning(f"Risk Assessment bypassed: {risk_analysis['risk_level']} ({risk_analysis['risk_score']})")
+
+            # 1. Context Validation (Existing hash-based check)
+            context_warning = self._verify_context(filename)
+            if context_warning:
+                UI.step_error("Context Mismatch")
+                reason_suffix = f"\nYour goal was: {thought}" if thought else ""
+                return {"success": False, "error": context_warning + reason_suffix}
+
             path = self.workspace._resolve(filename)
             if not os.path.exists(path):
                 return {"success": False, "error": f"File '{filename}' does not exist"}
@@ -375,9 +505,12 @@ class FileOpsMixin(Tools):
                 actual_old_text, match_pos = self._find_fuzzy_match(original, old_text)
                 if actual_old_text is None:
                     UI.step_error("Search block not found in file")
+                    error_msg = "The <search> block provided does not exist in the file exactly as written. Verify whitespace and context lines."
+                    if thought:
+                        error_msg += f"\nYou previously said you were: {thought}. Did you misread the file or has the file changed?"
                     return {
                         "success": False, 
-                        "error": "The <search> block provided does not exist in the file exactly as written. Verify whitespace and context lines."
+                        "error": error_msg
                     }
                 old_text_to_replace = actual_old_text
             else:
@@ -387,9 +520,12 @@ class FileOpsMixin(Tools):
             total_matches = original.count(old_text_to_replace)
             if total_matches > 1 and occurrence != 0:
                 UI.step_error(f"Ambiguous edit: found {total_matches} matches")
+                error_msg = f"Found {total_matches} matches for the search block. Please provide more context lines (before/after) to make the search unique."
+                if thought:
+                    error_msg += f"\nYou said you were: {thought}. Use that context to identify the specific lines."
                 return {
                     "success": False,
-                    "error": f"Found {total_matches} matches for the search block. Please provide more context lines (before/after) to make the search unique."
+                    "error": error_msg
                 }
 
             # 3. Create backup
@@ -402,6 +538,12 @@ class FileOpsMixin(Tools):
             else:
                 new_content = original.replace(old_text_to_replace, new_text, 1)
                 replaced_count = 1
+
+            # Check for transaction
+            if self.agent_state and self.agent_state.transaction_active:
+                self.agent_state.stage_change(filename, new_content)
+                UI.step_done(f"Staged edit for {filename} (buffered)")
+                return {"success": True, "action": "staged", "replaced": replaced_count, "buffered": True}
 
             # 5. AUTOMATIC VERIFICATION
             syntax_error = self._verify_syntax(filename, new_content)
@@ -438,11 +580,61 @@ class FileOpsMixin(Tools):
             UI.step_error(str(e))
             return {"success": False, "error": str(e)}
 
-    def replace_lines(self, filename, start_line, end_line, new_content, expected_hash=None, dry_run=False):
+    def replace_lines(self, filename, start_line, end_line, new_content, expected_hash=None, dry_run=False, thought=None, verify_risk=False):
         """Replace specific lines in a file (more reliable than text matching)"""
         self.next_step(f"Replacing lines {start_line}-{end_line} in {filename}")
 
         try:
+            path = self.workspace._resolve(filename)
+            if not os.path.exists(path):
+                UI.step_error(f"File not found: {filename}")
+                return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            # Risk Assessment
+            if not verify_risk and self.agent_state:
+                with open(path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                old_text = ''.join(lines[start_line-1:end_line])
+                
+                # Update agent state modification tracking (needed for RiskAnalyzer)
+                current_hash = self._calculate_file_hash(path) if os.path.exists(path) else None
+                
+                # Mock a call to file_modified_externally that actually works
+                original_check = self.agent_state.file_modified_externally
+                self.agent_state.file_modified_externally = lambda fp: original_check(fp, current_hash)
+                
+                model_id = getattr(self.agent_state, 'model_id', None)
+                risk_analysis = RiskAnalyzer().score_edit(filename, old_text, new_content, self.agent_state, model_id=model_id)
+                
+                # Restore original method
+                self.agent_state.file_modified_externally = original_check
+
+                if risk_analysis["requires_verification"]:
+                    block_threshold = risk_analysis.get('block_threshold', 100)
+                    verification_msg = f"""
+⚠️  HIGH-RISK EDIT BLOCKED
+Risk: {risk_analysis['risk_level']} ({risk_analysis['risk_score']}/{block_threshold})
+Issues: {', '.join(risk_analysis['flags'])}
+
+Required: Read the file first, then retry with verify_risk=true
+"""
+                    # UI.step_error(f"High-risk edit blocked ({risk_analysis['risk_level']})")
+                    # return {
+                    #     "success": False,
+                    #     "error": "HIGH_RIS_EDIT_BLOCKED",
+                    #     "message": verification_msg,
+                    #     "risk_analysis": risk_analysis,
+                    #     "suggested_action": f"read_file(filename='{filename}')"
+                    # }
+                    UI.warning(f"Risk Assessment bypassed: {risk_analysis['risk_level']} ({risk_analysis['risk_score']})")
+
+            # 0. Context Validation
+            context_warning = self._verify_context(filename)
+            if context_warning:
+                UI.step_error("Context Mismatch")
+                reason_suffix = f"\nYour goal was: {thought}" if thought else ""
+                return {"success": False, "error": context_warning + reason_suffix}
+
             path = self.workspace._resolve(filename)
             if not os.path.exists(path):
                 UI.step_error(f"File not found: {filename}")
@@ -453,9 +645,12 @@ class FileOpsMixin(Tools):
                 current_hash = self._calculate_file_hash(path)
                 if current_hash != expected_hash:
                     UI.step_error(f"Hash mismatch! Expected {expected_hash[:8]}..., got {current_hash[:8]}...")
+                    error_msg = "File changed since last read (hash mismatch). Please read again."
+                    if thought:
+                        error_msg += f"\nGoal: {thought}"
                     return {
                         "success": False, 
-                        "error": "File changed since last read (hash mismatch). Please read again.",
+                        "error": error_msg,
                         "current_hash": current_hash
                     }
 
@@ -465,7 +660,10 @@ class FileOpsMixin(Tools):
             total_lines = len(lines)
             if start_line < 1 or end_line > total_lines:
                 UI.step_error(f"Line range {start_line}-{end_line} out of bounds (file has {total_lines} lines)")
-                return {"success": False, "error": f"Line range out of bounds (1-{total_lines})"}
+                error_msg = f"Line range out of bounds (1-{total_lines})"
+                if thought:
+                    error_msg += f"\nYou thought you were editing lines for: {thought}. Did you miscalculate line numbers?"
+                return {"success": False, "error": error_msg}
 
             # Create backup
             backup_path = self._backup_file(path)
@@ -496,6 +694,18 @@ class FileOpsMixin(Tools):
             # Perform replacement
             result_lines = lines[:start_line-1] + new_lines + lines[end_line:]
             new_content_str = ''.join(result_lines)
+
+            # Check for transaction
+            if self.agent_state and self.agent_state.transaction_active:
+                self.agent_state.stage_change(filename, new_content_str)
+                UI.step_done(f"Staged line replacement for {filename} (buffered)")
+                return {
+                    "success": True, 
+                    "action": "staged", 
+                    "lines_removed": end_line - start_line + 1,
+                    "lines_added": len(new_lines),
+                    "buffered": True
+                }
 
             # AUTOMATIC VERIFICATION
             syntax_error = self._verify_syntax(filename, new_content_str)
@@ -601,18 +811,55 @@ class FileOpsMixin(Tools):
             return {"success": False, "error": str(e)}
 
     def append_to_file(self, filename, content):
-        """Append content to end of file"""
+        """Append content to end of file. Buffers if transaction is active."""
+        # Validate required arguments
+        if not filename:
+            UI.step_error("append_to_file: Missing required 'filename' argument")
+            return {"success": False, "error": "Missing required 'filename' argument. You must specify the file path."}
+        if content is None:
+            UI.step_error("append_to_file: Missing required 'content' argument")
+            return {"success": False, "error": "Missing required 'content' argument. You must specify content to append."}
+
         self.next_step(f"Appending to {filename}")
 
         try:
+            # Check for transaction
+            if self.agent_state and self.agent_state.transaction_active:
+                # Get current staged content or read from disk
+                current_content = ""
+                if filename in self.agent_state.staged_changes:
+                    current_content = self.agent_state.staged_changes[filename]
+                else:
+                    path = self.workspace._resolve(filename)
+                    if os.path.exists(path):
+                        with open(path, 'r', encoding='utf-8') as f:
+                            current_content = f.read()
+                
+                new_content = current_content + content
+                self.agent_state.stage_change(filename, new_content)
+                UI.step_done(f"Staged append for {filename} (buffered)")
+                return {"success": True, "action": "staged", "buffered": True}
+
             path = self.workspace._resolve(filename)
+            
+            # Create backup if file exists
+            if os.path.exists(path):
+                self._backup_file(path)
 
             with open(path, 'a', encoding='utf-8') as f:
                 f.write(content)
 
+            # Phase 5: Trigger background diagnostics (if code file)
+            if filename.endswith(".py"):
+                import subprocess
+                diag_path = os.path.join(self.workspace.root_dir, ".gondola_diagnostics.json")
+                cmd = f"ruff check --format json {path} > {diag_path} 2>/dev/null &"
+                subprocess.Popen(cmd, shell=True)
+
             lines = content.count('\n') + 1
             UI.step_detail(f"Added {lines} lines to end of file")
             UI.step_done()
+            self._track_file(filename)
             return {"success": True, "appended_lines": lines}
 
         except Exception as e:

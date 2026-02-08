@@ -1,139 +1,156 @@
-# Gondola v2.1 (Necromancer Edition)
+# Gondola v2.2
 
-## Overview
-Gondola v2.1 introduces the **Necromancer Architecture**: a stateless, resilient, and high-precision system designed to survive process deaths, interruptions, and "implementation amnesia."
+**An AI-powered coding assistant built by an AI orchestra leader.**
 
----
-
-## Key Architectural Upgrades
-
-### 1. Cognitive Resurrection (Git Heartbeat)
-*   **Module:** `venice/persistence.py`
-*   **Mechanism:** Uses low-level Git commands (`commit-tree`, `update-ref`) to store the agent's "Working Memory" in a hidden `_gondola_shadow` branch.
-*   **Benefit:** The agent can resume mid-thought after a crash or manual restart by reading the last resurrection point from the Git log.
-
-### 2. Stateless Structuralism (Tree-sitter)
-*   **Module:** `venice/tools/undead_ops.py`
-*   **Tools:** `get_skeleton`, `get_symbol_coordinates`
-*   **Benefit:** Provides instant Abstract Syntax Tree (AST) analysis without a long-running Language Server. The agent can see exact function line ranges and class structures with 0 latency.
-
-### 3. Global Symbol Navigation (Ctags)
-*   **Mechanism:** Triggers background `ctags` indexing on startup.
-*   **Tool:** `symbol_jump`
-*   **Benefit:** Project-wide navigation that survives power cycles. The agent can leap to any symbol definition across the entire codebase instantly.
-
-### 4. Surgical Autopsy (Lazy LSP)
-*   **Module:** `venice/undead_manager.py`
-*   **Engine:** `jedi`
-*   **Tool:** `inspect_type`
-*   **Benefit:** Deep type-inference and documentation lookup performed by spawning temporary worker processes that are killed immediately after the query. 0% idle RAM usage.
-
-### 5. Passive Diagnostics (The Observation Portal)
-*   **Mechanism:** Fire-and-forget background linting triggered by file edits.
-*   **Engine:** `ruff`
-*   **Benefit:** Diagnostic errors are injected into the agent's context at the start of every turn, allowing for immediate self-correction without blocking the thinking loop.
+Built in 3 weeks using lunch breaks and 3 hours a night—with a lot of help from Claude Code and Gemini CLI. If I can build this, imagine what you can do.
 
 ---
 
-## Recent Improvements (v2.1)
+## What is Gondola?
 
-### Complete Tool Schema Coverage
-*   **File:** `venice/tools/schema.py`
-*   **Impact:** All 30 tools now have proper OpenAI-compatible schemas
-*   **Tools Available:**
-    - File Operations: read, write, edit, search, info
-    - File Management: copy, move, delete, directories
-    - Code Analysis: syntax validation, function/class finding, project mapping
-    - Memory: persistent notes and preferences
-    - Backup: list, restore, undo operations
-    - Shell: command execution with environment awareness
-    - Undead Ops: get_skeleton, symbol_jump, inspect_type
+Gondola is a **bring-your-own-key** AI coding assistant that runs locally in your browser or terminal. It doesn't phone home to big tech, doesn't train on your code, and respects your privacy.
 
-### Thread-Safe UI Operations
-*   **File:** `venice/core.py`
-*   **Fix:** Resolved race condition in `UI.print()` that could cause output corruption
-*   **Benefit:** Reliable multi-threaded performance in web UI and CLI modes
+### Key Features
 
----
-
-## Architecture Core Principles
-
-1. **Resurrection over Persistence:** Assume the process will die. Use Git to store cognitive state.
-2. **Stateless Structuralism:** Use Tree-sitter and Ctags for instant, 0-RAM navigation.
-3. **Surgical Autopsy:** Use LSPs (Jedi) as "temporary workers"—spawn, query, and kill immediately.
-4. **Passive Safety:** Use fire-and-forget background linting injected at the start of turns.
-
----
-
-## The Necromancer Workflow
-
-The agent follows this discovery strategy:
-
-1. **Resurrection:** Check Git log for last checkpoint on startup
-2. **Structural Discovery:** Use `get_skeleton` to see a file's structure before reading the whole thing
-3. **Cross-File Leaps:** Use `symbol_jump` to instantly find symbol definitions across the project
-4. **Surgical Autopsy:** Use `inspect_type` for deep type-inference when needed
-5. **Passive Safety:** Watch for diagnostic errors injected at turn-start for self-correction
-
----
-
-## Integration Details
-
-*   **Web UI Port:** 5040
-*   **Launcher:** Integrated into the Venice Launcher (`command/main.py`)
-*   **Environment:** Powered by `litellm_venv`
-*   **Git Branch:** Uses `_gondola_shadow` for cognitive persistence
+- **25+ Tools**: File operations, code search, semantic understanding, project indexing
+- **Risk Analysis**: Pre-flight safety checks before edits
+- **Multi-Model Support**: Works with Venice AI, Together AI (Kimi K2.5, Llama, Qwen, and more)
+- **Project Indexing**: Compressed project understanding for large codebases
+- **Necromancer Persistence**: Git-based state recovery using shadow branches
+- **Web UI + CLI**: Choose your interface
+- **Context Management**: Token-aware conversation handling
+- **Agent State Tracking**: Loop prevention and progress monitoring
 
 ---
 
 ## Quick Start
 
+### Prerequisites
+
+- Python 3.8+
+- A Together AI API key (required)
+- Optional: Venice AI API key for additional models
+
 ### Installation
+
 ```bash
-cd gondola_v2.0_dev
-source litellm_venv/bin/activate
+# Clone the repository
+git clone https://github.com/yourusername/gondola.git
+cd gondola
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up your API keys (choose one method)
+
+# Method 1: Environment variables
+export TOGETHER_API_KEY="your_key_here"
+export VENICE_API_KEY="your_key_here"  # optional
+
+# Method 2: Config file
+cp app_config.json.template app_config.json
+# Edit app_config.json with your keys
+
+# Run the Web UI
+python venice-web-ui/server.py
+
+# Or run the CLI
+python venice_cli_v2.py
 ```
 
-### Launch Web UI
-```bash
-./start_gondola.sh
-# Access at http://localhost:5040
+The Web UI will be available at `http://localhost:5050`
+
+---
+
+## Supported Models
+
+| Model | Provider | Context | Best For |
+|-------|----------|---------|----------|
+| Kimi K2.5 | Together AI | 32k | General coding |
+| Llama 4 Maverick | Together AI | 128k | Long context |
+| Qwen 3 235B | Together AI | 131k | Function calling |
+| DeepSeek v3.2 | Venice AI | 160k | Reasoning |
+| Claude Opus 4.5 | Venice AI | 203k | Complex tasks |
+| GPT-5.2 Code | Venice AI | 262k | Elite coding |
+
+*Note: Claude models require Venice AI. Together AI does not offer Claude.*
+
+---
+
+## Architecture
+
 ```
-
-### Verify Installation
-```bash
-# Check tool schemas
-python3 -c "from venice.tools.schema import TOOL_SCHEMAS; print(f'✓ {len(TOOL_SCHEMAS)} tools loaded')"
-
-# Expected output: ✓ 30 tools loaded
+gondola_v2.2/
+├── venice/              # Core Python package
+│   ├── cli.py          # CLI entry point
+│   ├── core.py         # Models, UI, colors
+│   ├── api.py          # API utilities
+│   ├── workspace.py    # Secure file sandbox
+│   ├── memory.py       # Persistent storage
+│   ├── agent_state.py  # Session tracking
+│   ├── project_index.py # Code understanding
+│   ├── context_manager.py # Token management
+│   ├── risk_analyzer.py # Edit safety
+│   └── tools/          # 25+ tool implementations
+├── venice-web-ui/      # Flask web interface
+│   ├── server.py       # Main server
+│   ├── static/         # CSS, JS
+│   └── templates/      # HTML
+└── venice_cli_v2.py    # CLI launcher
 ```
 
 ---
 
-## Testing
+## The Story
 
-```bash
-# Test tool schema
-python3 test_tool_schema.py
+I'm not a developer. I'm an AI orchestra leader.
 
-# Test thread safety
-python3 test_race_condition.py
-```
+I built Gondola using:
+- **Claude Code** for architecture and complex logic
+- **Gemini CLI** for quick iterations and debugging
+- **3 weeks** of lunch breaks and late nights
+- **Determination** to prove what's possible
 
-Expected output:
-```
-✓ ALL SCHEMA TESTS PASSED
-✓ ALL TESTS PASSED
-```
+Every line of code was written by AI, but every architectural decision was human. This is the future of software development.
 
 ---
 
-## Documentation
+## Support the Project
 
-- **`NECROMANCER_IMPLEMENTATION_PLAN.md`** - Architecture blueprint
-- **`README_FIXES.md`** - Recent improvements and fixes
-- **`PROPOSAL_SEMANTIC_SEARCH.md`** - Future semantic search integration
+If Gondola helps you build something amazing, consider supporting continued development:
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/yourusername?style=social)](https://github.com/sponsors/yourusername)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-ff5f5f?style=flat&logo=ko-fi)](https://ko-fi.com/yourusername)
+
+Your support means:
+- ☕ $5 = 30 minutes of bug fixes
+- 🍕 $20 = 2 hours of new features
+- 💻 $100 = Priority issue resolution
 
 ---
 
-*Gondola v2.1: Built for resurrection, not persistence.*
+## Roadmap
+
+- [ ] Docker containerization
+- [ ] Plugin system for custom tools
+- [ ] Multi-workspace support
+- [ ] Team collaboration features
+- [ ] VS Code extension
+
+---
+
+## License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
+---
+
+## Acknowledgments
+
+- Built with [Claude](https://claude.ai) and [Gemini](https://gemini.google.com)
+- Inspired by the future of human-AI collaboration
+- Thanks to everyone who believed an AI orchestra leader could ship software
+
+---
+
+**"If you can describe it, AI can build it."**

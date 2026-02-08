@@ -10,8 +10,12 @@ from datetime import datetime
 class Memory:
     """Persistent memory across sessions"""
 
-    def __init__(self, workspace_root):
+    def __init__(self, workspace_root, conversation_dir=None):
+        self.workspace_root = workspace_root
         self.memory_file = os.path.join(workspace_root, '.venice_memory.json')
+        # Conversation persists in gondola dir, not user's workspace
+        conv_dir = conversation_dir or workspace_root
+        self.conversation_file = os.path.join(conv_dir, '.venice_conversation.json')
         self.data = self._load()
 
     def _load(self):
@@ -20,7 +24,7 @@ class Memory:
             try:
                 with open(self.memory_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError):
                 return self._default()
         return self._default()
 
@@ -107,3 +111,47 @@ class Memory:
         """Clear all project notes"""
         self.data["project_notes"] = []
         self.save()
+
+    def save_conversation(self, messages):
+        """Save the current conversation to disk for crash recovery"""
+        try:
+            # Filter out system messages (they're rebuilt on startup)
+            # Keep user, assistant, and tool messages
+            saveable = [m for m in messages if m.get('role') != 'system']
+
+            data = {
+                "messages": saveable,
+                "timestamp": datetime.now().isoformat(),
+                "message_count": len(saveable)
+            }
+
+            with open(self.conversation_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+
+            return True
+        except Exception as e:
+            print(f"Failed to save conversation: {e}")
+            return False
+
+    def load_conversation(self):
+        """Load saved conversation from disk"""
+        if os.path.exists(self.conversation_file):
+            try:
+                with open(self.conversation_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    messages = data.get("messages", [])
+                    timestamp = data.get("timestamp", "unknown")
+                    print(f"Restored {len(messages)} messages from {timestamp}")
+                    return messages
+            except Exception as e:
+                print(f"Failed to load conversation: {e}")
+                return []
+        return []
+
+    def clear_conversation(self):
+        """Clear saved conversation (after explicit save or clear)"""
+        if os.path.exists(self.conversation_file):
+            try:
+                os.remove(self.conversation_file)
+            except (IOError, OSError):
+                pass  # File may not exist or be locked, that's ok

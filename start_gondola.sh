@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Gondola v2.0 (Native Function Calling) Launcher
+# Gondola v2.2 (Native Function Calling) Launcher
 # Running on Port 5009
 
 # Path to the virtual environment python
@@ -13,7 +13,7 @@ SERVER_SCRIPT="venice-web-ui/server.py"
 cd "$(dirname "$0")"
 
 echo "------------------------------------------------"
-echo "Starting Gondola v2.0 (NATIVE)..."
+echo "Starting Gondola v2.2 (NATIVE)..."
 echo "URL: http://localhost:5009"
 echo "------------------------------------------------"
 

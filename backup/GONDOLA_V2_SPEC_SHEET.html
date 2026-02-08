@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gondola v2.2: Necromancer Architecture Specifications</title>
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --surface: #16161a;
+            --border: #2d2d34;
+            --text: #e1e1e6;
+            --accent: #00f2ff;
+            --accent-dim: rgba(0, 242, 255, 0.1);
+            --danger: #ff4545;
+            --success: #00ff9d;
+            --amber: #ffb86c;
+            --grey: #888891;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 1000px;
+        }
+
+        header {
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: var(--accent);
+            font-size: 2.5rem;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .version-badge {
+            background: var(--accent-dim);
+            color: var(--accent);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            border: 1px solid var(--accent);
+        }
+
+        section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            border-left: 4px solid var(--accent);
+            padding-left: 15px;
+            font-size: 1.5rem;
+            margin-top: 0;
+            color: var(--accent);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .spec-item {
+            border-bottom: 1px solid var(--border);
+            padding: 10px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .spec-label {
+            color: var(--grey);
+            font-weight: 500;
+        }
+
+        .spec-value {
+            font-family: 'Fira Code', monospace;
+            color: var(--success);
+        }
+
+        code {
+            background: #000;
+            color: var(--amber);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+        }
+
+        .module-card {
+            background: #000;
+            border: 1px solid var(--border);
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+
+        .module-name {
+            color: var(--accent);
+            font-weight: bold;
+            display: block;
+            margin-bottom: 10px;
+            font-family: 'Fira Code', monospace;
+        }
+
+        .tag {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            margin-right: 5px;
+        }
+
+        .tag-persistence { background: #4a148c; color: #ea80fc; }
+        .tag-structural { background: #1a237e; color: #8c9eff; }
+        .tag-autopsy { background: #b71c1c; color: #ff8a80; }
+
+        .diagram {
+            border: 1px dashed var(--grey);
+            padding: 20px;
+            text-align: center;
+            font-family: 'Fira Code', monospace;
+            color: var(--grey);
+            margin: 20px 0;
+        }
+
+        ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gondola v2.2 <span class="version-badge">Necromancer Edition</span></h1>
+            <p style="color: var(--grey);">Stateless. Resilient. Atomic. Agent Architecture.</p>
+        </header>
+
+        <section id="philosophy">
+            <h2>I. Core Philosophy</h2>
+            <div class="grid">
+                <div>
+                    <strong>1. Resurrection over Persistence</strong>
+                    <p>Assume the process will die. Store cognitive state in the filesystem's "shadow" (Git) rather than volatile RAM.</p>
+                </div>
+                <div>
+                    <strong>2. Stateless Structuralism</strong>
+                    <p>Zero-latency file mapping using Tree-sitter and Ctags instead of a long-running Language Server (LSP).</p>
+                </div>
+                <div>
+                    <strong>3. Surgical Autopsy</strong>
+                    <p>Spawn deep-analysis workers (Jedi) only on-demand. SIGKILL immediately after results are returned.</p>
+                </div>
+                <div>
+                    <strong>4. Passive Safety</strong>
+                    <p>Fire-and-forget background diagnostics (Ruff) injected into the next turn's observation portal.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="persistence">
+            <h2>II. Cognitive Persistence (The Heartbeat)</h2>
+            <div class="module-card">
+                <span class="module-name">venice/persistence.py</span>
+                <span class="tag tag-persistence">Atomic Git Plumbing</span>
+                <ul>
+                    <li><strong>Branch:</strong> <code>_gondola_shadow</code> (Hidden from user <code>git branch</code> by default).</li>
+                    <li><strong>Mechanism:</strong> Uses <code>git commit-tree</code> and <code>git update-ref</code>.</li>
+                    <li><strong>Safety:</strong> Never performs a <code>checkout</code>. Does not clobber user's working directory.</li>
+                    <li><strong>Payload:</strong> Encodes <code>{thought: str, task: str}</code> into the commit message history.</li>
+                    <li><strong>Resurrection:</strong> CLI reads the most recent commit on <code>_gondola_shadow</code> at startup to rebuild prompt context.</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="structural">
+            <h2>III. Structural Awareness Engine</h2>
+            <div class="grid">
+                <div class="module-card">
+                    <span class="module-name">venice/tools/undead_ops.py</span>
+                    <span class="tag tag-structural">Tree-Sitter v0.25.2</span>
+                    <p><strong>get_skeleton(filename)</strong>: Parses file into Classes/Methods with 100% accurate line-range mapping. Zero RAM idle cost.</p>
+                    <p><strong>symbol_jump(name)</strong>: Greps <code>.gondola_tags</code> (Ctags) for instant cross-project definition leaps.</p>
+                </div>
+                <div class="module-card">
+                    <span class="module-name">venice/undead_manager.py</span>
+                    <span class="tag tag-autopsy">Lazy LSP (Jedi)</span>
+                    <p><strong>inspect_type(filename, symbol)</strong>: Spawns a temporary Jedi process to perform deep type-inference and docstring lookup.</p>
+                    <p><strong>cleanup()</strong>: Surgical workers are terminated immediately after the tool call returns.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="safety">
+            <h2>IV. Passive Safety & Diagnostics</h2>
+            <div class="module-card">
+                <span class="module-name">The Observation Portal</span>
+                <p>Every <code>write_file</code> or <code>edit_file</code> triggers a background subprocess:</p>
+                <code>ruff check --format json > .gondola_diagnostics.json 2>/dev/null &</code>
+                <p style="margin-top:15px;">At the start of <strong>every turn</strong>, the CLI reads this JSON. If errors exist, they are injected as <strong>SYSTEM OBSERVATIONS</strong> before the agent speaks.</p>
+            </div>
+        </section>
+
+        <section id="specs">
+            <h2>V. Technical Specifications</h2>
+            <div class="grid">
+                <div>
+                    <div class="spec-item"><span class="spec-label">Process Model</span><span class="spec-value">Stateless / Ephemeral</span></div>
+                    <div class="spec-item"><span class="spec-label">Language Support</span><span class="spec-value">Python, JS, JSX, CSS</span></div>
+                    <div class="spec-item"><span class="spec-label">Context Injection</span><span class="spec-value">Dynamic System Prompt</span></div>
+                    <div class="spec-item"><span class="spec-label">Diagnostic Latency</span><span class="spec-value">&lt; 150ms (Background)</span></div>
+                </div>
+                <div>
+                    <div class="spec-item"><span class="spec-label">Web UI Port</span><span class="spec-value">5009 / 5040</span></div>
+                    <div class="spec-item"><span class="spec-label">Search Engine</span><span class="spec-value">Ripgrep (rg --json)</span></div>
+                    <div class="spec-item"><span class="spec-label">Semantic Engine</span><span class="spec-value">all-MiniLM-L6-v2</span></div>
+                    <div class="spec-item"><span class="spec-label">Persistence Depth</span><span class="spec-value">Infinite (Git History)</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tools">
+            <h2>VI. Complete Tool Registry (32 Native Tools)</h2>
+            <div style="column-count: 2; font-size: 0.85rem;">
+                <strong>File Ops:</strong> read_file, write_file, edit_file, replace_lines, insert_at_line, delete_lines, append_to_file, list_files, get_file_info, search_content, search_file_content<br><br>
+                <strong>Management:</strong> delete_file, move_file, copy_file, make_directory, delete_directory, list_backups, restore_backup, undo_edit<br><br>
+                <strong>Code Analysis:</strong> validate_syntax, find_functions, find_classes, map_project, extract_symbol, get_skeleton, symbol_jump, inspect_type<br><br>
+                <strong>Memory & Control:</strong> remember, recall, forget, set_preference, done, run_command
+            </div>
+        </section>
+
+        <footer style="text-align: center; color: var(--grey); font-size: 0.8rem; margin-top: 40px;">
+            Gondola v2.2 Spec Sheet | Generated Feb 3, 2026 | "Necromancer Architecture: Resurrection over Persistence"
+        </footer>
+    </div>
+</body>
+</html>

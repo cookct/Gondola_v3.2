@@ -89,7 +89,7 @@ class CodeOpsMixin(Tools):
     def done(self, summary):
         """Signal task is complete"""
         UI.success(f"COMPLETE: {summary}")
-        return {"success": True, "summary": summary}
+        return {"success": True, "summary": summary, "terminate": True}
 
     # ---- Code Analysis (Multi-Language) ----
 
@@ -413,7 +413,7 @@ class CodeOpsMixin(Tools):
     # ---- Semantic Search ----
 
     def semantic_search(self, query, max_results=5):
-        """Search the project using vector similarity for conceptual matches"""
+        """Search the project using vector similarity for conceptual matches. Returns file paths and line hints."""
         self.next_step(f"Semantic search: {query}")
         
         if not self.project_index:
@@ -423,25 +423,62 @@ class CodeOpsMixin(Tools):
         try:
             results = self.project_index.semantic_search(query, max_results=max_results)
             
+            # Also check for relevant knowledge entries
+            knowledge_results = []
+            if hasattr(self, 'get_relevant_knowledge'):
+                knowledge_entries = self.get_relevant_knowledge(query)
+                for entry in knowledge_entries:
+                    knowledge_results.append({
+                        "filename": f".gondola_knowledge/{entry['title']}.md",
+                        "relevance": 0.95,  # High relevance for explicit knowledge
+                        "summary": f"Knowledge: {entry['title']}",
+                        "line_hints": [],
+                        "knowledge_content": entry['content']  # Include actual knowledge
+                    })
+            
             formatted_results = []
             for filepath, score in results:
                 summary = self.project_index.file_summaries.get(filepath, "No summary available")
+                
+                # Extract line hints from symbols if they match query
+                line_hints = []
+                if filepath in self.project_index.symbols:
+                    syms = self.project_index.symbols[filepath]
+                    query_terms = query.lower().split()
+                    
+                    for sym_type in ['classes', 'functions']:
+                        if sym_type in syms:
+                            for sym in syms[sym_type]:
+                                name = sym['name'] if isinstance(sym, dict) else sym
+                                line = sym['line'] if isinstance(sym, dict) else None
+                                if any(term in name.lower() for term in query_terms):
+                                    line_hints.append({"name": name, "line": line, "type": sym_type[:-1]})
+
                 formatted_results.append({
                     "filename": filepath,
                     "relevance": round(score, 3),
-                    "summary": summary
+                    "summary": summary,
+                    "line_hints": line_hints
                 })
             
+            # Merge knowledge results (they usually have higher relevance)
+            formatted_results = knowledge_results + formatted_results
+            
+            # Sort by relevance
+            formatted_results.sort(key=lambda x: x["relevance"], reverse=True)
+            
             if formatted_results:
-                UI.step_detail(f"Found {len(formatted_results)} conceptually relevant files")
+                UI.step_detail(f"Found {len(formatted_results)} relevant results")
                 for res in formatted_results[:3]:
-                    UI.step_detail(f"  - {res['filename']} ({res['relevance']})")
+                    hints_str = f" ({len(res['line_hints'])} line hints)" if res.get('line_hints') else ""
+                    knowledge_marker = " [KNOWLEDGE]" if '.gondola_knowledge/' in res['filename'] else ""
+                    UI.step_detail(f"  - {res['filename']}{knowledge_marker} {hints_str}")
                 UI.step_done()
             else:
                 UI.step_detail("No conceptually relevant files found")
                 UI.step_done()
                 
-            return {"success": True, "results": formatted_results}
+            return {"success": True, "results": formatted_results[:max_results]}
             
         except Exception as e:
             UI.step_error(str(e))

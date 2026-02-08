@@ -60,8 +60,8 @@ MODELS = {
         "context_limit": 131000,
         "price_in": 0.15,
         "price_out": 0.75,
-        "max_tokens": 20000,
-        "stream_timeout": 120,
+        "max_tokens": 8000,
+        "stream_timeout": 90,
         # Qwen needs more guidance to stop
         "native_function_calling": True,
         "max_agent_turns": 15,  # Reduced - tends to loop
@@ -95,6 +95,19 @@ MODELS = {
         "needs_explicit_stop": True,
         "checkpoint_turns": [8, 15]
     },
+    "moonshotai/Kimi-K2.5": {
+        "name": "Kimi K2.5",
+        "type": "vision",
+        "description": "Vision · Function Calling · Reasoning · Code · Long Context",
+        "strength": "Elite All-Rounder",
+        "rank": 1,
+        "context_limit": 256000,
+        "price_in": 0.30,
+        "price_out": 1.20,
+        "native_function_calling": True,
+        "max_agent_turns": 50,
+        "needs_explicit_stop": False
+    },
     "zai-org-glm-4.7": {
         "name": "GLM 4.7",
         "type": "text",
@@ -118,12 +131,29 @@ MODELS = {
         "context_limit": 131000,
         "price_in": 0.70,
         "price_out": 2.80,
-        "max_tokens": 20000,
-        "stream_timeout": 120,
+        "max_tokens": 8000,
+        "stream_timeout": 90,
         "native_function_calling": True,
         "max_agent_turns": 15,
         "needs_explicit_stop": True,
         "checkpoint_turns": [5, 10, 13]
+    },
+    "maverick": {
+        "name": "Maverick",
+        "model_id": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+        "type": "text",
+        "description": "Function Calling · Reasoning · Code",
+        "strength": "Experimental Leader",
+        "rank": 2,
+        "context_limit": 131000,
+        "price_in": 0.20,
+        "price_out": 0.80,
+        "max_tokens": 8000,
+        "stream_timeout": 60,
+        "native_function_calling": True,
+        "max_agent_turns": 25,
+        "needs_explicit_stop": True,
+        "checkpoint_turns": [5, 10, 15]
     },
     "google-gemma-3-27b-it": {
         "name": "Gemma 3 27B",
@@ -134,8 +164,8 @@ MODELS = {
         "context_limit": 203000,
         "price_in": 0.12,
         "price_out": 0.20,
-        "max_tokens": 20000,
-        "stream_timeout": 120,
+        "max_tokens": 6000,
+        "stream_timeout": 40,
         # Gemma uses text-based tools despite Venice's claim
         "native_function_calling": False,  # Actually outputs tools as text
         "max_agent_turns": 10,  # Short leash - tends to hallucinate
@@ -143,42 +173,10 @@ MODELS = {
         "checkpoint_turns": [3, 6, 8],
         "strip_hallucinated_output": True  # Remove fake tool outputs from response
     },
-    "qwen-image": {
-        "name": "Qwen Image",
-        "type": "image",
-        "description": "Image Editing & Generation",
-        "strength": "Visual Creativity",
-        "rank": 0,
-        "context_limit": 0,
-        "price_in": 0.04,
-        "price_out": 0.04,
-        "native_function_calling": False,
-        "max_agent_turns": 1
-    },
-    "grok-imagine": {
-        "name": "Grok Imagine",
-        "type": "image",
-        "description": "Image Generation",
-        "strength": "Creative Generation",
-        "rank": 0,
-        "context_limit": 0,
-        "price_in": 0.04,
-        "price_out": 0.04,
-        "native_function_calling": False,
-        "max_agent_turns": 1
-    },
-    "grok-imagine-edit": {
-        "name": "Grok Imagine Edit",
-        "type": "image-edit",
-        "description": "Image Editing with Input Image",
-        "strength": "Creative Editing",
-        "rank": 0,
-        "context_limit": 0,
-        "price_in": 0.04,
-        "price_out": 0.04,
-        "native_function_calling": False,
-        "max_agent_turns": 1
-    }
+    # NOTE: Image models removed for v1.0 - will be added back after testing
+    # "qwen-image": { ... }
+    # "grok-imagine": { ... }
+    # "grok-imagine-edit": { ... }
 }
 
 

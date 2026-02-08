@@ -6,6 +6,21 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "save_knowledge",
+            "description": "Save knowledge or solutions for later retrieval.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "knowledge": {"type": "string", "description": "The knowledge or solution to save"},
+                    "keywords": {"type": "string", "description": "Keywords or tags for the knowledge"}
+                },
+                "required": ["knowledge", "keywords"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_files",
             "description": "List files in a directory with optional recursion and pattern matching.",
             "parameters": {
@@ -88,6 +103,30 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "begin_transaction",
+            "description": "Start a multi-file atomic transaction. All subsequent edits (write_file, edit_file, replace_lines) will be buffered in a staging area and NOT applied to disk until commit_transaction is called.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "commit_transaction",
+            "description": "Apply all buffered changes from the current transaction to disk simultaneously. Verifies syntax for ALL files before applying any. If one file fails validation, the entire transaction is rolled back.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dry_run": {"type": "boolean", "description": "Preview changes without applying them (default false)"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "write_constant",
             "description": "Recommended for writing code. Saves a string to a Python file as a variable. Handles escaping automatically.",
             "parameters": {
@@ -128,8 +167,10 @@ TOOL_SCHEMAS = [
                     "old_text": {"type": "string", "description": "Exact text to find (must be unique)"},
                     "new_text": {"type": "string", "description": "Replacement text"},
                     "occurrence": {"type": "integer", "description": "Which occurrence to replace (default 1, 0 for all)"},
+                    "thought": {"type": "string", "description": "Your reasoning for this edit (e.g. 'fixing the bug in the auth loop'). Used for better error reporting on failure."},
                     "expected_hash": {"type": "string", "description": "Optional file hash for verification"},
-                    "dry_run": {"type": "boolean", "description": "Preview changes without saving (default false)"}
+                    "dry_run": {"type": "boolean", "description": "Preview changes without saving (default false)"},
+                    "verify_risk": {"type": "boolean", "description": "NEW: Override flag to proceed with high-risk edits after manual verification (default false)"}
                 },
                 "required": ["filename", "old_text", "new_text"]
             }
@@ -147,8 +188,10 @@ TOOL_SCHEMAS = [
                     "start_line": {"type": "integer", "description": "Starting line number (1-indexed)"},
                     "end_line": {"type": "integer", "description": "Ending line number (inclusive)"},
                     "new_content": {"type": "string", "description": "New content to insert"},
+                    "thought": {"type": "string", "description": "Your reasoning for this edit. Used for better error reporting on failure."},
                     "expected_hash": {"type": "string", "description": "Optional file hash for verification"},
-                    "dry_run": {"type": "boolean", "description": "Preview changes without saving (default false)"}
+                    "dry_run": {"type": "boolean", "description": "Preview changes without saving (default false)"},
+                    "verify_risk": {"type": "boolean", "description": "NEW: Override flag to proceed with high-risk edits after manual verification (default false)"}
                 },
                 "required": ["filename", "start_line", "end_line", "new_content"]
             }
@@ -501,6 +544,21 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "get_symbol_coordinates",
+            "description": "Find exact line:column coordinates for a symbol (class, function, variable) using Tree-sitter.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {"type": "string", "description": "Path to the file"},
+                    "symbol_name": {"type": "string", "description": "Name of the symbol to find"}
+                },
+                "required": ["filename", "symbol_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "inspect_type",
             "description": "Perform a deep 'autopsy' on a symbol to find its type, signature, and docstrings using Jedi.",
             "parameters": {
@@ -524,6 +582,287 @@ TOOL_SCHEMAS = [
                     "summary": {"type": "string", "description": "Short summary of work done"}
                 },
                 "required": ["summary"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "multi_edit",
+            "description": "Apply multiple edits across multiple files atomically. All edits succeed or all fail.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "edits": {
+                        "type": "array",
+                        "description": "List of edit operations",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "filename": {"type": "string", "description": "File to edit"},
+                                "old_text": {"type": "string", "description": "Text to find and replace"},
+                                "new_text": {"type": "string", "description": "Replacement text"}
+                            },
+                            "required": ["filename", "old_text", "new_text"]
+                        }
+                    }
+                },
+                "required": ["edits"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "smart_context",
+            "description": "Intelligently gather context for a file by finding related files (imports, same directory, tests).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {"type": "string", "description": "File to gather context for"},
+                    "depth": {"type": "integer", "description": "How many related files to include (default 2)"}
+                },
+                "required": ["filename"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "batch_read",
+            "description": "Read multiple files efficiently in one operation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "files": {
+                        "type": "array",
+                        "description": "List of filenames to read",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["files"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_and_replace",
+            "description": "Find and replace across multiple files with preview. Use dry_run=True first to see what would change.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Regex pattern to search for"},
+                    "replacement": {"type": "string", "description": "Replacement text"},
+                    "path": {"type": "string", "description": "Directory to search in (default '.')"},
+                    "file_pattern": {"type": "string", "description": "Optional glob pattern to filter files (e.g. '*.py')"},
+                    "dry_run": {"type": "boolean", "description": "If True, only show what would be changed (default True)"}
+                },
+                "required": ["pattern", "replacement"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_status",
+            "description": "Get git repository status including staged, unstaged, and untracked files.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_diff",
+            "description": "Get git diff showing changes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "staged": {"type": "boolean", "description": "Show staged changes (default False)"},
+                    "file": {"type": "string", "description": "Show diff for specific file only"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_log",
+            "description": "Get git commit history.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "n": {"type": "integer", "description": "Number of commits to show (default 10)"},
+                    "file": {"type": "string", "description": "Show commits affecting this file only"},
+                    "author": {"type": "string", "description": "Filter by author"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_blame",
+            "description": "Get git blame showing who wrote each line.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {"type": "string", "description": "File to blame"},
+                    "start_line": {"type": "integer", "description": "Start line number"},
+                    "end_line": {"type": "integer", "description": "End line number"}
+                },
+                "required": ["filename"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_commit_message",
+            "description": "Analyze staged changes and suggest a commit message.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for current information using DuckDuckGo.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "n_results": {"type": "integer", "description": "Number of results (default 5)"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_url",
+            "description": "Fetch and extract content from a URL.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL to fetch"},
+                    "max_length": {"type": "integer", "description": "Max characters to return (default 10000)"}
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_docs",
+            "description": "Search documentation for popular libraries (Python, React, etc.).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "library": {"type": "string", "description": "Library name (e.g., 'python', 'react', 'numpy')"},
+                    "query": {"type": "string", "description": "What to search for"},
+                    "version": {"type": "string", "description": "Specific version (optional)"}
+                },
+                "required": ["library", "query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_stackoverflow",
+            "description": "Search Stack Overflow for solutions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags to filter by"},
+                    "n_results": {"type": "integer", "description": "Number of results (default 5)"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_github",
+            "description": "Search GitHub repositories.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "language": {"type": "string", "description": "Filter by language"},
+                    "sort": {"type": "string", "enum": ["stars", "updated", "best-match"], "description": "Sort by"},
+                    "n_results": {"type": "integer", "description": "Number of results (default 5)"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_tests",
+            "description": "Run Python tests using pytest or unittest.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory or file to test (default '.')"},
+                    "pattern": {"type": "string", "description": "Test file pattern (e.g., 'test_*.py')"},
+                    "verbose": {"type": "boolean", "description": "Show detailed output"},
+                    "fail_fast": {"type": "boolean", "description": "Stop on first failure"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "test_coverage",
+            "description": "Run tests with coverage analysis.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory to analyze (default '.')"},
+                    "output_format": {"type": "string", "enum": ["text", "json", "html"], "description": "Output format"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_test_files",
+            "description": "Find all test files in a directory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory to search (default '.')"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_test_stub",
+            "description": "Generate a test stub for a file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {"type": "string", "description": "File to generate tests for"},
+                    "function_name": {"type": "string", "description": "Specific function to test (optional)"}
+                },
+                "required": ["filename"]
             }
         }
     }

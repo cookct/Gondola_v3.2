@@ -576,13 +576,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!text && !currentImageData) return;
 
         if (currentImageData) {
-            appendMessageWithImage('user', text || 'Analyze this image', `data:${currentImageMime};base64,${currentImageData}`);
+            appendMessageWithImage('user', text, `data:${currentImageMime};base64,${currentImageData}`);
         } else {
             appendMessage('user', text);
         }
         
         const payload = {
-            message: text || 'Describe this image in detail.',
+            message: text || '',
             image: currentImageData,
             image_mime: currentImageMime,
             model: modelSelect.value

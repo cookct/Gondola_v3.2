@@ -1,4 +1,4 @@
-# Gondola v2.2 - Testing Checklist
+# Gondola v2.3 - Testing Checklist
 
 **Status: PRE-RELEASE TESTING**
 

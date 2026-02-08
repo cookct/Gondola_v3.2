@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gondola v2.2 - Security Tests
+Gondola v2.3 - Security Tests
 Verify sandbox and security features work.
 """
 
@@ -194,7 +194,7 @@ class TestWorkspaceSecurity(unittest.TestCase):
 def run_security_tests():
     """Run all security tests with verbose output"""
     print("=" * 60)
-    print("GONDOLA v2.2 - SECURITY TESTS")
+    print("GONDOLA v2.3 - SECURITY TESTS")
     print("=" * 60)
     
     loader = unittest.TestLoader()

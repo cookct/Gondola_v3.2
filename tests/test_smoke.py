@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gondola v2.2 - Smoke Tests
+Gondola v2.3 - Smoke Tests
 Quick verification that core functionality works.
 """
 
@@ -183,7 +183,7 @@ class TestAPIKeys(unittest.TestCase):
 def run_smoke_tests():
     """Run all smoke tests with verbose output"""
     print("=" * 60)
-    print("GONDOLA v2.2 - SMOKE TESTS")
+    print("GONDOLA v2.3 - SMOKE TESTS")
     print("=" * 60)
     
     loader = unittest.TestLoader()

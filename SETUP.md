@@ -1,4 +1,4 @@
-# Gondola v2.2 - Setup Guide
+# Gondola v2.3 - Setup Guide
 
 ## Quick Start (5 minutes)
 

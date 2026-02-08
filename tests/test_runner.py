@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gondola v2.2 - Unified Test Runner
+Gondola v2.3 - Unified Test Runner
 Runs all tests with proper structure and reporting.
 """
 
@@ -150,7 +150,7 @@ def discover_and_run_tests(test_dir='tests', pattern='test_*.py', verbosity=2, f
     reporter = TestReporter(verbosity=verbosity)
     
     # Print header
-    reporter.print_header("GONDOLA v2.2 - UNIFIED TEST SUITE")
+    reporter.print_header("GONDOLA v2.3 - UNIFIED TEST SUITE")
     reporter.stream.write(f"\nStarted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
     # Git integration
@@ -203,7 +203,7 @@ def discover_and_run_tests(test_dir='tests', pattern='test_*.py', verbosity=2, f
     reporter.print_header("FINAL STATUS")
     if result.wasSuccessful():
         reporter.stream.write("\n✓ ALL TESTS PASSED\n")
-        reporter.stream.write("🎉 Gondola v2.2 is ready for action!\n\n")
+        reporter.stream.write("🎉 Gondola v2.3 is ready for action!\n\n")
         return 0
     else:
         reporter.stream.write("\n✗ SOME TESTS FAILED\n")

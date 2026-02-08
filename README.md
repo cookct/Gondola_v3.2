@@ -1,4 +1,4 @@
-# Gondola v2.2
+# Gondola v2.3
 
 **An AI-powered coding assistant built by an AI orchestra leader.**
 

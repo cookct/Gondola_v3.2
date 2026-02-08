@@ -178,7 +178,7 @@ def main():
  current_model = args.model if args.model in MODELS else DEFAULT_MODEL
 
  # Welcome
- UI.header("Venice CLI v2.2", Colors.CYAN)
+ UI.header("Venice CLI v2.3", Colors.CYAN)
  print(f"{Colors.GREY}Workspace: {workspace.root_dir}{Colors.RESET}")
  print(f"{Colors.GREY}Model: {MODELS[current_model]['name']} ({current_model}){Colors.RESET}")
  if memory_context:

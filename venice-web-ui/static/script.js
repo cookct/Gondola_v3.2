@@ -774,6 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (currentToolBlock) {
                     const content = currentToolBlock.querySelector('.tool-block-content');
                     content.innerHTML += ansiToHtml(data);
+                    scrollToBottom();
                 }
                 break;
 
@@ -942,8 +943,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Check if user is near bottom
     function isNearBottom() {
+        // Reduced threshold to 10px for stricter auto-scroll
         const scrollBottom = chatHistory.scrollHeight - chatHistory.scrollTop - chatHistory.clientHeight;
-        return scrollBottom < SCROLL_THRESHOLD;
+        return scrollBottom <= 10;
     }
     
     // Smart scroll handler - detects user intent
@@ -970,17 +972,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Mouse wheel handler - pause auto-scroll on wheel up
     chatHistory.addEventListener('wheel', (e) => {
         if (e.deltaY < 0) {
-            // Scrolling up - pause auto-scroll
-            userScrolledUp = true;
-            chatAutoScroll = false;
-            showScrollIndicator();
+            // Only pause if actually moving away from bottom
+            if (!isNearBottom()) {
+                userScrolledUp = true;
+                chatAutoScroll = false;
+                showScrollIndicator();
+            }
         } else if (e.deltaY > 0 && isNearBottom()) {
-            // Scrolling down and near bottom - resume auto-scroll
             userScrolledUp = false;
             chatAutoScroll = true;
             hideScrollIndicator();
         }
-    });
+    }, { passive: true });
     
     // Scroll indicator element
     let scrollIndicator = null;
@@ -1009,7 +1012,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Enhanced scroll to bottom with force option
     function scrollToBottom(force = false) {
         if (chatAutoScroll || force) {
+            // Set twice to ensure layout engine catches up
             chatHistory.scrollTop = chatHistory.scrollHeight;
+            requestAnimationFrame(() => {
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            });
         }
     }
 

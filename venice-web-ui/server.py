@@ -383,7 +383,7 @@ def get_conversation():
 def get_models():
     return jsonify({
         "models": MODELS,
-        "current": "moonshotai/Kimi-K2.5"
+        "current": "moonshotai/Kimi-K2-Instruct-0905"
     })
 
 @app.route('/api/models', methods=['POST'])

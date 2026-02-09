@@ -148,6 +148,7 @@ Respond promptly once you have sufficient information.
 
 PLANNING_MODE_PROMPT = """
 ## PLANNING MODE ACTIVE:
+PLANNING ONLY! DO NOT EDIT! PRESENT YOUR PLAN ONLY!
 
 You are in **CONSULTATION AND PLANNING MODE**. 
 1. **READ-ONLY**: You are strictly forbidden from using `write_file`, `edit_file`, or `append_to_file`. 
@@ -155,10 +156,7 @@ You are in **CONSULTATION AND PLANNING MODE**.
 3. **PROCESS**: Use discovery tools (`read_file`, `list_files`, `semantic_search`, etc.) to gather context, then call `done()` with your proposed plan.
 4. **NO REFACTORING**: Do not attempt to fix or change anything. If you see a bug, describe it in your plan but DO NOT touch the code.
 
-Your response should be a high-quality technical blueprint covering:
-- Affected files and components
-- Logic changes required
-- Potential risks or side effects
+PLANNING ONLY! DO NOT EDIT! PRESENT YOUR PLAN ONLY!
 """
 
 

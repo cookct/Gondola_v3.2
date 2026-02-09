@@ -1028,6 +1028,30 @@ def chat():
                         tool_start = time.time()
 
                         try:
+                            # HARD LOCK: Planning Mode enforcement
+                            if planning_mode and tool_name in ['write_file', 'edit_file', 'append_to_file', 'delete_lines', 'replace_lines', 'insert_at_line']:
+                                logger.warning(f"[{request_id}] │  BLOCKED: {tool_name} called in Planning Mode")
+                                result = {
+                                    "success": False,
+                                    "error": f"TOOL BLOCKED: You are in PLANNING MODE. You are forbidden from using {tool_name}. Present your plan to the user using the information you have gathered."
+                                }
+                                result_str = json.dumps(result)
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tool_id,
+                                    "name": tool_name,
+                                    "content": result_str
+                                })
+                                event_queue.put({
+                                    "type": "tool_done",
+                                    "data": {
+                                        "tool": tool_name,
+                                        "success": False,
+                                        "error": "Blocked by Planning Mode governor."
+                                    }
+                                })
+                                continue
+
                             class NativeTC:
                                 def __init__(self, d):
                                     self.function = type('Func', (), d['function'])

@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Model select
     const modelSelect = document.getElementById('model-select');
+    const planningModeCheck = document.getElementById('planning-mode');
 
     // Sidebar elements
     const sidebarLeft = document.querySelector('.sidebar-left');
@@ -652,7 +653,8 @@ document.addEventListener('DOMContentLoaded', () => {
             message: text || '',
             image: currentImageData,
             image_mime: currentImageMime,
-            model: modelSelect.value
+            model: modelSelect.value,
+            planning_mode: planningModeCheck ? planningModeCheck.checked : false
         };
         
         conversationHistory.push({ role: 'user', content: payload.message });

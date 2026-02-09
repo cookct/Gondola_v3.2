@@ -508,8 +508,10 @@ def chat():
     image_data = data.get('image')
     image_mime = data.get('image_mime', 'image/png')
     model_id = data.get('model', 'moonshotai/Kimi-K2-Instruct-0905')
+    planning_mode = data.get('planning_mode', False)
 
     logger.info(f"[{request_id}] Model: {model_id}")
+    logger.info(f"[{request_id}] Planning Mode: {planning_mode}")
     logger.info(f"[{request_id}] Message length: {len(user_message) if user_message else 0} chars")
     logger.info(f"[{request_id}] Has image: {bool(image_data)}")
     logger.debug(f"[{request_id}] User message preview: {(user_message or '')[:200]}...")
@@ -636,7 +638,8 @@ def chat():
                                 project_context=project_context,
                                 turn_count=agent_turns,
                                 max_turns=MAX_AGENT_TURNS,
-                                files_already_read=files_read
+                                files_already_read=files_read,
+                                planning_mode=planning_mode
                             )
                             # Update system message in messages list
                             if messages and messages[0].get('role') == 'system':

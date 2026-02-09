@@ -146,13 +146,30 @@ Respond promptly once you have sufficient information.
 }
 
 
+PLANNING_MODE_PROMPT = """
+## PLANNING MODE ACTIVE:
+
+You are in **CONSULTATION AND PLANNING MODE**. 
+1. **READ-ONLY**: You are strictly forbidden from using `write_file`, `edit_file`, or `append_to_file`. 
+2. **GOAL**: Your only objective is to analyze the codebase and provide a detailed technical implementation plan.
+3. **PROCESS**: Use discovery tools (`read_file`, `list_files`, `semantic_search`, etc.) to gather context, then call `done()` with your proposed plan.
+4. **NO REFACTORING**: Do not attempt to fix or change anything. If you see a bug, describe it in your plan but DO NOT touch the code.
+
+Your response should be a high-quality technical blueprint covering:
+- Affected files and components
+- Logic changes required
+- Potential risks or side effects
+"""
+
+
 def build_system_prompt(
     model_id: str = None,
     project_context: str = None,
     turn_count: int = 0,
     max_turns: int = 20,
     files_already_read: list = None,
-    resurrection_context: str = None
+    resurrection_context: str = None,
+    planning_mode: bool = False
 ) -> str:
     """
     Build a dynamic system prompt with context.
@@ -164,8 +181,13 @@ def build_system_prompt(
         max_turns: Maximum allowed turns
         files_already_read: List of files already read this session
         resurrection_context: Information about the last interrupted state
+        planning_mode: If True, restricts agent to planning only
     """
     parts = [BASE_SYSTEM_PROMPT]
+
+    # Add planning mode instructions early to override default workflow
+    if planning_mode:
+        parts.append(PLANNING_MODE_PROMPT)
 
     # Add resurrection context if available
     if resurrection_context:

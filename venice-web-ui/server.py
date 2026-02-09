@@ -526,11 +526,6 @@ def chat():
         initialize()
         return jsonify({"response": "Conversation cleared."})
 
-    # Planning Mode: Aggressive message wrapping
-    if planning_mode:
-        warning = "PLANNING ONLY! DO NOT EDIT! PRESENT YOUR PLAN ONLY!"
-        user_message = f"{warning}\n\n{user_message or ''}\n\n{warning}"
-
     if image_data:
         logger.debug(f"[{request_id}] Building multimodal message with image ({image_mime})")
         message_content = [

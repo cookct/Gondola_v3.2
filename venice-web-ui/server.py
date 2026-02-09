@@ -228,24 +228,44 @@ def list_backups():
     """List all available backups"""
     try:
         backup_dir = os.path.join(WORKSPACE_DIR, '.venice_backups')
+        logger.info(f"Listing backups from: {backup_dir}")
         if not os.path.exists(backup_dir):
             return jsonify({"success": True, "backups": []})
-        backups = []
-        for f in sorted(os.listdir(backup_dir), reverse=True):
+        
+        # Get all files with metadata first
+        backup_files = []
+        for f in os.listdir(backup_dir):
             if f.endswith('.bak'):
                 full_path = os.path.join(backup_dir, f)
-                stat = os.stat(full_path)
-                size = stat.st_size
-                for unit in ['B', 'KB', 'MB', 'GB']:
-                    if size < 1024:
-                        size_str = f"{size:.1f} {unit}"
-                        break
-                    size /= 1024
-                else:
-                    size_str = f"{size:.1f} TB"
-                from datetime import datetime
-                modified = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
-                backups.append({"name": f, "size": size_str, "modified": modified})
+                try:
+                    stat = os.stat(full_path)
+                    backup_files.append({
+                        "name": f,
+                        "path": full_path,
+                        "size_bytes": stat.st_size,
+                        "mtime": stat.st_mtime
+                    })
+                except OSError:
+                    continue
+
+        # Sort by modification time (newest first)
+        backup_files.sort(key=lambda x: x['mtime'], reverse=True)
+
+        backups = []
+        for b in backup_files:
+            size = b['size_bytes']
+            for unit in ['B', 'KB', 'MB', 'GB']:
+                if size < 1024:
+                    size_str = f"{size:.1f} {unit}"
+                    break
+                size /= 1024
+            else:
+                size_str = f"{size:.1f} TB"
+            
+            from datetime import datetime
+            modified = datetime.fromtimestamp(b['mtime']).strftime('%Y-%m-%d %H:%M')
+            backups.append({"name": b['name'], "size": size_str, "modified": modified})
+            
         return jsonify({"success": True, "backups": backups})
     except Exception as e:
         traceback.print_exc()
@@ -487,7 +507,7 @@ def chat():
     user_message = data.get('message')
     image_data = data.get('image')
     image_mime = data.get('image_mime', 'image/png')
-    model_id = data.get('model', 'moonshotai/Kimi-K2.5')
+    model_id = data.get('model', 'moonshotai/Kimi-K2-Instruct-0905')
 
     logger.info(f"[{request_id}] Model: {model_id}")
     logger.info(f"[{request_id}] Message length: {len(user_message) if user_message else 0} chars")
@@ -540,7 +560,7 @@ def chat():
                 model_config = get_model_config(model_id)
                 MAX_AGENT_TURNS = model_config['max_agent_turns']
                 # Default checkpoints for all models - ensure we always remind to stop
-                default_checkpoints = [5, 10, 15, 20, 25, 30]
+                default_checkpoints = [10, 20, 30, 40, 45, 48]
                 checkpoint_turns = model_config.get('checkpoint_turns', default_checkpoints)
                 needs_explicit_stop = model_config.get('needs_explicit_stop', False)
 
@@ -555,6 +575,10 @@ def chat():
                 agent_state.task_description = user_message or "image task"
                 agent_state.model_id = model_id
                 agent_state.max_turns = MAX_AGENT_TURNS
+
+                # Track consecutive empty responses for nudge injection
+                consecutive_empty_responses = 0
+                MAX_EMPTY_RESPONSES = 3  # Give up after 3 nudges
 
                 # NEW: Set up context manager with project index
                 ctx_model_config = ModelConfig(
@@ -623,7 +647,7 @@ def chat():
                         from venice.core import MODELS
                         model_info = MODELS.get(model_id, {})
                         max_tokens = model_info.get("max_tokens", 20000)
-                        stream_timeout = model_info.get("stream_timeout", 60)
+                        stream_timeout = model_info.get("stream_timeout", 180)
                         context_limit = model_info.get("context_limit", 128000)
                         pricing = model_info.get("pricing", "unknown")
 
@@ -645,6 +669,7 @@ def chat():
 
                         api_call_start = time.time()
                         logger.info(f"[{request_id}] >>> Initiating API call at {datetime.now().isoformat()}")
+                        event_queue.put({"type": "status", "data": f"Connecting to {('Venice' if is_together else 'Together')}..."}) # is_together logic inverted in variable name above, but label is distinct
 
                         # Generous timeouts: connect=60s, read=180s (time between chunks), write=60s, pool=60s
                         # The read timeout is high because some models take a long time to produce the first token
@@ -662,7 +687,7 @@ def chat():
                             }
                             # Only add venice_parameters for Venice
                             if not is_together:
-                                api_payload["venice_parameters"] = {"include_venice_system_prompt": False}
+                                api_payload["venice_parameters"] = {"include_venice_system_prompt": True}
 
                             with http_client.stream(
                                 "POST",
@@ -675,6 +700,7 @@ def chat():
                                     ) as response:
                                 connection_time = time.time() - api_call_start
                                 logger.info(f"[{request_id}] <<< Connection established in {connection_time:.3f}s")
+                                event_queue.put({"type": "status", "data": "Connected. Waiting for first token..."})
                                 logger.info(f"[{request_id}] Response status: {response.status_code}")
 
                                 # DEBUG: Log ALL headers received
@@ -765,6 +791,7 @@ def chat():
                                         first_chunk_time = current_time
                                         ttft = first_chunk_time - api_call_start
                                         logger.info(f"[{request_id}] ⚡ FIRST CHUNK received! Time-to-first-token: {ttft:.3f}s")
+                                        event_queue.put({"type": "status", "data": "Receiving stream..."})
 
                                     # Log every 50 chunks or every 5 seconds
                                     time_since_start = current_time - stream_start_time
@@ -948,8 +975,35 @@ def chat():
                     messages.append(assistant_msg)
 
                     if not native_tool_calls:
-                        logger.info(f"[{request_id}] No tool calls (native or text-based) - ending turn")
-                        break
+                        # Check if this is an empty response (no content AND no tool calls)
+                        is_empty_response = not response_content or len(response_content.strip()) == 0
+
+                        if is_empty_response and consecutive_empty_responses < MAX_EMPTY_RESPONSES:
+                            consecutive_empty_responses += 1
+                            logger.warning(f"[{request_id}] EMPTY RESPONSE detected ({consecutive_empty_responses}/{MAX_EMPTY_RESPONSES}) - injecting continuation nudge")
+
+                            # Remove the empty assistant message we just added
+                            if messages and messages[-1].get("role") == "assistant":
+                                messages.pop()
+
+                            # Inject a nudge to continue working
+                            nudge_msg = "SYSTEM: Your response was empty. The task is not complete. Continue working - use tools to make progress, then call done() when finished."
+                            messages.append({"role": "user", "content": nudge_msg})
+                            event_queue.put({"type": "status", "data": "Nudging model to continue..."})
+
+                            # Continue the loop instead of breaking
+                            agent_turns += 1
+                            continue
+                        else:
+                            if consecutive_empty_responses >= MAX_EMPTY_RESPONSES:
+                                logger.error(f"[{request_id}] Too many empty responses ({consecutive_empty_responses}) - giving up")
+                                event_queue.put({"type": "error", "data": "Model stopped responding. Task may be incomplete."})
+                            else:
+                                logger.info(f"[{request_id}] No tool calls but has content - ending turn normally")
+                            break
+
+                    # Reset empty response counter on successful tool call response
+                    consecutive_empty_responses = 0
 
                     # Execute tools
                     logger.info(f"[{request_id}] Executing {len(native_tool_calls)} tool call(s)")
@@ -1157,6 +1211,42 @@ def chat():
         yield f"event: done\ndata: {json.dumps({'history_length': len(messages)})}\n\n"
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
+@app.route('/api/git/status', methods=['GET'])
+def git_status():
+    """Get git status for the current workspace."""
+    try:
+        import subprocess
+        import os
+        
+        # Determine the correct directory
+        if workspace and hasattr(workspace, 'root_dir'):
+            git_dir = workspace.root_dir
+        elif WORKSPACE_DIR:
+            git_dir = WORKSPACE_DIR
+        else:
+            git_dir = os.getcwd()
+        
+        logger.info(f"Git status checking directory: {git_dir}")
+        
+        result = subprocess.run(
+            ['git', 'status'],
+            cwd=git_dir,
+            capture_output=True,
+            text=True
+        )
+        
+        logger.info(f"Git status return code: {result.returncode}")
+        if result.stderr:
+            logger.info(f"Git stderr: {result.stderr}")
+        
+        if result.returncode == 0:
+            return jsonify({"success": True, "output": result.stdout})
+        else:
+            return jsonify({"success": False, "error": result.stderr or "Not a git repository"})
+    except Exception as e:
+        logger.error(f"Git status error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
 if __name__ == '__main__':
 
     logger.info("=" * 70)
@@ -1172,3 +1262,5 @@ if __name__ == '__main__':
     print("Starting Gondola Server (Modular) on port 5050...")
 
     app.run(host='0.0.0.0', port=5050, debug=True, use_reloader=False)
+
+

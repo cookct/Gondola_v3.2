@@ -173,6 +173,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Auto-resize textarea
+    function adjustTextareaHeight() {
+        userInput.style.height = '44px';
+        const newHeight = Math.min(userInput.scrollHeight, 314);
+        userInput.style.height = newHeight + 'px';
+        userInput.style.overflowY = userInput.scrollHeight > 314 ? 'auto' : 'hidden';
+    }
+    userInput.addEventListener('input', adjustTextareaHeight);
+
     // --- Sidebar Initialization ---
     function initSidebar() {
         // Workspace Selector (Dropdown)
@@ -257,7 +266,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Macro Buttons
         document.querySelectorAll('.macro-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
+                const text = btn.querySelector('.macro-text')?.textContent;
+                if (text === 'Forget') {
+                    if (confirm('Are you sure you want to clear all memory and conversation history?')) {
+                        try {
+                            const res = await fetch('/api/forget', { method: 'POST' });
+                            const data = await res.json();
+                            if (data.success) {
+                                conversationHistory = [];
+                                chatHistory.innerHTML = '<div class="message system">Memory cleared.</div>';
+                                updateContextPulse([]);
+                            } else {
+                                alert('Error: ' + data.error);
+                            }
+                        } catch (e) {
+                            alert('Failed to clear memory: ' + e.message);
+                        }
+                    }
+                    return;
+                }
                 userInput.value = btn.dataset.prompt;
                 sendMessage();
             });
@@ -319,6 +347,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const uploadBtn = document.getElementById('upload-btn');
         const imageInput = document.getElementById('image-input');
         uploadBtn?.addEventListener('click', () => imageInput.click());
+
+        // Screenshot Button
+        const screenshotBtn = document.getElementById('screenshot-btn');
+        if (screenshotBtn) {
+            screenshotBtn.addEventListener('click', async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getDisplayMedia({ 
+                        video: { cursor: "always" }, 
+                        audio: false 
+                    });
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.onloadedmetadata = async () => {
+                        await video.play();
+                        // Capture frame
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        // Stop stream
+                        stream.getTracks().forEach(track => track.stop());
+
+                        // Set as current image
+                        currentImageData = canvas.toDataURL('image/png').split(',')[1];
+                        currentImageMime = 'image/png';
+                        imagePreview.src = canvas.toDataURL('image/png');
+                        imageName.textContent = "Screenshot " + new Date().toLocaleTimeString();
+                        imagePreviewContainer.style.display = 'flex';
+                        document.getElementById('upload-btn').classList.add('has-image');
+                    };
+                } catch (err) {
+                    console.error("Error capturing screenshot: " + err);
+                }
+            });
+        }
 
         // Image Editor Logic
         const editorDropzone = document.getElementById('editor-dropzone');
@@ -557,17 +622,19 @@ document.addEventListener('DOMContentLoaded', () => {
     async function refreshGitStatus() {
         const gitLog = document.getElementById('git-status-log');
         if (!gitLog) return;
-        gitLog.textContent = 'Loading...';
+        gitLog.innerHTML = '<em>Loading...</em>';
         try {
             const res = await fetch('/api/git/status');
             const data = await res.json();
             if (data.success) {
-                gitLog.textContent = data.output || 'No git repository found';
+                // Convert git output to markdown code block for better formatting
+                const output = data.output || 'No git repository found';
+                gitLog.innerHTML = marked.parse('```\n' + output + '\n```');
             } else {
-                gitLog.textContent = data.error || 'Error fetching git status';
+                gitLog.innerHTML = marked.parse('**Error:** ' + (data.error || 'Error fetching git status'));
             }
         } catch (e) {
-            gitLog.textContent = 'Not a git repository or git not available';
+            gitLog.innerHTML = marked.parse('*Not a git repository or git not available*');
         }
     }
 
@@ -590,8 +657,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         conversationHistory.push({ role: 'user', content: payload.message });
         userInput.value = '';
+        userInput.style.height = '44px';
+        userInput.style.overflowY = 'hidden';
         clearImageUpload();
         userInput.disabled = true;
+        userInput.parentElement.classList.add('thinking');
         sendBtn.disabled = false; // Keep enabled for STOP
         setButtonState(true);
         agentStatus.textContent = 'Processing...';
@@ -641,6 +711,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             stopBuffering();
             userInput.disabled = false;
+            userInput.placeholder = "Describe a task (e.g., 'Create a flask app in app.py')...";
+            userInput.parentElement.classList.remove('thinking');
             setButtonState(false);
             agentStatus.textContent = 'Idle';
             userInput.focus();
@@ -674,14 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
 
             case 'reasoning':
-                // Switch to thinking block if not already
-                if (currentBlockType !== 'thinking') {
-                    finalizeCurrentBlock();  // Close any previous block
-                    currentBlockElement = createThinkingBlock(currentTurnContainer);
-                    currentBlockType = 'thinking';
-                }
-                currentBlockElement.textContent += data;
-                scrollToBottom();
+                // Skip thinking/reasoning content - don't display it
                 break;
 
             case 'content':
@@ -712,6 +777,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentBlockType = 'tool';
                 }
                 agentStatus.textContent = data;
+                // Flash status in the main text box
+                if (userInput) {
+                    userInput.placeholder = ">> " + data;
+                }
                 break;
 
             case 'tool_done':
@@ -1011,14 +1080,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update Header Balance
         const headerBal = document.getElementById('balance-usd');
         if (headerBal) headerBal.textContent = usd;
-        
-        // Update Mini Balance (Input Area)
-        const miniBal = document.getElementById('mini-balance');
-        if (miniBal) {
-            // Format nicely (e.g. $13.45)
-            const val = parseFloat(usd);
-            miniBal.textContent = '$' + (isNaN(val) ? '0.00' : val.toFixed(2));
-        }
     }
 
     async function fetchBalance() {

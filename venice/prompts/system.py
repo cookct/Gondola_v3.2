@@ -48,6 +48,8 @@ BASE_SYSTEM_PROMPT = """You are an autonomous AI coding agent with direct access
 - `edit_file(filename, old_text, new_text)` - Replace text in a file
 - `run_command(command)` - Execute a shell command
 - `map_project(max_depth)` - Get project structure overview
+- `web_search(query, n_results)` - Search the web using DuckDuckGo
+- `fetch_url(url, max_length)` - Fetch content from any URL
 - `done(summary)` - **REQUIRED** - Complete the task with your response
 
 ## DISCOVERY STRATEGY (Tracing):
@@ -201,15 +203,12 @@ def get_checkpoint_message(turn_count: int, model_id: str = None) -> str:
     Get a checkpoint reminder message for the current turn.
     """
     messages = {
-        3: "You're 3 turns in. If you have enough info, call done() now.",
-        5: "Turn 5: Review your progress. Do you have what you need? If yes, call done().",
-        8: "Turn 8: You should have enough context by now. Time to complete your task.",
-        10: "Turn 10: You MUST complete your task soon. Call done() with your response.",
-        13: "Turn 13: FINAL WARNING. Call done() on your next turn.",
-        15: "Turn 15: STOP. Call done() NOW with whatever you have.",
-        20: "Turn 20: CRITICAL - You are taking too long. Call done() IMMEDIATELY.",
-        25: "Turn 25: EMERGENCY STOP. Call done() NOW or you will be terminated.",
-        30: "Turn 30: FINAL CHANCE. Call done() with your best response NOW."
+        10: "Turn 10: You're making good progress. Continue if needed, or wrap up if ready.",
+        20: "Turn 20: Halfway through your limit. Keep going if the task requires more work.",
+        30: "Turn 30: Getting close to limit. Start thinking about completing soon.",
+        40: "Turn 40: Almost at max turns. Finish up in the next few turns.",
+        45: "Turn 45: FINAL WARNING. Complete your task and call done() soon.",
+        48: "Turn 48: CRITICAL - You have 2 turns left. Call done() on your next turn."
     }
 
     return messages.get(turn_count, None)

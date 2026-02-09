@@ -35,14 +35,14 @@ class TestOpsMixin(Tools):
             
             # Check if pytest is available
             result = subprocess.run(
-                ["python", "-m", "pytest", "--version"],
+                ["python3", "-m", "pytest", "--version"],
                 capture_output=True,
                 cwd=self.workspace.root_dir
             )
             has_pytest = result.returncode == 0
             
             if has_pytest:
-                cmd = ["python", "-m", "pytest"]
+                cmd = ["python3", "-m", "pytest"]
                 if verbose:
                     cmd.append("-v")
                 if fail_fast:
@@ -52,7 +52,7 @@ class TestOpsMixin(Tools):
                 cmd.append(target)
             else:
                 # Fall back to unittest
-                cmd = ["python", "-m", "unittest", "discover", "-s", target]
+                cmd = ["python3", "-m", "unittest", "discover", "-s", target]
                 if pattern:
                     cmd.extend(["-p", pattern])
                 if verbose:
@@ -127,7 +127,7 @@ class TestOpsMixin(Tools):
             
             # Check if coverage is available
             result = subprocess.run(
-                ["python", "-m", "coverage", "--version"],
+                ["python3", "-m", "coverage", "--version"],
                 capture_output=True,
                 cwd=self.workspace.root_dir
             )
@@ -137,7 +137,7 @@ class TestOpsMixin(Tools):
             
             # Run tests with coverage
             cmd = [
-                "python", "-m", "coverage", "run",
+                "python3", "-m", "coverage", "run",
                 "--source", target,
                 "-m", "pytest", target
             ]
@@ -152,9 +152,9 @@ class TestOpsMixin(Tools):
             
             # Generate report
             if output_format == "json":
-                report_cmd = ["python", "-m", "coverage", "json", "-o", "-"]
+                report_cmd = ["python3", "-m", "coverage", "json", "-o", "-"]
             elif output_format == "html":
-                report_cmd = ["python", "-m", "coverage", "html"]
+                report_cmd = ["python3", "-m", "coverage", "html"]
                 subprocess.run(report_cmd, cwd=self.workspace.root_dir)
                 return {
                     "success": True,
@@ -162,7 +162,7 @@ class TestOpsMixin(Tools):
                     "report_path": "htmlcov/index.html"
                 }
             else:
-                report_cmd = ["python", "-m", "coverage", "report"]
+                report_cmd = ["python3", "-m", "coverage", "report"]
             
             report_result = subprocess.run(
                 report_cmd,

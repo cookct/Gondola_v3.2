@@ -17,21 +17,39 @@ from venice.tools.schema import TOOL_SCHEMAS
 logger = logging.getLogger('gondola.api')
 
 
-def get_api_key():
-    key = os.getenv("VENICE_API_KEY")
+def _get_key_from_config(key_name, env_var_name):
+    """
+    Helper function to retrieve an API key from environment variable or config files.
+    
+    Lookup order:
+    1. Environment variable specified by env_var_name
+    2. Config files (app_config.json, ~/.venice_config.json, ~/.config/venice/config.json)
+    
+    Args:
+        key_name: The config key name to look for in JSON files (e.g., "venice_api_key")
+        env_var_name: The environment variable name to check (e.g., "VENICE_API_KEY")
+    
+    Returns:
+        The API key string if found, None otherwise
+    """
+    # Check environment variable first
+    key = os.getenv(env_var_name)
     if key:
         return key
+    
+    # Config file locations to search
     config_locations = [
         os.path.join(SCRIPT_DIR, "app_config.json"),
         os.path.expanduser("~/.venice_config.json"),
         os.path.expanduser("~/.config/venice/config.json"),
         "app_config.json",
     ]
+    
     for config_path in config_locations:
         try:
             with open(config_path, "r") as f:
                 config = json.load(f)
-            key = config.get("venice_api_key")
+            key = config.get(key_name)
             if key:
                 return key
         except FileNotFoundError:
@@ -42,29 +60,14 @@ def get_api_key():
     return None
 
 
+def get_api_key():
+    """Retrieve the Venice API key from environment or config files."""
+    return _get_key_from_config("venice_api_key", "VENICE_API_KEY")
+
+
 def get_together_api_key():
-    key = os.getenv("TOGETHER_API_KEY")
-    if key:
-        return key
-    config_locations = [
-        os.path.join(SCRIPT_DIR, "app_config.json"),
-        os.path.expanduser("~/.venice_config.json"),
-        os.path.expanduser("~/.config/venice/config.json"),
-        "app_config.json",
-    ]
-    for config_path in config_locations:
-        try:
-            with open(config_path, "r") as f:
-                config = json.load(f)
-            key = config.get("together_api_key")
-            if key:
-                return key
-        except FileNotFoundError:
-            continue
-        except Exception as e:
-            # UI.warning(f"Error reading {config_path}: {e}")
-            continue
-    return None
+    """Retrieve the Together API key from environment or config files."""
+    return _get_key_from_config("together_api_key", "TOGETHER_API_KEY")
 
 
 def _clean_and_parse_json(json_str):
@@ -436,6 +439,15 @@ def execute_tool(tools: CombinedTools, tool_call: dict):
             args.get("symbol_name")
         ),
         "done": lambda: tools.done(args.get("summary", "Task complete")),
+        # --- Web tools ---
+        "web_search": lambda: tools.web_search(
+            args.get("query"),
+            args.get("n_results", 5)
+        ),
+        "fetch_url": lambda: tools.fetch_url(
+            args.get("url"),
+            args.get("max_length", 10000)
+        ),
         # --- Previously missing tools ---
         "append_to_file": lambda: tools.append_to_file(
             args.get("filename"),
@@ -481,6 +493,62 @@ def execute_tool(tools: CombinedTools, tool_call: dict):
             args.get("before", 0),
             args.get("after", 0)
         ),
+        # --- Missing git tools ---
+        "git_status": lambda: tools.git_status(),
+        "git_log": lambda: tools.git_log(args.get("max_count", 10)),
+        "git_diff": lambda: tools.git_diff(args.get("filename")),
+        "git_blame": lambda: tools.git_blame(
+            args.get("filename"),
+            args.get("line_number")
+        ),
+        # --- Missing test tools ---
+        "run_tests": lambda: tools.run_tests(
+            args.get("path", "."),
+            args.get("pattern"),
+            args.get("verbose", False),
+            args.get("fail_fast", False)
+        ),
+        "test_coverage": lambda: tools.test_coverage(args.get("test_path")),
+        "find_test_files": lambda: tools.find_test_files(args.get("path", ".")),
+        "generate_test_stub": lambda: tools.generate_test_stub(
+            args.get("source_file"),
+            args.get("function_name")
+        ),
+        # --- Missing web tools ---
+        "search_docs": lambda: tools.search_docs(
+            args.get("library"),
+            args.get("query"),
+            args.get("version")
+        ),
+        "search_github": lambda: tools.search_github(
+            args.get("query"),
+            args.get("language"),
+            args.get("n_results", 5)
+        ),
+        "search_stackoverflow": lambda: tools.search_stackoverflow(
+            args.get("query"),
+            args.get("tags"),
+            args.get("n_results", 5)
+        ),
+        # --- Missing utility tools ---
+        "batch_read": lambda: tools.batch_read(args.get("files")),
+        "multi_edit": lambda: tools.multi_edit(args.get("edits")),
+        "find_and_replace": lambda: tools.find_and_replace(
+            args.get("filename"),
+            args.get("pattern"),
+            args.get("replacement"),
+            args.get("ignore_case", True)
+        ),
+        "smart_context": lambda: tools.smart_context(
+            args.get("filename"),
+            args.get("depth", 2)
+        ),
+        "suggest_commit_message": lambda: tools.suggest_commit_message(),
+        "list_backups": lambda: tools.list_backups(args.get("filename")),
+        "undo_edit": lambda: tools.undo_edit(args.get("filename")),
+        "get_file_info": lambda: tools.get_file_info(args.get("filename")),
+        "delete_file": lambda: tools.delete_file(args.get("filename")),
+        "make_directory": lambda: tools.make_directory(args.get("path")),
     }
 
     if name not in tool_map:

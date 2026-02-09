@@ -95,8 +95,8 @@ MODELS = {
         "needs_explicit_stop": True,
         "checkpoint_turns": [8, 15]
     },
-    "moonshotai/Kimi-K2.5": {
-        "name": "Kimi K2.5",
+    "moonshotai/Kimi-K2-Instruct-0905": {
+        "name": "Kimi K2 Instruct (T)",
         "type": "vision",
         "description": "Vision · Function Calling · Reasoning · Code · Long Context",
         "strength": "Elite All-Rounder",
@@ -104,6 +104,21 @@ MODELS = {
         "context_limit": 256000,
         "price_in": 0.30,
         "price_out": 1.20,
+        "max_tokens": 8000,
+        "native_function_calling": True,
+        "max_agent_turns": 50,
+        "needs_explicit_stop": False
+    },
+    "kimi-k2-5": {
+        "name": "Kimi K2.5 (V)",
+        "type": "vision",
+        "description": "Vision · Function Calling · Reasoning · Code · Long Context",
+        "strength": "Elite All-Rounder",
+        "rank": 1,
+        "context_limit": 256000,
+        "price_in": 0.30,
+        "price_out": 1.20,
+        "max_tokens": 8000,
         "native_function_calling": True,
         "max_agent_turns": 50,
         "needs_explicit_stop": False
@@ -172,11 +187,7 @@ MODELS = {
         "needs_explicit_stop": True,
         "checkpoint_turns": [3, 6, 8],
         "strip_hallucinated_output": True  # Remove fake tool outputs from response
-    },
-    # NOTE: Image models removed for v1.0 - will be added back after testing
-    # "qwen-image": { ... }
-    # "grok-imagine": { ... }
-    # "grok-imagine-edit": { ... }
+    }
 }
 
 

@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Model select
     const modelSelect = document.getElementById('model-select');
-    const planningModeCheck = document.getElementById('planning-mode');
+    const planningBtn = document.getElementById('planning-mode-btn');
 
     // Sidebar elements
     const sidebarLeft = document.querySelector('.sidebar-left');
@@ -96,6 +96,13 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchBalance();
     initSidebar();
     restoreConversation();
+
+    // Planning mode toggle
+    if (planningBtn) {
+        planningBtn.addEventListener('click', () => {
+            planningBtn.classList.toggle('active');
+        });
+    }
 
     // Restore conversation from server on page load
     async function restoreConversation() {
@@ -654,7 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
             image: currentImageData,
             image_mime: currentImageMime,
             model: modelSelect.value,
-            planning_mode: planningModeCheck ? planningModeCheck.checked : false
+            planning_mode: planningBtn ? planningBtn.classList.contains('active') : false
         };
         
         conversationHistory.push({ role: 'user', content: payload.message });

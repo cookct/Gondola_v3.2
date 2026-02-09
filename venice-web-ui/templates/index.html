@@ -87,10 +87,6 @@
 
                 <!-- Tool Visibility Toggle -->
                 <div class="control-section">
-                    <label class="toggle-row" title="Restriction mode: analysis only, no file edits">
-                        <input type="checkbox" id="planning-mode">
-                        <span>📝 Planning Mode</span>
-                    </label>
                     <label class="toggle-row">
                         <input type="checkbox" id="auto-expand-tools">
                         <span>Auto-expand tool output</span>
@@ -145,6 +141,10 @@
                             </button>
                             <button type="button" id="screenshot-btn" class="file-upload-btn" title="Take Screenshot">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            </button>
+                            <button type="button" id="planning-mode-btn" class="file-upload-btn planning-btn" title="Toggle Planning Mode (Read-only)">
+                                <span>P</span>
+                                <div class="chase-indicator"></div>
                             </button>
                         </div>
                         <div class="input-wrapper">

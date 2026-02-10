@@ -608,7 +608,38 @@ body {
 
 .header-actions {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    gap: 15px;
+}
+
+.credit-monitor {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.credit-label {
+    color: var(--text-dim);
+    font-weight: 500;
+}
+
+.credit-value {
+    color: #4ade80;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    min-width: 40px;
+    text-align: right;
+}
+
+.credit-unit {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
 }
 
 .btn-danger {

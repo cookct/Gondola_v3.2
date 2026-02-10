@@ -796,8 +796,8 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.parentElement.classList.add('thinking');
         sendBtn.disabled = false; // Keep enabled for STOP
         setButtonState(true);
-        agentStatus.textContent = 'Processing...';
-
+        agentStatus && (agentStatus.textContent = 'Processing...');
+        
         // Create turn container for unified chat stream
         currentTurnContainer = createTurnContainer();
         currentBlockType = null;
@@ -846,7 +846,7 @@ document.addEventListener('DOMContentLoaded', () => {
             userInput.placeholder = "Describe a task (e.g., 'Create a flask app in app.py')...";
             userInput.parentElement.classList.remove('thinking');
             setButtonState(false);
-            agentStatus.textContent = 'Idle';
+            agentStatus && (agentStatus.textContent = 'Idle');
             userInput.focus();
         }
     }
@@ -910,7 +910,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentToolBlock = createToolBlock(currentTurnContainer, toolName);
                     currentBlockType = 'tool';
                 }
-                agentStatus.textContent = data;
+                agentStatus && (agentStatus.textContent = data);
                 // Flash status in the main text box
                 if (userInput) {
                     userInput.placeholder = ">> " + data;

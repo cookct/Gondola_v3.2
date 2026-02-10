@@ -656,6 +656,15 @@ body {
     background-color: rgba(0, 0, 0, 0.6);
     border: 1px solid var(--border);
     width: fit-content;
+    margin-bottom: 4px;
+}
+
+.message p {
+    margin: 0;
+}
+
+.message p + p {
+    margin-top: 1em;
 }
 
 .message.user {
@@ -1588,7 +1597,7 @@ textarea:focus {
    ============================================ */
 
 .tool-block {
-    margin: 8px 0;
+    margin: 12px 0;
     border: 1px solid var(--border);
     border-radius: 6px;
     overflow: hidden;

@@ -903,8 +903,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             case 'status':
                 // Status updates can indicate tool execution
-                if (data.startsWith('Executing ')) {
-                    const toolName = data.replace('Executing ', '').replace('...', '');
+                let toolMatch = data.match(/Executing (.*)\.\.\./) || data.match(/\(using (.*)\)/);
+                if (toolMatch) {
+                    const toolName = toolMatch[1];
                     finalizeCurrentBlock();  // Close any previous block before tool
                     currentToolBlock = createToolBlock(currentTurnContainer, toolName);
                     currentBlockType = 'tool';

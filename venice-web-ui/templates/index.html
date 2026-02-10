@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gondola v2.2 - Venice Agent UI</title>
+    <title>ASBO - AI Studio Builder & Operator</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
@@ -96,11 +96,30 @@
 
             <div class="tab-panel" id="tab-git">
                 <div class="control-section">
+                    <div class="section-header">🌿 Git Tree</div>
+                    <div id="git-tree-log" class="git-tree-log">
+                        Loading tree...
+                    </div>
+                </div>
+
+                <div class="control-section">
                     <div class="section-header">🌿 Git Status</div>
+                    <div id="git-status-info" class="git-status-info">
+                        <!-- Populated by JS -->
+                    </div>
                     <div id="git-status-log" class="git-log">
                         Initializing...
                     </div>
-                    <button id="git-refresh" class="btn-tiny">Refresh</button>
+                </div>
+
+                <div class="control-section">
+                    <div class="git-actions-grid">
+                        <button id="git-refresh" class="btn-tiny">Refresh</button>
+                        <button id="git-diff-btn" class="btn-tiny">Diff</button>
+                        <button id="git-commit-btn" class="btn-tiny">Commit</button>
+                        <button id="git-branch-btn" class="btn-tiny">New Branch</button>
+                        <button id="git-checkout-btn" class="btn-tiny">Checkout</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -112,8 +131,8 @@
             <div class="chat-section">
                 <div class="chat-header">
                     <div class="header-left">
-                        <h2>Gondola</h2>
-                        <span id="agent-status" class="status-indicator">Idle</span>
+                        <h2>ASBO</h2>
+                        <span id="agent-status" class="status-indicator">Community Service</span>
                     </div>
                     <div class="header-center">
                         <span id="model-rank-badge"></span>
@@ -128,7 +147,7 @@
                 </div>
                 <div id="chat-history" class="chat-history">
                     <div class="message system">
-                        <p>Welcome to <strong>Gondola</strong>. I have full access to the sandbox files.</p>
+                        <p>Welcome to <strong>ASBO</strong>. I'm immortal, and I have full access to the sandbox files. Let's make some beautiful screw-ups.</p>
                     </div>
                 </div>
                 <div class="input-area">

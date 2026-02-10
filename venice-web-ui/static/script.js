@@ -629,22 +629,145 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function refreshGitStatus() {
         const gitLog = document.getElementById('git-status-log');
-        if (!gitLog) return;
-        gitLog.innerHTML = '<em>Loading...</em>';
+        const gitStatusInfo = document.getElementById('git-status-info');
+        const gitTreeLog = document.getElementById('git-tree-log');
+        
+        if (!gitLog || !gitStatusInfo || !gitTreeLog) return;
+        
+        gitLog.innerHTML = '<em>Loading status...</em>';
+        gitTreeLog.innerHTML = '<em>Loading tree...</em>';
+
         try {
-            const res = await fetch('/api/git/status');
-            const data = await res.json();
-            if (data.success) {
-                // Convert git output to markdown code block for better formatting
-                const output = data.output || 'No git repository found';
-                gitLog.innerHTML = marked.parse('```\n' + output + '\n```');
+            // 1. Fetch structured status
+            const statusRes = await fetch('/api/git/status');
+            const statusData = await statusRes.json();
+            
+            if (statusData.success) {
+                let infoHtml = `<div><strong>Branch:</strong> <span class="git-branch-tag">${statusData.branch}</span></div>`;
+                if (statusData.ahead_behind) {
+                    infoHtml += `<div><strong>Sync:</strong> Ahead ${statusData.ahead_behind.ahead}, Behind ${statusData.ahead_behind.behind}</div>`;
+                }
+                infoHtml += `<div><strong>Status:</strong> ${statusData.is_clean ? '<span class="ansi-green">Clean</span>' : '<span class="ansi-yellow">Modified</span>'}</div>`;
+                gitStatusInfo.innerHTML = infoHtml;
+
+                // Build a summary for the log area
+                let statusLog = `Staged: ${statusData.staged.length}\nUnstaged: ${statusData.unstaged.length}\nUntracked: ${statusData.untracked.length}`;
+                gitLog.textContent = statusLog;
             } else {
-                gitLog.innerHTML = marked.parse('**Error:** ' + (data.error || 'Error fetching git status'));
+                gitStatusInfo.innerHTML = `<div class="ansi-red">Error: ${statusData.error}</div>`;
+                gitLog.textContent = 'Failed to get status';
             }
+
+            // 2. Fetch Git Graph
+            const graphRes = await fetch('/api/git/graph');
+            const graphData = await graphRes.json();
+            
+            if (graphData.success) {
+                renderGitTree(graphData.output);
+            } else {
+                gitTreeLog.textContent = 'Failed to load tree';
+            }
+
         } catch (e) {
-            gitLog.innerHTML = marked.parse('*Not a git repository or git not available*');
+            console.error('Git refresh error:', e);
+            gitLog.textContent = 'Error connecting to Git API';
         }
     }
+
+    function renderGitTree(rawGraph) {
+        const container = document.getElementById('git-tree-log');
+        container.innerHTML = '';
+        
+        const lines = rawGraph.split('\n');
+        lines.forEach(line => {
+            if (!line.trim()) return;
+            
+            const lineEl = document.createElement('div');
+            lineEl.className = 'git-tree-line';
+            
+            // Highlight current HEAD
+            if (line.includes('(HEAD ->')) {
+                lineEl.classList.add('current-head');
+            }
+
+            // Make commit hashes clickable
+            const commitMatch = line.match(/([0-9a-f]{7,})/);
+            if (commitMatch) {
+                const hash = commitMatch[1];
+                lineEl.dataset.hash = hash;
+                lineEl.title = `Click to checkout ${hash}`;
+                lineEl.onclick = () => handleGitCheckout(hash);
+                
+                // Colorize components
+                let formatted = line
+                    .replace(/([0-9a-f]{7,})/, '<span class="git-commit-hash">$1</span>')
+                    .replace(/\(([^)]+)\)/, '<span class="git-branch-tag">($1)</span>');
+                
+                lineEl.innerHTML = formatted;
+            } else {
+                lineEl.textContent = line;
+            }
+            
+            container.appendChild(lineEl);
+        });
+    }
+
+    async function handleGitCheckout(target) {
+        if (!confirm(`Are you sure you want to checkout ${target}?`)) return;
+        
+        try {
+            const res = await fetch('/api/git/checkout', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target})
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                appendMessage('system', `Git: Checked out ${target}`);
+                refreshGitStatus();
+            } else {
+                alert('Checkout failed: ' + data.error);
+            }
+        } catch (e) {
+            alert('Error during checkout: ' + e.message);
+        }
+    }
+
+    // Git Action Listeners
+    document.getElementById('git-diff-btn')?.addEventListener('click', () => {
+        userInput.value = "Show me the current git diff";
+        sendMessage();
+    });
+
+    document.getElementById('git-commit-btn')?.addEventListener('click', async () => {
+        const msg = prompt('Enter commit message:');
+        if (!msg) return;
+        
+        // This would need a /api/git/commit endpoint which we'll add if needed
+        // For now, let's just use a macro-like approach or suggest it to the agent
+        userInput.value = `Stage all changes and commit with message: "${msg}"`;
+        sendMessage();
+    });
+
+    document.getElementById('git-branch-btn')?.addEventListener('click', () => {
+        const name = prompt('Enter new branch name:');
+        if (!name) return;
+        userInput.value = `Create and switch to new git branch: "${name}"`;
+        sendMessage();
+    });
+
+    document.getElementById('git-checkout-btn')?.addEventListener('click', async () => {
+        try {
+            const res = await fetch('/api/git/branches');
+            const data = await res.json();
+            if (data.success) {
+                const names = data.branches.map(b => b.name).join(', ');
+                const target = prompt(`Enter branch or commit to checkout (Available: ${names}):`);
+                if (target) handleGitCheckout(target);
+            }
+        } catch (e) {}
+    });
 
     async function sendMessage() {
         const text = userInput.value.trim();

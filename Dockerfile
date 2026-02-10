@@ -1,5 +1,5 @@
 # Gondola v2.2 - AI Coding Assistant
-# Built by an AI orchestra leader
+# Built by a Vandal Architect
 
 FROM python:3.11-slim
 

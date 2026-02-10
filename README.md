@@ -1,6 +1,6 @@
 # Gondola v2.3
 
-**An AI-powered coding assistant built by an AI orchestra leader.**
+**An AI-powered coding assistant built by a Vandal Architect.**
 
 Built in 3 weeks using lunch breaks and 3 hours a night—with a lot of help from Claude Code and Gemini CLI. If I can build this, imagine what you can do.
 
@@ -103,7 +103,7 @@ gondola_v2.2/
 
 ## The Story
 
-I'm not a developer. I'm an AI orchestra leader.
+I'm not a developer. I'm a Vandal Architect.
 
 I built Gondola using:
 - **Claude Code** for architecture and complex logic
@@ -149,7 +149,7 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 - Built with [Claude](https://claude.ai) and [Gemini](https://gemini.google.com)
 - Inspired by the future of human-AI collaboration
-- Thanks to everyone who believed an AI orchestra leader could ship software
+- Thanks to everyone who believed a Vandal Architect could ship software
 
 ---
 

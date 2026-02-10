@@ -1,6 +1,6 @@
-# Gondola v2.2 - The AI Orchestra Leader Edition
+# ASBO v2.3 - The Vandal Architect Edition
 
-**"Built by an AI orchestra leader in 3 weeks. If I can build this, imagine what you can do."**
+**"Built by a Vandal Architect in 3 weeks. If I can build this, imagine what you can do."**
 
 ---
 
@@ -217,7 +217,7 @@ New test suites added:
 
 ## 🎭 THE STORY
 
-**Built by:** An AI orchestra leader (not a developer)
+**Built by:** A Vandal Architect (not a developer)
 **Time:** 3 weeks of lunch breaks and late nights
 **Tools used:** Claude Code, Gemini CLI, determination
 **Result:** Production-ready AI coding assistant
@@ -274,5 +274,5 @@ New test suites added:
 
 ---
 
-*Built with ❤️ by an AI orchestra leader*
+*Built with ❤️ by a Vandal Architect*
 *If you can describe it, AI can build it.*

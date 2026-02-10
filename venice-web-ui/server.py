@@ -9,6 +9,7 @@ import time
 import uuid
 import base64  # Moved to top level
 import logging
+import subprocess
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, Response, stream_with_context, send_from_directory
 
@@ -197,6 +198,63 @@ def initialize(clear_messages=False):
 
 # Initialize on startup
 initialize()
+
+import random
+
+MISFITS_QUOTES = [
+    "I have a gift.",
+    "I'm gracefully tall, you're freakishly short.",
+    "Save me, Barry!",
+    "I appear to have shat myself.",
+    "Pure mindless vandalism!",
+    "Bullseye!",
+    "You look like a panty sniffer.",
+    "That accent is just a noise!",
+    "Strange tingling sensation in my anus.",
+    "I'm pretty sure this breaches the terms of my ASBO.",
+    "We were so beautiful!",
+    "I'm a screw-up and I plan to be a screw-up.",
+    "Where do you get this stuff?",
+    "It just comes to me.",
+    "I'm immortal!",
+    "Kind of put a downer on the whole thing.",
+    "Me? I got done for eating some pick-n-mix."
+]
+
+def get_nathan_status(action=None, tool_name=None):
+    if action == "think":
+        return random.choice([
+            "I have a gift.",
+            "Thinking? It just comes to me.",
+            "Where do you get this stuff?",
+            "I'm immortal! (thinking...)"
+        ])
+    if action == "tool":
+        if tool_name:
+            return f"{random.choice(['Pure mindless vandalism!', 'Bullseye!', 'I have a gift.'])} (using {tool_name})"
+        return random.choice([
+            "Pure mindless vandalism!",
+            "Bullseye!",
+            "I'm pretty sure this breaches the terms of my ASBO.",
+            "I have a gift (for tools)."
+        ])
+    if action == "connect":
+        return random.choice([
+            "That accent is just a noise!",
+            "Save me, Barry!",
+            "Connected. You like that? Oh yeah!"
+        ])
+    if action == "stream":
+        return random.choice([
+            "Strange tingling sensation in my anus (receiving data...)",
+            "We were so beautiful! (streaming...)",
+            "Oh yeah, oh yeah, oh yeah!"
+        ])
+    if action == "nudge":
+        return "Your response was empty? You mentally deficient?! (nudging)"
+    if action == "interrupt":
+        return "Kind of put a downer on the whole thing (interrupted)."
+    return random.choice(MISFITS_QUOTES)
 
 @app.route('/images/<path:filename>')
 def serve_image(filename):
@@ -601,7 +659,7 @@ def chat():
                     turn_start = time.time()
                     logger.info(f"[{request_id}] --- AGENT TURN {agent_turns + 1} ---")
 
-                    event_queue.put({"type": "status", "data": "Thinking..."})
+                    event_queue.put({"type": "status", "data": get_nathan_status("think")})
                     response_content = ""
                     global messages
                     pre_manage_count = len(messages)
@@ -672,7 +730,7 @@ def chat():
 
                         api_call_start = time.time()
                         logger.info(f"[{request_id}] >>> Initiating API call at {datetime.now().isoformat()}")
-                        event_queue.put({"type": "status", "data": f"Connecting to {('Venice' if is_together else 'Together')}..."}) # is_together logic inverted in variable name above, but label is distinct
+                        event_queue.put({"type": "status", "data": get_nathan_status("connect")}) # is_together logic inverted in variable name above, but label is distinct
 
                         # Generous timeouts: connect=60s, read=180s (time between chunks), write=60s, pool=60s
                         # The read timeout is high because some models take a long time to produce the first token
@@ -703,7 +761,7 @@ def chat():
                                     ) as response:
                                 connection_time = time.time() - api_call_start
                                 logger.info(f"[{request_id}] <<< Connection established in {connection_time:.3f}s")
-                                event_queue.put({"type": "status", "data": "Connected. Waiting for first token..."})
+                                event_queue.put({"type": "status", "data": get_nathan_status("connect")})
                                 logger.info(f"[{request_id}] Response status: {response.status_code}")
 
                                 # DEBUG: Log ALL headers received
@@ -794,7 +852,7 @@ def chat():
                                         first_chunk_time = current_time
                                         ttft = first_chunk_time - api_call_start
                                         logger.info(f"[{request_id}] ⚡ FIRST CHUNK received! Time-to-first-token: {ttft:.3f}s")
-                                        event_queue.put({"type": "status", "data": "Receiving stream..."})
+                                        event_queue.put({"type": "status", "data": get_nathan_status("stream")})
 
                                     # Log every 50 chunks or every 5 seconds
                                     time_since_start = current_time - stream_start_time
@@ -894,7 +952,7 @@ def chat():
                         return
                     
                     if stop_signal:
-                        event_queue.put({"type": "status", "data": "Interrupted."})
+                        event_queue.put({"type": "status", "data": get_nathan_status("interrupt")})
                         break
                     
                     # Store assistant message
@@ -992,7 +1050,7 @@ def chat():
                             # Inject a nudge to continue working
                             nudge_msg = "SYSTEM: Your response was empty. The task is not complete. Continue working - use tools to make progress, then call done() when finished."
                             messages.append({"role": "user", "content": nudge_msg})
-                            event_queue.put({"type": "status", "data": "Nudging model to continue..."})
+                            event_queue.put({"type": "status", "data": get_nathan_status("nudge")})
 
                             # Continue the loop instead of breaking
                             agent_turns += 1
@@ -1019,7 +1077,7 @@ def chat():
                         logger.info(f"[{request_id}] │  ID: {tool_id}")
                         logger.debug(f"[{request_id}] │  Args: {tool_args[:500]}{'...' if len(tool_args) > 500 else ''}")
 
-                        event_queue.put({"type": "status", "data": f"Executing {tool_name}..."})
+                        event_queue.put({"type": "status", "data": get_nathan_status("tool", tool_name)})
                         tool_start = time.time()
 
                         try:
@@ -1240,39 +1298,104 @@ def chat():
 
 @app.route('/api/git/status', methods=['GET'])
 def git_status():
-    """Get git status for the current workspace."""
+    """Get git repository status"""
     try:
-        import subprocess
-        import os
+        if not tools:
+            return jsonify({"success": False, "error": "Tools not initialized"}), 500
+        result = tools.git_status()
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Git status error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/git/log', methods=['GET'])
+def git_log():
+    """Get git log"""
+    try:
+        n = int(request.args.get('n', 20))
+        if not tools:
+            return jsonify({"success": False, "error": "Tools not initialized"}), 500
+        result = tools.git_log(n=n)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Git log error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/git/branches', methods=['GET'])
+def git_branches():
+    """List git branches"""
+    try:
+        if not tools:
+            return jsonify({"success": False, "error": "Tools not initialized"}), 500
+        result = tools.git_branch()
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Git branches error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/git/checkout', methods=['POST'])
+def git_checkout():
+    """Checkout a branch or commit"""
+    try:
+        data = request.json
+        target = data.get('target')
+        if not target:
+            return jsonify({"success": False, "error": "No target provided"}), 400
         
-        # Determine the correct directory
-        if workspace and hasattr(workspace, 'root_dir'):
-            git_dir = workspace.root_dir
-        elif WORKSPACE_DIR:
-            git_dir = WORKSPACE_DIR
-        else:
-            git_dir = os.getcwd()
-        
-        logger.info(f"Git status checking directory: {git_dir}")
-        
+        # Use subprocess directly for checkout as it's not in git_ops.py yet
         result = subprocess.run(
-            ['git', 'status'],
-            cwd=git_dir,
+            ['git', 'checkout', target],
+            cwd=WORKSPACE_DIR,
             capture_output=True,
             text=True
         )
         
-        logger.info(f"Git status return code: {result.returncode}")
-        if result.stderr:
-            logger.info(f"Git stderr: {result.stderr}")
-        
         if result.returncode == 0:
             return jsonify({"success": True, "output": result.stdout})
         else:
-            return jsonify({"success": False, "error": result.stderr or "Not a git repository"})
+            return jsonify({"success": False, "error": result.stderr})
     except Exception as e:
-        logger.error(f"Git status error: {e}")
+        logger.error(f"Git checkout error: {e}")
         return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/git/graph', methods=['GET'])
+def git_graph():
+    """Get git graph output"""
+    try:
+        result = subprocess.run(
+            ['git', 'log', '--graph', '--oneline', '--all', '-n', '30', '--color=never'],
+            cwd=WORKSPACE_DIR,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            return jsonify({"success": True, "output": result.stdout})
+        else:
+            return jsonify({"success": False, "error": result.stderr})
+    except Exception as e:
+        logger.error(f"Git graph error: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/forget', methods=['POST'])
+def forget():
+    """Clear all memory and conversation history"""
+    try:
+        logger.info("Forget command received - clearing all memory and history")
+        if memory:
+            memory.clear_conversation()
+            memory.clear_notes()
+            # Reset memory data to default
+            memory.data = memory._default()
+            memory.save()
+        
+        # Global messages list reset
+        global messages
+        initialize(clear_messages=True)
+        
+        return jsonify({"success": True, "message": "Memory and conversation cleared."})
+    except Exception as e:
+        logger.error(f"Forget error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
 

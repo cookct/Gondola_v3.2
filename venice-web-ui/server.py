@@ -541,25 +541,42 @@ def get_provider_models():
 
                 models_data = response.json()
 
-                # Filter for chat models that likely support function calling
-                # Together models with type "chat" generally support tool use
+                # Filter for SERVERLESS chat models that support function calling
+                # Serverless models have per-token pricing (input/output > 0)
+                # Dedicated models require hourly pricing and custom endpoints
                 filtered_models = []
                 for model in models_data:
                     model_type = model.get('type', '')
                     model_id = model.get('id', '')
+                    pricing = model.get('pricing', {})
 
-                    # Filter for chat/language models (these typically support function calling)
-                    if model_type in ['chat', 'language', 'code']:
-                        pricing = model.get('pricing', {})
-                        filtered_models.append({
-                            "id": model_id,
-                            "name": model.get('display_name') or model_id.split('/')[-1],
-                            "type": model_type,
-                            "context_length": model.get('context_length', 4096),
-                            "organization": model.get('organization', ''),
-                            "price_in": pricing.get('input', 0),
-                            "price_out": pricing.get('output', 0),
-                        })
+                    # Skip non-chat/language/code models
+                    if model_type not in ['chat', 'language', 'code']:
+                        continue
+
+                    # Check if serverless (has per-token pricing)
+                    # Serverless models have input/output pricing > 0
+                    # Dedicated-only models have 0 for per-token but require hourly
+                    input_price = pricing.get('input', 0)
+                    output_price = pricing.get('output', 0)
+                    hourly_price = pricing.get('hourly', 0)
+
+                    # Only include models with per-token pricing (serverless)
+                    # Skip models that only have hourly pricing (dedicated only)
+                    is_serverless = (input_price > 0 or output_price > 0)
+
+                    if not is_serverless:
+                        continue
+
+                    filtered_models.append({
+                        "id": model_id,
+                        "name": model.get('display_name') or model_id.split('/')[-1],
+                        "type": model_type,
+                        "context_length": model.get('context_length', 4096),
+                        "organization": model.get('organization', ''),
+                        "price_in": input_price,
+                        "price_out": output_price,
+                    })
 
                 # Sort by organization then name
                 filtered_models.sort(key=lambda x: (x['organization'], x['name']))

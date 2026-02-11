@@ -1,0 +1,23 @@
+{
+  "gemini-3-flash-preview": {
+    "name": "gemini-3-flash-preview",
+    "type": "text",
+    "provider": "venice",
+    "description": "Function Calling \u00b7 Reasoning \u00b7 Code",
+    "strength": "venice.ai",
+    "rank": 3,
+    "context_limit": 32000,
+    "price_in": 0,
+    "price_out": 0,
+    "max_tokens": 8000,
+    "stream_timeout": 180,
+    "_user_added": true,
+    "native_function_calling": true,
+    "max_agent_turns": 30,
+    "needs_explicit_stop": false,
+    "supports_parallel_tools": true,
+    "preferred_tool_choice": "auto",
+    "tool_choice_on_nudge": "required",
+    "force_done_at_max": true
+  }
+}

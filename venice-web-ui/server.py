@@ -1048,9 +1048,10 @@ def chat():
 
     if image_data:
         logger.debug(f"[{request_id}] Building multimodal message with image ({image_mime})")
+        # Text first, then image - Together AI and most vision models expect this order
         message_content = [
-            {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}},
-            {"type": "text", "text": user_message or "Describe this image in detail."}
+            {"type": "text", "text": user_message or "Describe this image in detail."},
+            {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}}
         ]
         messages.append({"role": "user", "content": message_content})
     else:

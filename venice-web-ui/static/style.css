@@ -1938,7 +1938,7 @@ textarea:focus {
 
 .provider-dropdown {
     width: 100%;
-    background-color: rgba(0, 0, 0, 0.3);
+    background-color: #1e1e1e;
     border: 1px solid var(--border);
     color: var(--text-main);
     padding: 8px 10px;
@@ -1949,6 +1949,12 @@ textarea:focus {
 
 .provider-dropdown:hover {
     border-color: var(--accent);
+}
+
+.provider-dropdown option {
+    background-color: #1e1e1e;
+    color: var(--text-main);
+    padding: 8px;
 }
 
 .model-filter-row {

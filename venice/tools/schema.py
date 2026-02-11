@@ -575,11 +575,11 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "done",
-            "description": "Signal that the requested task is fully complete.",
+            "description": "Signal that a multi-step CODING task is fully complete. IMPORTANT: Only use this after completing file operations (write, edit, create). Do NOT use for simple questions - just respond with text. For conversations and questions, respond directly without calling any tools.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "summary": {"type": "string", "description": "Short summary of work done"}
+                    "summary": {"type": "string", "description": "Short summary of coding work completed (files created/edited)"}
                 },
                 "required": ["summary"]
             }

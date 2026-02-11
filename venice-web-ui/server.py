@@ -623,6 +623,84 @@ def get_provider_models():
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
+# Known Together AI models with verified function calling support
+# From: https://docs.together.ai/docs/function-calling
+TOGETHER_FUNCTION_CALLING_MODELS = {
+    # Text models with function calling
+    "openai/gpt-oss-120b", "openai/gpt-oss-20b",
+    "moonshotai/Kimi-K2-Thinking", "moonshotai/Kimi-K2-Instruct-0905",
+    "zai-org/GLM-4.5-Air-FP8",
+    "Qwen/Qwen3-Next-80B-A3B-Instruct", "Qwen/Qwen3-Next-80B-A3B-Thinking",
+    "Qwen/Qwen3-235B-A22B-Thinking-2507", "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+    "Qwen/Qwen3-235B-A22B-fp8-tput",
+    "deepseek-ai/DeepSeek-R1", "deepseek-ai/DeepSeek-V3",
+    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+    "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+    "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+    "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "meta-llama/Llama-3.2-3B-Instruct-Turbo",
+    "Qwen/Qwen2.5-7B-Instruct-Turbo", "Qwen/Qwen2.5-72B-Instruct-Turbo",
+    "mistralai/Mistral-Small-24B-Instruct-2501",
+    "arcee-ai/virtuoso-large",
+    # Vision models with function calling
+    "Qwen/Qwen3-VL-32B-Instruct",
+}
+
+def infer_function_calling_config(model_id: str, model_type: str, context_length: int, provider: str) -> dict:
+    """
+    Infer function calling configuration based on model characteristics.
+    Uses Together AI docs for known models, otherwise infers from type.
+    """
+    # Check if it's a known function-calling model
+    is_known_fc_model = model_id in TOGETHER_FUNCTION_CALLING_MODELS
+
+    # Infer from model type if not in known list
+    # chat, code, and language types typically support function calling
+    type_supports_fc = model_type in ('chat', 'code', 'language')
+
+    # Check for common function-calling model patterns in the ID
+    fc_patterns = ['instruct', 'chat', 'coder', 'turbo', 'gpt', 'claude', 'llama-3', 'qwen', 'mistral', 'deepseek']
+    id_suggests_fc = any(p in model_id.lower() for p in fc_patterns)
+
+    # Determine if model likely supports native function calling
+    native_fc = is_known_fc_model or (type_supports_fc and id_suggests_fc)
+
+    # Determine max agent turns based on context length
+    # Larger context = can handle more turns without truncation
+    if context_length >= 128000:
+        max_turns = 50
+    elif context_length >= 64000:
+        max_turns = 40
+    elif context_length >= 32000:
+        max_turns = 30
+    else:
+        max_turns = 20
+
+    # Determine if model likely supports parallel tool calls
+    # Most modern instruction-tuned models do
+    supports_parallel = native_fc and context_length >= 32000
+
+    # Build configuration
+    config = {
+        "native_function_calling": native_fc,
+        "max_agent_turns": max_turns,
+        "needs_explicit_stop": False,
+        "supports_parallel_tools": supports_parallel,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required" if native_fc else "auto",
+        "force_done_at_max": True,
+        # Inferred capabilities for description
+        "_inferred": {
+            "is_known_fc_model": is_known_fc_model,
+            "type_supports_fc": type_supports_fc,
+            "id_suggests_fc": id_suggests_fc
+        }
+    }
+
+    return config
+
 @app.route('/api/models/add', methods=['POST'])
 def add_model():
     """Add a new model to the runtime MODELS configuration"""
@@ -641,32 +719,60 @@ def add_model():
         # Build model config from provided data
         provider = data.get('provider', 'venice')
         context_length = data.get('context_length', 32000)
+        model_type = data.get('type', 'chat')
+
+        # AUTO-CONFIGURE: Infer function calling settings from model characteristics
+        fc_config = infer_function_calling_config(model_id, model_type, context_length, provider)
+        inferred_info = fc_config.pop('_inferred', {})
+
+        # Build description based on capabilities
+        capabilities = []
+        if fc_config['native_function_calling']:
+            capabilities.append("Function Calling")
+        if model_type == 'vision' or 'vl' in model_id.lower() or 'vision' in model_id.lower():
+            capabilities.append("Vision")
+        capabilities.extend(["Reasoning", "Code"])
+        if context_length >= 100000:
+            capabilities.append("Long Context")
+        description = " · ".join(capabilities)
 
         new_model = {
             "name": data.get('name', model_id.split('/')[-1]),
-            "type": data.get('type', 'text'),
+            "type": model_type,
             "provider": provider,
-            "description": data.get('description', "Function Calling · Reasoning · Code"),
-            "strength": data.get('strength', "Custom Model"),
+            "description": description,
+            "strength": data.get('strength', data.get('organization', 'Custom Model')),
             "rank": data.get('rank', 3),
             "context_limit": context_length,
             "price_in": data.get('price_in', 0),
             "price_out": data.get('price_out', 0),
             "max_tokens": min(data.get('max_tokens', 8000), 32000),
             "stream_timeout": 180,
-            "native_function_calling": True,
-            "max_agent_turns": 30,
-            "needs_explicit_stop": False
+            # Merge inferred function calling config
+            **fc_config
         }
 
         # Add to MODELS dict
         MODELS[model_id] = new_model
+
+        # Log what was inferred
         logger.info(f"Added new model: {model_id} (provider: {provider})")
+        logger.info(f"  Auto-configured: native_fc={fc_config['native_function_calling']}, "
+                   f"max_turns={fc_config['max_agent_turns']}, parallel={fc_config['supports_parallel_tools']}")
+        if inferred_info.get('is_known_fc_model'):
+            logger.info(f"  (Known function-calling model from Together AI docs)")
 
         return jsonify({
             "success": True,
             "model_id": model_id,
-            "model": new_model
+            "model": new_model,
+            "auto_configured": {
+                "native_function_calling": fc_config['native_function_calling'],
+                "max_agent_turns": fc_config['max_agent_turns'],
+                "supports_parallel_tools": fc_config['supports_parallel_tools'],
+                "is_known_fc_model": inferred_info.get('is_known_fc_model', False),
+                "inferred_from": "Together AI docs" if inferred_info.get('is_known_fc_model') else "model type/name patterns"
+            }
         })
 
     except Exception as e:

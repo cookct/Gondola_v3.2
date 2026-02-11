@@ -1550,7 +1550,15 @@ async function sendMessage() {
             const data = await res.json();
 
             if (data.success) {
-                showStatus(`Added ${model.name} successfully!`, 'success');
+                // Build status message with auto-configured info
+                let statusMsg = `Added ${model.name}`;
+                if (data.auto_configured) {
+                    const ac = data.auto_configured;
+                    const fcStatus = ac.native_function_calling ? '✓ FC' : '✗ FC';
+                    const source = ac.is_known_fc_model ? '(verified)' : '(inferred)';
+                    statusMsg += ` | ${fcStatus} ${source} | ${ac.max_agent_turns} turns`;
+                }
+                showStatus(statusMsg, 'success');
 
                 // Update local model map
                 modelMap[model.id] = data.model;

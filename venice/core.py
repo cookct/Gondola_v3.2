@@ -10,6 +10,7 @@ MODELS = {
     "claude-opus-45": {
         "name": "Claude Opus 4.5",
         "type": "text",
+        "provider": "venice",
         "description": "Function Calling · Reasoning · Vision · Code",
         "strength": "Elite Logic & Code",
         "rank": 1,
@@ -24,6 +25,7 @@ MODELS = {
     "openai-gpt-52-codex": {
         "name": "GPT-5.2 Code",
         "type": "text",
+        "provider": "venice",
         "description": "Function Calling · Reasoning · Vision · Code",
         "strength": "Elite Coding Agent",
         "rank": 1,
@@ -39,6 +41,7 @@ MODELS = {
     "claude-sonnet-45": {
         "name": "Claude Sonnet 4.5",
         "type": "text",
+        "provider": "venice",
         "description": "Function Calling · Reasoning · Vision · Code",
         "strength": "High Intelligence",
         "rank": 2,
@@ -51,53 +54,10 @@ MODELS = {
         "max_agent_turns": 40,
         "needs_explicit_stop": False
     },
-    "qwen3-235b-a22b-instruct-2507": {
-        "name": "Qwen 3 235B",
-        "type": "text",
-        "description": "Function Calling",
-        "strength": "Strong Generalist",
-        "rank": 2,
-        "context_limit": 131000,
-        "price_in": 0.15,
-        "price_out": 0.75,
-        "max_tokens": 8000,
-        "stream_timeout": 90,
-        # Qwen needs more guidance to stop
-        "native_function_calling": True,
-        "max_agent_turns": 15,  # Reduced - tends to loop
-        "needs_explicit_stop": True,  # Needs checkpoint reminders
-        "checkpoint_turns": [5, 10, 13]
-    },
-    "grok-code-fast-1": {
-        "name": "Grok Code Fast",
-        "type": "text",
-        "description": "Function Calling · Reasoning · Code",
-        "strength": "Fast Coding",
-        "rank": 2,
-        "context_limit": 262000,
-        "price_in": 0.25,
-        "price_out": 1.87,
-        "native_function_calling": True,
-        "max_agent_turns": 25,
-        "needs_explicit_stop": False
-    },
-    "minimax-m21": {
-        "name": "MiniMax M2.1",
-        "type": "text",
-        "description": "Function Calling · Reasoning · Code",
-        "strength": "Balanced Logic",
-        "rank": 3,
-        "context_limit": 203000,
-        "price_in": 0.40,
-        "price_out": 1.60,
-        "native_function_calling": True,
-        "max_agent_turns": 20,
-        "needs_explicit_stop": True,
-        "checkpoint_turns": [8, 15]
-    },
     "moonshotai/Kimi-K2-Instruct-0905": {
-        "name": "Kimi K2 Instruct (T)",
+        "name": "Kimi K2 Instruct",
         "type": "vision",
+        "provider": "together",
         "description": "Vision · Function Calling · Reasoning · Code · Long Context",
         "strength": "Elite All-Rounder",
         "rank": 1,
@@ -110,8 +70,9 @@ MODELS = {
         "needs_explicit_stop": False
     },
     "kimi-k2-5": {
-        "name": "Kimi K2.5 (V)",
+        "name": "Kimi K2.5",
         "type": "vision",
+        "provider": "venice",
         "description": "Vision · Function Calling · Reasoning · Code · Long Context",
         "strength": "Elite All-Rounder",
         "rank": 1,
@@ -122,71 +83,6 @@ MODELS = {
         "native_function_calling": True,
         "max_agent_turns": 50,
         "needs_explicit_stop": False
-    },
-    "zai-org-glm-4.7": {
-        "name": "GLM 4.7",
-        "type": "text",
-        "description": "Function Calling · Reasoning",
-        "strength": "Reliable Standard",
-        "rank": 3,
-        "context_limit": 203000,
-        "price_in": 0.55,
-        "price_out": 2.65,
-        "native_function_calling": True,
-        "max_agent_turns": 20,
-        "needs_explicit_stop": True,
-        "checkpoint_turns": [8, 15]
-    },
-    "llama-3.3-70b": {
-        "name": "Llama 3.3 70B",
-        "type": "text",
-        "description": "Function Calling",
-        "strength": "Open Source Leader",
-        "rank": 3,
-        "context_limit": 131000,
-        "price_in": 0.70,
-        "price_out": 2.80,
-        "max_tokens": 8000,
-        "stream_timeout": 90,
-        "native_function_calling": True,
-        "max_agent_turns": 15,
-        "needs_explicit_stop": True,
-        "checkpoint_turns": [5, 10, 13]
-    },
-    "maverick": {
-        "name": "Maverick",
-        "model_id": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-        "type": "text",
-        "description": "Function Calling · Reasoning · Code",
-        "strength": "Experimental Leader",
-        "rank": 2,
-        "context_limit": 131000,
-        "price_in": 0.20,
-        "price_out": 0.80,
-        "max_tokens": 8000,
-        "stream_timeout": 60,
-        "native_function_calling": True,
-        "max_agent_turns": 25,
-        "needs_explicit_stop": True,
-        "checkpoint_turns": [5, 10, 15]
-    },
-    "google-gemma-3-27b-it": {
-        "name": "Gemma 3 27B",
-        "type": "text",
-        "description": "Function Calling · Vision",
-        "strength": "Fast & Efficient",
-        "rank": 4,
-        "context_limit": 203000,
-        "price_in": 0.12,
-        "price_out": 0.20,
-        "max_tokens": 6000,
-        "stream_timeout": 40,
-        # Gemma uses text-based tools despite Venice's claim
-        "native_function_calling": False,  # Actually outputs tools as text
-        "max_agent_turns": 10,  # Short leash - tends to hallucinate
-        "needs_explicit_stop": True,
-        "checkpoint_turns": [3, 6, 8],
-        "strip_hallucinated_output": True  # Remove fake tool outputs from response
     }
 }
 

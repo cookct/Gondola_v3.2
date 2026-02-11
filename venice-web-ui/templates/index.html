@@ -34,7 +34,7 @@
                             <div id="pulse-fill" class="pulse-bar-fill" style="width: 0%;"></div>
                         </div>
                         <div class="pulse-meta">
-                            <span id="pulse-count">0</span> / 200k <span class="pulse-unit">tokens</span>
+                            <span id="pulse-count">0</span> / <span id="pulse-max">200,000</span> <span class="pulse-unit">tokens</span>
                         </div>
                     </div>
                 </div>
@@ -55,9 +55,9 @@
                             <span class="macro-icon">🧹</span>
                             <span class="macro-text">Audit</span>
                         </button>
-                        <button class="macro-btn" data-prompt="Read the latest changes and update the README.md to reflect the new architecture.">
-                            <span class="macro-icon">📝</span>
-                            <span class="macro-text">Doc</span>
+                        <button class="macro-btn" id="summarize-btn">
+                            <span class="macro-icon">📋</span>
+                            <span class="macro-text">Summarize</span>
                         </button>
                         <button class="macro-btn" data-prompt="List all files and summarize the project state.">
                             <span class="macro-icon">🔍</span>
@@ -198,36 +198,48 @@
 
         <div class="sidebar-right">
             <div class="sidebar-tabs">
-                <button class="tab-btn" data-tab="editor">🎨 Editor</button>
+                <button class="tab-btn" data-tab="add-model">➕ Models</button>
                 <button class="tab-btn active" data-tab="backups">💾 Backups</button>
             </div>
-            <div class="tab-panel" id="tab-editor">
-                <div class="image-editor-panel">
-                    <div class="editor-upload-area" id="editor-upload-area">
-                        <label class="editor-dropzone" id="editor-dropzone">
-                            <input type="file" id="editor-image-input" accept="image/*" hidden>
-                            <div class="dropzone-content">
-                                <span class="dropzone-icon">📤</span>
-                                <span class="dropzone-text">Enter prompt to generate or click to upload</span>
-                            </div>
-                        </label>
+            <div class="tab-panel" id="tab-add-model">
+                <div class="add-model-panel">
+                    <div class="control-section">
+                        <div class="section-header">🔌 Provider</div>
+                        <select id="provider-select" class="provider-dropdown">
+                            <option value="together">Together AI</option>
+                            <option value="venice">Venice AI</option>
+                        </select>
                     </div>
-                    <div class="editor-preview-area" id="editor-preview-area" style="display: none;">
-                        <img id="editor-source-image" class="editor-image">
-                        <button id="editor-clear-image" class="btn-tiny">✕ Clear</button>
-                    </div>
-                    <div class="editor-prompt-area">
-                        <textarea id="editor-prompt" placeholder="Describe the edit (e.g., 'Change sky to sunset', 'Remove background')..." rows="2"></textarea>
-                        <button id="editor-submit" class="btn-primary" disabled>✨ Generate/Edit</button>
-                    </div>
-                    <div class="editor-result-area" id="editor-result-area" style="display: none;">
-                        <div class="result-header">
-                            <span>Result</span>
-                            <button id="editor-download" class="btn-tiny">⬇ Download</button>
+
+                    <div class="control-section">
+                        <div class="section-header">
+                            <span>📦 Available Models</span>
+                            <button id="refresh-provider-models" class="btn-icon" title="Refresh">↻</button>
                         </div>
-                        <img id="editor-result-image" class="editor-image">
+                        <div class="model-filter-row">
+                            <input type="text" id="model-filter" class="model-filter-input" placeholder="Filter models...">
+                        </div>
+                        <div class="provider-models-list" id="provider-models-list">
+                            <div class="loading-indicator">Select a provider and click refresh...</div>
+                        </div>
                     </div>
-                    <div class="editor-status" id="editor-status"></div>
+
+                    <div class="control-section" id="model-details-section" style="display: none;">
+                        <div class="section-header">📋 Model Details</div>
+                        <div class="model-details" id="model-details">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <button id="add-model-btn" class="btn-primary add-model-btn">➕ Add to My Models</button>
+                    </div>
+
+                    <div class="control-section">
+                        <div class="section-header">🗂️ Active Models</div>
+                        <div class="active-models-list" id="active-models-list">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <div class="add-model-status" id="add-model-status"></div>
                 </div>
             </div>
             <div class="tab-panel active" id="tab-backups">

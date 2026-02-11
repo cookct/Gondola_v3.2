@@ -422,7 +422,7 @@ class ProjectIndex:
             for filepath, score in sorted_files[:max_files]
         ]
 
-    def to_prompt(self, max_tokens: int = 1500) -> str:
+    def to_prompt(self, max_tokens: int = 800) -> str:
         """
         Generate a compact project overview for the system prompt.
         Fits within specified token limit (rough estimate: 4 chars = 1 token).
@@ -464,7 +464,7 @@ class ProjectIndex:
 
         return ''.join(lines)
 
-    def get_context_for_task(self, task: str, max_tokens: int = 3000) -> str:
+    def get_context_for_task(self, task: str, max_tokens: int = 1500) -> str:
         """
         Build context for a specific task.
         Includes project overview + relevant file details.
@@ -472,7 +472,7 @@ class ProjectIndex:
         lines = []
 
         # Start with compact overview
-        overview = self.to_prompt(max_tokens=800)
+        overview = self.to_prompt(max_tokens=500)
         lines.append(overview)
 
         # Add relevant files with more detail

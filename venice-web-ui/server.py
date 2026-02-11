@@ -437,6 +437,71 @@ def get_conversation():
         "count": len(conversation)
     })
 
+@app.route('/api/summarize', methods=['POST'])
+def summarize_session():
+    """Summarize the current session and return new history with summary + last 10 messages."""
+    try:
+        data = request.json
+        history = data.get('history', [])
+        keep_last_messages = data.get('keep_last_messages', 10)
+        
+        if not history:
+            return jsonify({"success": False, "error": "No history provided"}), 400
+        
+        # Get the last N user messages to keep
+        user_messages = [msg for msg in history if msg.get('role') == 'user']
+        last_user_messages = user_messages[-keep_last_messages:] if len(user_messages) > keep_last_messages else user_messages
+        
+        # Create a summary of the session
+        session_text = ""
+        for msg in history:
+            if msg.get('role') == 'user':
+                session_text += f"User: {msg.get('content', '')}\n"
+            elif msg.get('role') == 'assistant':
+                session_text += f"Assistant: {msg.get('content', '')}\n"
+        
+        # Generate summary (using a simple approach for now)
+        summary = f"Session Summary ({len(history)} messages total):\n"
+        summary += f"- {len([m for m in history if m.get('role') == 'user'])} user messages\n"
+        summary += f"- {len([m for m in history if m.get('role') == 'assistant'])} assistant responses\n"
+        
+        # Add some key actions if detectable
+        if 'edit_file' in str(history):
+            summary += "- File editing operations performed\n"
+        if 'run_command' in str(history):
+            summary += "- Command execution performed\n"
+        if 'create' in str(history).lower():
+            summary += "- File creation operations\n"
+            
+        summary += "\nLast actions preserved for continuity."
+        
+        # Build new history: summary + last user messages + their assistant responses
+        new_history = [{
+            "role": "system",
+            "content": f"[SESSION SUMMARY] {summary}"
+        }]
+        
+        # Add the last user messages and their corresponding assistant responses
+        for msg in history:
+            if msg.get('role') == 'user' and msg in last_user_messages:
+                new_history.append(msg)
+                # Find the assistant response that came after this user message
+                user_index = history.index(msg)
+                if user_index + 1 < len(history) and history[user_index + 1].get('role') == 'assistant':
+                    new_history.append(history[user_index + 1])
+        
+        return jsonify({
+            "success": True,
+            "new_history": new_history,
+            "summary": summary,
+            "original_length": len(history),
+            "new_length": len(new_history)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in summarize_session: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/models', methods=['GET'])
 def get_models():
     return jsonify({
@@ -451,6 +516,186 @@ def set_model():
     if model_id in MODELS:
         return jsonify({"success": True, "model": MODELS[model_id]})
     return jsonify({"success": False, "error": "Invalid model"}), 400
+
+@app.route('/api/provider-models', methods=['GET'])
+def get_provider_models():
+    """Fetch available models from a provider API (Together or Venice)"""
+    provider = request.args.get('provider', 'together')
+
+    try:
+        import httpx
+
+        if provider == 'together':
+            api_key = get_together_api_key()
+            if not api_key:
+                return jsonify({"success": False, "error": "Together API key not configured"}), 400
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
+                    "https://api.together.xyz/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}"}
+                )
+
+                if response.status_code != 200:
+                    return jsonify({"success": False, "error": f"API returned {response.status_code}"}), 500
+
+                models_data = response.json()
+
+                # Filter for chat models that likely support function calling
+                # Together models with type "chat" generally support tool use
+                filtered_models = []
+                for model in models_data:
+                    model_type = model.get('type', '')
+                    model_id = model.get('id', '')
+
+                    # Filter for chat/language models (these typically support function calling)
+                    if model_type in ['chat', 'language', 'code']:
+                        pricing = model.get('pricing', {})
+                        filtered_models.append({
+                            "id": model_id,
+                            "name": model.get('display_name') or model_id.split('/')[-1],
+                            "type": model_type,
+                            "context_length": model.get('context_length', 4096),
+                            "organization": model.get('organization', ''),
+                            "price_in": pricing.get('input', 0),
+                            "price_out": pricing.get('output', 0),
+                        })
+
+                # Sort by organization then name
+                filtered_models.sort(key=lambda x: (x['organization'], x['name']))
+
+                return jsonify({
+                    "success": True,
+                    "provider": "together",
+                    "models": filtered_models,
+                    "count": len(filtered_models)
+                })
+
+        elif provider == 'venice':
+            api_key = get_api_key()
+            if not api_key:
+                return jsonify({"success": False, "error": "Venice API key not configured"}), 400
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
+                    "https://api.venice.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}"}
+                )
+
+                if response.status_code != 200:
+                    return jsonify({"success": False, "error": f"API returned {response.status_code}"}), 500
+
+                data = response.json()
+                models_list = data.get('data', []) if isinstance(data, dict) else data
+
+                # Filter for text/chat models
+                filtered_models = []
+                for model in models_list:
+                    model_id = model.get('id', '')
+                    model_type = model.get('type', model.get('object', ''))
+
+                    # Include text and chat models
+                    if 'text' in str(model_type).lower() or 'chat' in str(model_type).lower() or model_type == 'model':
+                        filtered_models.append({
+                            "id": model_id,
+                            "name": model.get('name', model_id),
+                            "type": model_type,
+                            "context_length": model.get('context_length', model.get('context_window', 32000)),
+                            "organization": model.get('owned_by', ''),
+                            "price_in": 0,
+                            "price_out": 0,
+                        })
+
+                filtered_models.sort(key=lambda x: x['name'])
+
+                return jsonify({
+                    "success": True,
+                    "provider": "venice",
+                    "models": filtered_models,
+                    "count": len(filtered_models)
+                })
+
+        else:
+            return jsonify({"success": False, "error": f"Unknown provider: {provider}"}), 400
+
+    except Exception as e:
+        logger.error(f"Error fetching provider models: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/models/add', methods=['POST'])
+def add_model():
+    """Add a new model to the runtime MODELS configuration"""
+    global MODELS
+
+    try:
+        data = request.json
+        model_id = data.get('model_id')
+
+        if not model_id:
+            return jsonify({"success": False, "error": "No model_id provided"}), 400
+
+        if model_id in MODELS:
+            return jsonify({"success": False, "error": f"Model '{model_id}' already exists"}), 400
+
+        # Build model config from provided data
+        provider = data.get('provider', 'venice')
+        context_length = data.get('context_length', 32000)
+
+        new_model = {
+            "name": data.get('name', model_id.split('/')[-1]),
+            "type": data.get('type', 'text'),
+            "provider": provider,
+            "description": data.get('description', "Function Calling · Reasoning · Code"),
+            "strength": data.get('strength', "Custom Model"),
+            "rank": data.get('rank', 3),
+            "context_limit": context_length,
+            "price_in": data.get('price_in', 0),
+            "price_out": data.get('price_out', 0),
+            "max_tokens": min(data.get('max_tokens', 8000), 32000),
+            "stream_timeout": 180,
+            "native_function_calling": True,
+            "max_agent_turns": 30,
+            "needs_explicit_stop": False
+        }
+
+        # Add to MODELS dict
+        MODELS[model_id] = new_model
+        logger.info(f"Added new model: {model_id} (provider: {provider})")
+
+        return jsonify({
+            "success": True,
+            "model_id": model_id,
+            "model": new_model
+        })
+
+    except Exception as e:
+        logger.error(f"Error adding model: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/models/remove', methods=['POST'])
+def remove_model():
+    """Remove a model from the runtime MODELS configuration"""
+    global MODELS
+
+    try:
+        data = request.json
+        model_id = data.get('model_id')
+
+        if not model_id:
+            return jsonify({"success": False, "error": "No model_id provided"}), 400
+
+        if model_id not in MODELS:
+            return jsonify({"success": False, "error": f"Model '{model_id}' not found"}), 404
+
+        del MODELS[model_id]
+        logger.info(f"Removed model: {model_id}")
+
+        return jsonify({"success": True, "model_id": model_id})
+
+    except Exception as e:
+        logger.error(f"Error removing model: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/workspace', methods=['GET', 'POST'])
 def handle_workspace():
@@ -504,7 +749,7 @@ def list_workspaces():
 
     return jsonify({"success": True, "workspaces": workspaces, "current": WORKSPACE_DIR})
 
-def manage_context(messages, max_bytes=600000):
+def manage_context(messages, max_bytes=200000):
     while True:
         current_size = len(json.dumps(messages))
         if current_size < max_bytes or len(messages) <= 2:
@@ -666,12 +911,25 @@ def chat():
                     messages = manage_context(messages)
                     logger.debug(f"[{request_id}] Context managed: {pre_manage_count} -> {len(messages)} messages")
 
+                    # Initialize timing before try block so exception handlers can use it
+                    api_call_start = time.time()
+
                     try:
                         import httpx
-                        
+
+                        # Get model-specific settings FIRST (needed for provider routing)
+                        from venice.core import MODELS
+                        model_info = MODELS.get(model_id, {})
+                        max_tokens = model_info.get("max_tokens", 20000)
+                        stream_timeout = model_info.get("stream_timeout", 180)
+                        context_limit = model_info.get("context_limit", 128000)
+                        pricing = model_info.get("pricing", "unknown")
+
                         # Determine Provider and Endpoint
-                        is_together = model_id.startswith("moonshotai/")
-                        
+                        # Use explicit provider field from model config
+                        model_provider = model_info.get("provider", "venice")  # Default to Venice
+                        is_together = (model_provider == "together")
+
                         if is_together:
                             api_key = get_together_api_key()
                             api_base = "https://api.together.xyz/v1/chat/completions"
@@ -679,7 +937,7 @@ def chat():
                                 logger.error(f"[{request_id}] Together API Key missing for {model_id}")
                                 event_queue.put({"type": "error", "data": "Together API Key not configured."})
                                 break
-                        else:
+                        else:  # venice or default
                             api_key = get_api_key()
                             api_base = "https://api.venice.ai/api/v1/chat/completions"
                             if not api_key:
@@ -689,31 +947,29 @@ def chat():
 
                         # NEW: Rebuild system prompt dynamically with project context
                         if project_index and agent_state:
-                            project_context = context_manager.project_context if context_manager else None
+                            # Only include full project context for the first few turns to save tokens
+                            include_full_context = (agent_turns < 3)
+                            project_context = context_manager.project_context if (context_manager and include_full_context) else None
+                            
                             files_read = agent_state.get_files_read_list()
+                            memory_context = memory.get_context() if memory else None
+
                             dynamic_prompt = build_system_prompt(
                                 model_id=model_id,
                                 project_context=project_context,
                                 turn_count=agent_turns,
                                 max_turns=MAX_AGENT_TURNS,
                                 files_already_read=files_read,
-                                planning_mode=planning_mode
+                                planning_mode=planning_mode,
+                                memory_context=memory_context
                             )
                             # Update system message in messages list
                             if messages and messages[0].get('role') == 'system':
                                 messages[0]['content'] = dynamic_prompt
-                                logger.debug(f"[{request_id}] Dynamic system prompt updated ({len(dynamic_prompt)} chars)")
-
-                        # Get model-specific settings
-                        from venice.core import MODELS
-                        model_info = MODELS.get(model_id, {})
-                        max_tokens = model_info.get("max_tokens", 20000)
-                        stream_timeout = model_info.get("stream_timeout", 180)
-                        context_limit = model_info.get("context_limit", 128000)
-                        pricing = model_info.get("pricing", "unknown")
+                                logger.debug(f"[{request_id}] Dynamic system prompt updated ({len(dynamic_prompt)} chars, context included: {include_full_context})")
 
                         logger.info(f"[{request_id}] ╔══════════════════════════════════════════════════════════")
-                        logger.info(f"[{request_id}] ║ API REQUEST TO {'TOGETHER' if is_together else 'VENICE'}")
+                        logger.info(f"[{request_id}] ║ API REQUEST TO {model_provider.upper()}")
                         logger.info(f"[{request_id}] ╠══════════════════════════════════════════════════════════")
                         logger.info(f"[{request_id}] ║ Model:          {model_id}")
                         logger.info(f"[{request_id}] ║ Max Tokens:     {max_tokens}")
@@ -728,9 +984,10 @@ def chat():
                         payload_estimate = len(json.dumps(messages))
                         logger.debug(f"[{request_id}] Estimated payload size: {payload_estimate} bytes")
 
+                        # Update timing right before actual API call for accuracy
                         api_call_start = time.time()
                         logger.info(f"[{request_id}] >>> Initiating API call at {datetime.now().isoformat()}")
-                        event_queue.put({"type": "status", "data": get_nathan_status("connect")}) # is_together logic inverted in variable name above, but label is distinct
+                        event_queue.put({"type": "status", "data": get_nathan_status("connect")})
 
                         # Generous timeouts: connect=60s, read=180s (time between chunks), write=60s, pool=60s
                         # The read timeout is high because some models take a long time to produce the first token

@@ -1554,9 +1554,17 @@ async function sendMessage() {
                 let statusMsg = `Added ${model.name}`;
                 if (data.auto_configured) {
                     const ac = data.auto_configured;
-                    const fcStatus = ac.native_function_calling ? '✓ FC' : '✗ FC';
-                    const source = ac.is_known_fc_model ? '(verified)' : '(inferred)';
-                    statusMsg += ` | ${fcStatus} ${source} | ${ac.max_agent_turns} turns`;
+                    const fcStatus = ac.native_function_calling ? '✓ Tools' : '✗ Tools';
+                    // Shorten the inference source for display
+                    let source = '';
+                    if (ac.inferred_from.includes('verified')) {
+                        source = 'verified';
+                    } else if (ac.inferred_from.includes('Venice')) {
+                        source = 'OpenAI-compat';
+                    } else {
+                        source = 'inferred';
+                    }
+                    statusMsg += ` | ${fcStatus} (${source}) | ${ac.max_agent_turns} turns`;
                 }
                 showStatus(statusMsg, 'success');
 

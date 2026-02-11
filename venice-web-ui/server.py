@@ -623,10 +623,11 @@ def get_provider_models():
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Known Together AI models with verified function calling support
-# From: https://docs.together.ai/docs/function-calling
-TOGETHER_FUNCTION_CALLING_MODELS = {
-    # Text models with function calling
+# Known models with verified function calling support (OpenAI-compatible tool calling)
+# Together AI: https://docs.together.ai/docs/function-calling
+# Venice AI: Uses OpenAI-compatible tool calling for most instruction-tuned models
+KNOWN_FUNCTION_CALLING_MODELS = {
+    # === Together AI Models ===
     "openai/gpt-oss-120b", "openai/gpt-oss-20b",
     "moonshotai/Kimi-K2-Thinking", "moonshotai/Kimi-K2-Instruct-0905",
     "zai-org/GLM-4.5-Air-FP8",
@@ -644,28 +645,46 @@ TOGETHER_FUNCTION_CALLING_MODELS = {
     "Qwen/Qwen2.5-7B-Instruct-Turbo", "Qwen/Qwen2.5-72B-Instruct-Turbo",
     "mistralai/Mistral-Small-24B-Instruct-2501",
     "arcee-ai/virtuoso-large",
-    # Vision models with function calling
     "Qwen/Qwen3-VL-32B-Instruct",
+    # === Venice AI Models (OpenAI-compatible tool calling) ===
+    "claude-opus-45", "claude-sonnet-45", "claude-sonnet-4",
+    "openai-gpt-52-codex", "openai-gpt-5-turbo", "openai-gpt-4o",
+    "kimi-k2-5", "kimi-k2",
+    "llama-3.3-70b", "llama-3.1-405b", "llama-3.1-70b",
+    "qwen-2.5-coder", "qwen-2.5-72b", "qwen3-235b",
+    "deepseek-r1", "deepseek-v3", "deepseek-coder-v2",
+    "mistral-large", "mistral-small",
 }
 
 def infer_function_calling_config(model_id: str, model_type: str, context_length: int, provider: str) -> dict:
     """
     Infer function calling configuration based on model characteristics.
-    Uses Together AI docs for known models, otherwise infers from type.
+    Both Together AI and Venice AI use OpenAI-compatible tool calling.
     """
-    # Check if it's a known function-calling model
-    is_known_fc_model = model_id in TOGETHER_FUNCTION_CALLING_MODELS
+    # Check if it's a known function-calling model (either provider)
+    is_known_fc_model = model_id in KNOWN_FUNCTION_CALLING_MODELS
+
+    # Venice models: Most instruction-tuned models support OpenAI tool calling
+    # Be more permissive for Venice since their API handles tool calling uniformly
+    is_venice = provider == 'venice'
 
     # Infer from model type if not in known list
     # chat, code, and language types typically support function calling
-    type_supports_fc = model_type in ('chat', 'code', 'language')
+    type_supports_fc = model_type in ('chat', 'code', 'language', 'text')
 
     # Check for common function-calling model patterns in the ID
-    fc_patterns = ['instruct', 'chat', 'coder', 'turbo', 'gpt', 'claude', 'llama-3', 'qwen', 'mistral', 'deepseek']
+    fc_patterns = ['instruct', 'chat', 'coder', 'turbo', 'gpt', 'claude', 'llama-3', 'llama-4',
+                   'qwen', 'mistral', 'deepseek', 'kimi', 'gemma', 'phi', 'codestral']
     id_suggests_fc = any(p in model_id.lower() for p in fc_patterns)
 
     # Determine if model likely supports native function calling
-    native_fc = is_known_fc_model or (type_supports_fc and id_suggests_fc)
+    # Venice: More permissive - their API handles tool calling uniformly for most models
+    # Together: Rely on known list + inference
+    if is_venice:
+        # Venice uses OpenAI-compatible tool calling broadly
+        native_fc = is_known_fc_model or type_supports_fc or id_suggests_fc
+    else:
+        native_fc = is_known_fc_model or (type_supports_fc and id_suggests_fc)
 
     # Determine max agent turns based on context length
     # Larger context = can handle more turns without truncation
@@ -695,7 +714,9 @@ def infer_function_calling_config(model_id: str, model_type: str, context_length
         "_inferred": {
             "is_known_fc_model": is_known_fc_model,
             "type_supports_fc": type_supports_fc,
-            "id_suggests_fc": id_suggests_fc
+            "id_suggests_fc": id_suggests_fc,
+            "provider": provider,
+            "venice_inference": is_venice and not is_known_fc_model
         }
     }
 
@@ -762,6 +783,14 @@ def add_model():
         if inferred_info.get('is_known_fc_model'):
             logger.info(f"  (Known function-calling model from Together AI docs)")
 
+        # Determine inference source for UI feedback
+        if inferred_info.get('is_known_fc_model'):
+            inferred_from = "verified (known model)"
+        elif inferred_info.get('venice_inference'):
+            inferred_from = "Venice OpenAI-compatible"
+        else:
+            inferred_from = "model type/name patterns"
+
         return jsonify({
             "success": True,
             "model_id": model_id,
@@ -771,7 +800,7 @@ def add_model():
                 "max_agent_turns": fc_config['max_agent_turns'],
                 "supports_parallel_tools": fc_config['supports_parallel_tools'],
                 "is_known_fc_model": inferred_info.get('is_known_fc_model', False),
-                "inferred_from": "Together AI docs" if inferred_info.get('is_known_fc_model') else "model type/name patterns"
+                "inferred_from": inferred_from
             }
         })
 

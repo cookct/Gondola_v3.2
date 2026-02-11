@@ -6,6 +6,12 @@ import threading
 import difflib
 
 # Available models with capability flags for agent behavior
+# Function calling config options:
+#   - native_function_calling: True if model supports OpenAI-style tool calling
+#   - supports_parallel_tools: True if model can call multiple tools in one response
+#   - preferred_tool_choice: Default tool_choice setting ("auto", "required", or None)
+#   - tool_choice_on_nudge: tool_choice to use after empty response nudge
+#   - force_done_at_max: Force done() tool at max turns (default True)
 MODELS = {
     "claude-opus-45": {
         "name": "Claude Opus 4.5",
@@ -19,8 +25,13 @@ MODELS = {
         "price_out": 30.00,
         # Agent capabilities
         "native_function_calling": True,
-        "max_agent_turns": 50,  # Very capable, can handle complex tasks
-        "needs_explicit_stop": False
+        "max_agent_turns": 50,
+        "needs_explicit_stop": False,
+        # Function calling optimization
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True
     },
     "openai-gpt-52-codex": {
         "name": "GPT-5.2 Code",
@@ -36,7 +47,12 @@ MODELS = {
         "stream_timeout": 180,
         "native_function_calling": True,
         "max_agent_turns": 50,
-        "needs_explicit_stop": False
+        "needs_explicit_stop": False,
+        # Function calling optimization
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True
     },
     "claude-sonnet-45": {
         "name": "Claude Sonnet 4.5",
@@ -52,7 +68,12 @@ MODELS = {
         "stream_timeout": 180,
         "native_function_calling": True,
         "max_agent_turns": 40,
-        "needs_explicit_stop": False
+        "needs_explicit_stop": False,
+        # Function calling optimization
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True
     },
     "moonshotai/Kimi-K2-Instruct-0905": {
         "name": "Kimi K2 Instruct",
@@ -67,7 +88,12 @@ MODELS = {
         "max_tokens": 8000,
         "native_function_calling": True,
         "max_agent_turns": 50,
-        "needs_explicit_stop": False
+        "needs_explicit_stop": False,
+        # Function calling optimization (Together AI specific)
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True
     },
     "kimi-k2-5": {
         "name": "Kimi K2.5",
@@ -82,7 +108,12 @@ MODELS = {
         "max_tokens": 8000,
         "native_function_calling": True,
         "max_agent_turns": 50,
-        "needs_explicit_stop": False
+        "needs_explicit_stop": False,
+        # Function calling optimization
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True
     }
 }
 
@@ -100,6 +131,11 @@ def get_model_config(model_id: str) -> dict:
         'strip_hallucinated_output': config.get('strip_hallucinated_output', False),
         'max_tokens': config.get('max_tokens'),
         'stream_timeout': config.get('stream_timeout', 120),
+        # Function calling optimization settings
+        'supports_parallel_tools': config.get('supports_parallel_tools', True),
+        'preferred_tool_choice': config.get('preferred_tool_choice', 'auto'),
+        'tool_choice_on_nudge': config.get('tool_choice_on_nudge', 'required'),
+        'force_done_at_max': config.get('force_done_at_max', True),
     }
 
 class Colors:

@@ -869,11 +869,20 @@ def chat():
                 checkpoint_turns = model_config.get('checkpoint_turns', default_checkpoints)
                 needs_explicit_stop = model_config.get('needs_explicit_stop', False)
 
+                # Function calling optimization settings
+                preferred_tool_choice = model_config.get('preferred_tool_choice', 'auto')
+                tool_choice_on_nudge = model_config.get('tool_choice_on_nudge', 'required')
+                force_done_at_max = model_config.get('force_done_at_max', True)
+                supports_parallel_tools = model_config.get('supports_parallel_tools', True)
+
                 logger.info(f"[{request_id}] Model config loaded:")
                 logger.info(f"[{request_id}]   max_agent_turns: {MAX_AGENT_TURNS}")
                 logger.info(f"[{request_id}]   checkpoint_turns: {checkpoint_turns}")
                 logger.info(f"[{request_id}]   needs_explicit_stop: {needs_explicit_stop}")
                 logger.info(f"[{request_id}]   native_function_calling: {model_config.get('native_function_calling', True)}")
+                logger.info(f"[{request_id}]   preferred_tool_choice: {preferred_tool_choice}")
+                logger.info(f"[{request_id}]   tool_choice_on_nudge: {tool_choice_on_nudge}")
+                logger.info(f"[{request_id}]   force_done_at_max: {force_done_at_max}")
 
                 # NEW: Reset agent state for this task
                 agent_state.reset()
@@ -884,6 +893,17 @@ def chat():
                 # Track consecutive empty responses for nudge injection
                 consecutive_empty_responses = 0
                 MAX_EMPTY_RESPONSES = 3  # Give up after 3 nudges
+
+                # OPTIMIZATION: Dynamic tool_choice control
+                tool_choice_override = None  # None means use default "auto"
+
+                # OPTIMIZATION: Tool result cache (for read_file within same task)
+                tool_result_cache = {}  # key: (tool_name, args_hash) -> result
+
+                # OPTIMIZATION: Retry configuration for transient errors
+                MAX_API_RETRIES = 3
+                RETRY_BASE_DELAY = 1.0  # seconds
+                RETRYABLE_STATUS_CODES = {429, 502, 503, 504}  # Rate limit, bad gateway, service unavailable, timeout
 
                 # NEW: Set up context manager with project index
                 ctx_model_config = ModelConfig(
@@ -991,23 +1011,51 @@ def chat():
 
                         # Generous timeouts: connect=60s, read=180s (time between chunks), write=60s, pool=60s
                         # The read timeout is high because some models take a long time to produce the first token
-                        with httpx.Client(timeout=httpx.Timeout(connect=60.0, read=180.0, write=60.0, pool=60.0)) as http_client:
-                            
-                            # Construct payload
-                            api_payload = {
-                                "model": model_id,
-                                "messages": messages,
-                                "temperature": 0.4,
-                                "max_tokens": max_tokens,
-                                "stream": True,
-                                "tools": TOOL_SCHEMAS,
-                                "tool_choice": "auto"
-                            }
-                            # Only add venice_parameters for Venice
-                            if not is_together:
-                                api_payload["venice_parameters"] = {"include_venice_system_prompt": True}
 
-                            with http_client.stream(
+                        # OPTIMIZATION: Dynamic tool_choice based on agent state and model config
+                        effective_tool_choice = tool_choice_override or preferred_tool_choice
+
+                        # Force done() when at max turns (if model config allows)
+                        if force_done_at_max and agent_turns >= MAX_AGENT_TURNS - 1:
+                            effective_tool_choice = {
+                                "type": "function",
+                                "function": {"name": "done"}
+                            }
+                            logger.info(f"[{request_id}] Forcing tool_choice to 'done' at turn {agent_turns + 1}")
+
+                        # Construct payload
+                        api_payload = {
+                            "model": model_id,
+                            "messages": messages,
+                            "temperature": 0.4,
+                            "max_tokens": max_tokens,
+                            "stream": True,
+                            "tools": TOOL_SCHEMAS,
+                            "tool_choice": effective_tool_choice
+                        }
+                        # Only add venice_parameters for Venice
+                        if not is_together:
+                            api_payload["venice_parameters"] = {"include_venice_system_prompt": True}
+
+                        logger.debug(f"[{request_id}] tool_choice: {effective_tool_choice}")
+
+                        # OPTIMIZATION: Retry loop with exponential backoff
+                        api_attempt = 0
+                        api_success = False
+                        last_api_error = None
+
+                        while api_attempt < MAX_API_RETRIES and not api_success:
+                            api_attempt += 1
+                            if api_attempt > 1:
+                                retry_delay = RETRY_BASE_DELAY * (2 ** (api_attempt - 2))  # 1s, 2s, 4s...
+                                logger.warning(f"[{request_id}] API retry {api_attempt}/{MAX_API_RETRIES} after {retry_delay:.1f}s delay")
+                                event_queue.put({"type": "status", "data": f"Retrying ({api_attempt}/{MAX_API_RETRIES})..."})
+                                time.sleep(retry_delay)
+                                api_call_start = time.time()  # Reset timing for retry
+
+                            try:
+                                with httpx.Client(timeout=httpx.Timeout(connect=60.0, read=180.0, write=60.0, pool=60.0)) as http_client:
+                                    with http_client.stream(
                                 "POST",
                                 api_base,
                                 headers={
@@ -1183,30 +1231,63 @@ def chat():
                                     for idx, tc in tool_calls_buffer.items():
                                         logger.info(f"[{request_id}]     [{idx}] {tc['name']} (args: {len(tc['arguments'])} chars)")
 
-                    except httpx.TimeoutException as e:
-                        elapsed = time.time() - api_call_start
-                        logger.error(f"[{request_id}] ⛔ HTTPX TIMEOUT EXCEPTION!")
-                        logger.error(f"[{request_id}] Exception type: {type(e).__name__}")
-                        logger.error(f"[{request_id}] Exception message: {str(e)}")
-                        logger.error(f"[{request_id}] Elapsed time: {elapsed:.2f}s")
-                        logger.error(f"[{request_id}] Model: {model_id}")
-                        logger.error(f"[{request_id}] Stream timeout setting: {stream_timeout}s")
-                        event_queue.put({"type": "error", "data": f"Connection timeout after {elapsed:.1f}s: {str(e)}"})
-                        return
-                    except httpx.ConnectError as e:
-                        logger.error(f"[{request_id}] ⛔ HTTPX CONNECTION ERROR!")
-                        logger.error(f"[{request_id}] Exception: {str(e)}")
-                        event_queue.put({"type": "error", "data": f"Connection error: {str(e)}"})
-                        return
-                    except Exception as e:
-                        elapsed = time.time() - api_call_start
-                        logger.error(f"[{request_id}] ⛔ UNEXPECTED EXCEPTION IN API CALL!")
-                        logger.error(f"[{request_id}] Exception type: {type(e).__name__}")
-                        logger.error(f"[{request_id}] Exception message: {str(e)}")
-                        logger.error(f"[{request_id}] Elapsed time: {elapsed:.2f}s")
-                        logger.error(f"[{request_id}] Traceback:\n{traceback.format_exc()}")
-                        event_queue.put({"type": "error", "data": str(e)})
-                        return
+                                # OPTIMIZATION: Mark API call as successful to exit retry loop
+                                api_success = True
+
+                            except httpx.TimeoutException as e:
+                                elapsed = time.time() - api_call_start
+                                last_api_error = f"Connection timeout after {elapsed:.1f}s: {str(e)}"
+                                logger.warning(f"[{request_id}] ⚠️ HTTPX TIMEOUT (attempt {api_attempt}/{MAX_API_RETRIES})")
+                                logger.warning(f"[{request_id}] Exception: {str(e)}")
+                                # Timeouts are retryable
+                                if api_attempt >= MAX_API_RETRIES:
+                                    logger.error(f"[{request_id}] ⛔ Max retries exceeded for timeout")
+                                    event_queue.put({"type": "error", "data": last_api_error})
+                                    return
+
+                            except httpx.ConnectError as e:
+                                last_api_error = f"Connection error: {str(e)}"
+                                logger.warning(f"[{request_id}] ⚠️ HTTPX CONNECTION ERROR (attempt {api_attempt}/{MAX_API_RETRIES})")
+                                logger.warning(f"[{request_id}] Exception: {str(e)}")
+                                # Connection errors are retryable
+                                if api_attempt >= MAX_API_RETRIES:
+                                    logger.error(f"[{request_id}] ⛔ Max retries exceeded for connection error")
+                                    event_queue.put({"type": "error", "data": last_api_error})
+                                    return
+
+                            except httpx.HTTPStatusError as e:
+                                status_code = e.response.status_code
+                                last_api_error = f"HTTP {status_code}: {str(e)}"
+                                logger.warning(f"[{request_id}] ⚠️ HTTP STATUS ERROR {status_code} (attempt {api_attempt}/{MAX_API_RETRIES})")
+
+                                if status_code in RETRYABLE_STATUS_CODES:
+                                    # Retryable status codes (rate limit, server errors)
+                                    if api_attempt >= MAX_API_RETRIES:
+                                        logger.error(f"[{request_id}] ⛔ Max retries exceeded for HTTP {status_code}")
+                                        event_queue.put({"type": "error", "data": last_api_error})
+                                        return
+                                else:
+                                    # Non-retryable status codes (4xx client errors except 429)
+                                    logger.error(f"[{request_id}] ⛔ Non-retryable HTTP error: {status_code}")
+                                    event_queue.put({"type": "error", "data": last_api_error})
+                                    return
+
+                            except Exception as e:
+                                elapsed = time.time() - api_call_start
+                                last_api_error = str(e)
+                                logger.error(f"[{request_id}] ⛔ UNEXPECTED EXCEPTION IN API CALL!")
+                                logger.error(f"[{request_id}] Exception type: {type(e).__name__}")
+                                logger.error(f"[{request_id}] Exception message: {str(e)}")
+                                logger.error(f"[{request_id}] Elapsed time: {elapsed:.2f}s")
+                                logger.error(f"[{request_id}] Traceback:\n{traceback.format_exc()}")
+                                event_queue.put({"type": "error", "data": str(e)})
+                                return
+
+                        # End of retry loop - check if we succeeded
+                        if not api_success:
+                            logger.error(f"[{request_id}] ⛔ API call failed after {MAX_API_RETRIES} attempts")
+                            event_queue.put({"type": "error", "data": f"API call failed after {MAX_API_RETRIES} retries: {last_api_error}"})
+                            return
                     
                     if stop_signal:
                         event_queue.put({"type": "status", "data": get_nathan_status("interrupt")})
@@ -1309,6 +1390,10 @@ def chat():
                             messages.append({"role": "user", "content": nudge_msg})
                             event_queue.put({"type": "status", "data": get_nathan_status("nudge")})
 
+                            # OPTIMIZATION: Force tool use after nudge (using model-specific config)
+                            tool_choice_override = tool_choice_on_nudge
+                            logger.info(f"[{request_id}] Setting tool_choice to '{tool_choice_on_nudge}' after nudge")
+
                             # Continue the loop instead of breaking
                             agent_turns += 1
                             continue
@@ -1320,8 +1405,9 @@ def chat():
                                 logger.info(f"[{request_id}] No tool calls but has content - ending turn normally")
                             break
 
-                    # Reset empty response counter on successful tool call response
+                    # Reset empty response counter and tool_choice override on successful tool call response
                     consecutive_empty_responses = 0
+                    tool_choice_override = None  # Reset to auto after successful response
 
                     # Execute tools
                     logger.info(f"[{request_id}] Executing {len(native_tool_calls)} tool call(s)")
@@ -1366,24 +1452,36 @@ def chat():
                                 def __init__(self, d):
                                     self.function = type('Func', (), d['function'])
 
-                            # NEW: Check for duplicate file reads
+                            # OPTIMIZATION: Check tool result cache for read_file
                             if tool_name == 'read_file':
                                 try:
                                     args_dict = json.loads(tool_args) if isinstance(tool_args, str) else tool_args
                                     filename = args_dict.get('filename', '')
-                                    if agent_state.was_file_read(filename):
-                                        logger.warning(f"[{request_id}] │  DUPLICATE READ DETECTED: {filename}")
-                                        result = {
+                                    start_line = args_dict.get('start_line')
+                                    end_line = args_dict.get('end_line')
+                                    cache_key = f"read_file:{filename}:{start_line}:{end_line}"
+
+                                    if cache_key in tool_result_cache:
+                                        # Return cached result
+                                        cached_result = tool_result_cache[cache_key]
+                                        logger.info(f"[{request_id}] │  CACHE HIT: {filename}")
+                                        result_str = json.dumps({
                                             "success": True,
-                                            "warning": f"You already read this file. Use the information from your previous read.",
-                                            "filename": filename
-                                        }
-                                        result_str = json.dumps(result)
+                                            "cached": True,
+                                            "filename": filename,
+                                            "content": cached_result.get('content', ''),
+                                            "lines": cached_result.get('lines', 0),
+                                            "note": "Returned from cache - file was already read this session"
+                                        })
                                         messages.append({
                                             "role": "tool",
                                             "tool_call_id": tc["id"],
                                             "name": tool_name,
                                             "content": result_str
+                                        })
+                                        event_queue.put({
+                                            "type": "tool_done",
+                                            "data": {"tool": tool_name, "success": True, "cached": True}
                                         })
                                         continue  # Skip actual execution
                                 except:
@@ -1401,11 +1499,20 @@ def chat():
                             if tool_warning:
                                 logger.warning(f"[{request_id}] │  {tool_warning}")
 
-                            # NEW: Track file reads
+                            # NEW: Track file reads and populate cache
                             if tool_name == 'read_file' and isinstance(result, dict) and result.get('success'):
                                 filename = args_dict.get('filename', '')
                                 content = result.get('content', '')
                                 agent_state.record_file_read(filename, content)
+                                # OPTIMIZATION: Cache the result for future reads
+                                start_line = args_dict.get('start_line')
+                                end_line = args_dict.get('end_line')
+                                cache_key = f"read_file:{filename}:{start_line}:{end_line}"
+                                tool_result_cache[cache_key] = {
+                                    'content': content,
+                                    'lines': result.get('lines', 0)
+                                }
+                                logger.debug(f"[{request_id}] │  Cached read_file result: {cache_key}")
 
                             # NEW: Track file writes/edits
                             if tool_name == 'write_file':

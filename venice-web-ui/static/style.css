@@ -186,6 +186,82 @@ body {
     color: var(--text-dim);
 }
 
+/* Session Stats */
+.collapsible-section {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.collapsible-section > summary {
+    cursor: pointer;
+    padding: 8px 10px;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.collapsible-section > summary::-webkit-details-marker {
+    display: none;
+}
+
+.collapsible-section > summary::after {
+    content: '▼';
+    font-size: 8px;
+    color: var(--text-dim);
+    transition: transform 0.2s ease;
+}
+
+.collapsible-section[open] > summary::after {
+    transform: rotate(180deg);
+}
+
+.collapsible-section > summary:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.session-stats {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 0 0 4px 4px;
+    border-top: 1px solid var(--border);
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+.stat-label {
+    color: var(--text-dim);
+}
+
+.stat-value {
+    color: var(--ansi-cyan);
+    font-weight: 500;
+}
+
+.stat-total {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.stat-total .stat-value {
+    color: var(--ansi-green);
+    font-size: 12px;
+}
+
 /* Macro Grid */
 .macro-grid {
     display: grid;

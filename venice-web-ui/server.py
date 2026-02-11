@@ -99,6 +99,64 @@ def save_workspace(path):
     except Exception as e:
         logger.warning(f"Failed to save workspace: {e}")
 
+# ============================================================================
+# CUSTOM MODELS PERSISTENCE
+# ============================================================================
+CUSTOM_MODELS_FILE = os.path.join(sandbox_dir, 'custom_models.json')
+
+def load_custom_models():
+    """Load user-added models from JSON file and merge into MODELS dict."""
+    if os.path.exists(CUSTOM_MODELS_FILE):
+        try:
+            with open(CUSTOM_MODELS_FILE, 'r') as f:
+                custom_models = json.load(f)
+                count = 0
+                for model_id, model_config in custom_models.items():
+                    if model_id not in MODELS:  # Don't overwrite built-in models
+                        MODELS[model_id] = model_config
+                        count += 1
+                logger.info(f"Loaded {count} custom models from {CUSTOM_MODELS_FILE}")
+                return count
+        except Exception as e:
+            logger.warning(f"Failed to load custom models: {e}")
+    return 0
+
+def save_custom_models():
+    """Save user-added models to JSON file (excludes built-in models)."""
+    # Get the original built-in model IDs from venice/core.py
+    from venice.core import MODELS as BUILTIN_MODELS
+    builtin_ids = set(BUILTIN_MODELS.keys())
+
+    # Filter to only custom (user-added) models
+    custom_models = {
+        model_id: config
+        for model_id, config in MODELS.items()
+        if model_id not in builtin_ids or config.get('_user_added', False)
+    }
+
+    try:
+        with open(CUSTOM_MODELS_FILE, 'w') as f:
+            json.dump(custom_models, f, indent=2)
+        logger.info(f"Saved {len(custom_models)} custom models to {CUSTOM_MODELS_FILE}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save custom models: {e}")
+        return False
+
+def get_custom_model_ids():
+    """Get list of user-added model IDs (for UI to show which can be removed)."""
+    if os.path.exists(CUSTOM_MODELS_FILE):
+        try:
+            with open(CUSTOM_MODELS_FILE, 'r') as f:
+                custom_models = json.load(f)
+                return set(custom_models.keys())
+        except:
+            pass
+    return set()
+
+# Load custom models on startup
+load_custom_models()
+
 WORKSPACE_DIR = load_saved_workspace()
 print(f"Workspace Dir: {WORKSPACE_DIR}")
 print(f"Images Dir: {IMAGES_DIR}")
@@ -786,12 +844,16 @@ def add_model():
             "price_out": data.get('price_out', 0),
             "max_tokens": min(data.get('max_tokens', 8000), 32000),
             "stream_timeout": 180,
+            "_user_added": True,  # Mark as user-added for persistence tracking
             # Merge inferred function calling config
             **fc_config
         }
 
         # Add to MODELS dict
         MODELS[model_id] = new_model
+
+        # PERSIST: Save custom models to file
+        save_custom_models()
 
         # Log what was inferred
         logger.info(f"Added new model: {model_id} (provider: {provider})")
@@ -842,6 +904,9 @@ def remove_model():
 
         del MODELS[model_id]
         logger.info(f"Removed model: {model_id}")
+
+        # Persist the change
+        save_custom_models()
 
         return jsonify({"success": True, "model_id": model_id})
 
@@ -1072,11 +1137,38 @@ def chat():
                     context_manager.set_project_context(project_context)
                     logger.info(f"[{request_id}] Project context loaded: {len(project_context)} chars")
 
+                # NEW: Send session info with pricing for cost calculations
+                from venice.core import MODELS as CORE_MODELS
+                session_model_info = CORE_MODELS.get(model_id, {})
+                event_queue.put({
+                    "type": "session_info",
+                    "data": {
+                        "max_turns": MAX_AGENT_TURNS,
+                        "price_in": session_model_info.get("price_in", 0),
+                        "price_out": session_model_info.get("price_out", 0),
+                        "model_name": session_model_info.get("name", model_id)
+                    }
+                })
+
+                # Track total tokens for the session
+                session_tokens_in = 0
+                session_tokens_out = 0
+
                 while not stop_signal:
                     turn_start = time.time()
                     logger.info(f"[{request_id}] --- AGENT TURN {agent_turns + 1} ---")
 
                     event_queue.put({"type": "status", "data": get_nathan_status("think")})
+
+                    # Send turn start event
+                    event_queue.put({
+                        "type": "turn_start",
+                        "data": {
+                            "turn": agent_turns + 1,
+                            "max_turns": MAX_AGENT_TURNS
+                        }
+                    })
+
                     response_content = ""
                     global messages
                     pre_manage_count = len(messages)
@@ -1746,6 +1838,29 @@ def chat():
                     agent_state.record_turn()
                     turn_duration = time.time() - turn_start
                     logger.info(f"[{request_id}] Turn {agent_turns} completed in {turn_duration:.2f}s")
+
+                    # Estimate tokens for this turn (rough: ~4 chars per token)
+                    # Input: estimate from last user message + system prompt
+                    input_chars = sum(len(str(m.get('content', ''))) for m in messages[-3:] if m.get('role') in ('user', 'system'))
+                    turn_tokens_in = max(1, input_chars // 4)
+                    turn_tokens_out = max(1, len(response_content) // 4)
+
+                    session_tokens_in += turn_tokens_in
+                    session_tokens_out += turn_tokens_out
+
+                    # Send turn complete event with token estimates
+                    event_queue.put({
+                        "type": "turn_complete",
+                        "data": {
+                            "turn": agent_turns,
+                            "max_turns": MAX_AGENT_TURNS,
+                            "turn_tokens_in": turn_tokens_in,
+                            "turn_tokens_out": turn_tokens_out,
+                            "session_tokens_in": session_tokens_in,
+                            "session_tokens_out": session_tokens_out,
+                            "turn_duration": round(turn_duration, 2)
+                        }
+                    })
 
                     # NEW: Check for loop patterns
                     loop_warning = agent_state.detect_loop_pattern()

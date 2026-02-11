@@ -41,6 +41,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tool visibility preference
     let autoExpandTools = localStorage.getItem('autoExpandTools') === 'true';
 
+    // Session stats state
+    let sessionStartTime = null;
+    let sessionTimerInterval = null;
+    let sessionPriceIn = 0;  // $ per million tokens
+    let sessionPriceOut = 0;
+    let sessionTokensIn = 0;
+    let sessionTokensOut = 0;
+    let currentTurn = 0;
+    let maxTurns = 50;
+
     // Block creation functions for unified chat stream
     function createTurnContainer() {
         const container = document.createElement('div');
@@ -141,12 +151,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const model = modelSelect.value;
         updateCapabilitiesDisplay(model);
         updateContextPulse(conversationHistory); // Refresh gauge with new limit
+        updateSessionPricing(model); // Update pricing for cost calculations
         await fetch('/api/models', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({model})
         });
     });
+
+    // Update session pricing when model changes
+    function updateSessionPricing(modelId) {
+        if (modelMap[modelId]) {
+            const m = modelMap[modelId];
+            sessionPriceIn = m.price_in || 0;
+            sessionPriceOut = m.price_out || 0;
+            // Recalculate cost with new pricing
+            updateSessionStats();
+        }
+    }
 
     let isProcessing = false;
 
@@ -591,6 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             updateCapabilitiesDisplay(data.current);
             updateContextPulse(conversationHistory);
+            updateSessionPricing(data.current); // Set initial pricing
         } catch (e) {
             console.error('Failed to fetch models', e);
         }
@@ -1050,7 +1073,82 @@ async function sendMessage() {
                 currentToolBlock = null;
                 updateContextPulse(conversationHistory);
                 break;
+
+            case 'session_info':
+                // Initialize session with pricing info
+                sessionPriceIn = data.price_in || 0;
+                sessionPriceOut = data.price_out || 0;
+                maxTurns = data.max_turns || 50;
+                document.getElementById('turn-counter').textContent = `0 / ${maxTurns}`;
+                // Start session timer if not already running
+                if (!sessionStartTime) {
+                    sessionStartTime = Date.now();
+                    startSessionTimer();
+                }
+                break;
+
+            case 'turn_start':
+                currentTurn = data.turn || 0;
+                document.getElementById('turn-counter').textContent = `${currentTurn} / ${data.max_turns || maxTurns}`;
+                break;
+
+            case 'turn_complete':
+                currentTurn = data.turn || 0;
+                sessionTokensIn = data.session_tokens_in || 0;
+                sessionTokensOut = data.session_tokens_out || 0;
+                updateSessionStats();
+                break;
         }
+    }
+
+    // Session timer functions
+    function startSessionTimer() {
+        if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+        sessionTimerInterval = setInterval(updateSessionTimer, 1000);
+        updateSessionTimer();
+    }
+
+    function updateSessionTimer() {
+        if (!sessionStartTime) return;
+        const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        document.getElementById('session-timer').textContent =
+            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    function updateSessionStats() {
+        // Update token displays (with null checks)
+        const tokensInEl = document.getElementById('tokens-in');
+        const tokensOutEl = document.getElementById('tokens-out');
+        const turnCounterEl = document.getElementById('turn-counter');
+        const sessionCostEl = document.getElementById('session-cost');
+
+        if (tokensInEl) tokensInEl.textContent = sessionTokensIn.toLocaleString();
+        if (tokensOutEl) tokensOutEl.textContent = sessionTokensOut.toLocaleString();
+        if (turnCounterEl) turnCounterEl.textContent = `${currentTurn} / ${maxTurns}`;
+
+        // Calculate cost (prices are per million tokens)
+        const costIn = (sessionTokensIn / 1000000) * sessionPriceIn;
+        const costOut = (sessionTokensOut / 1000000) * sessionPriceOut;
+        const totalCost = costIn + costOut;
+        if (sessionCostEl) sessionCostEl.textContent = `$${totalCost.toFixed(4)}`;
+    }
+
+    function resetSessionStats() {
+        sessionStartTime = null;
+        sessionTokensIn = 0;
+        sessionTokensOut = 0;
+        currentTurn = 0;
+        if (sessionTimerInterval) {
+            clearInterval(sessionTimerInterval);
+            sessionTimerInterval = null;
+        }
+        document.getElementById('session-timer').textContent = '00:00';
+        document.getElementById('turn-counter').textContent = '0 / --';
+        document.getElementById('tokens-in').textContent = '0';
+        document.getElementById('tokens-out').textContent = '0';
+        document.getElementById('session-cost').textContent = '$0.00';
     }
 
     // --- UI Helpers ---
@@ -1273,7 +1371,7 @@ async function sendMessage() {
     });
 
     removeImageBtn.addEventListener('click', clearImageUpload);
-    clearBtn.addEventListener('click', () => { if(confirm('Clear history?')) { fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: 'clear'}) }).then(() => { chatHistory.innerHTML = '<div class="message system">Cleared.</div>'; conversationHistory = []; updateContextPulse([]); }); } });
+    clearBtn.addEventListener('click', () => { if(confirm('Clear history?')) { fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: 'clear'}) }).then(() => { chatHistory.innerHTML = '<div class="message system">Cleared.</div>'; conversationHistory = []; updateContextPulse([]); resetSessionStats(); }); } });
     if (stopBtn) stopBtn.addEventListener('click', () => fetch('/api/interrupt', { method: 'POST' }));
 
     // Backups/History Functions

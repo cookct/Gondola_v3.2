@@ -1191,183 +1191,183 @@ def chat():
                             try:
                                 with httpx.Client(timeout=httpx.Timeout(connect=60.0, read=180.0, write=60.0, pool=60.0)) as http_client:
                                     with http_client.stream(
-                                "POST",
-                                api_base,
-                                headers={
-                                    "Authorization": f"Bearer {api_key}",
-                                    "Content-Type": "application/json"
-                                },
-                                json=api_payload
+                                        "POST",
+                                        api_base,
+                                        headers={
+                                            "Authorization": f"Bearer {api_key}",
+                                            "Content-Type": "application/json"
+                                        },
+                                        json=api_payload
                                     ) as response:
-                                connection_time = time.time() - api_call_start
-                                logger.info(f"[{request_id}] <<< Connection established in {connection_time:.3f}s")
-                                event_queue.put({"type": "status", "data": get_nathan_status("connect")})
-                                logger.info(f"[{request_id}] Response status: {response.status_code}")
+                                        connection_time = time.time() - api_call_start
+                                        logger.info(f"[{request_id}] <<< Connection established in {connection_time:.3f}s")
+                                        event_queue.put({"type": "status", "data": get_nathan_status("connect")})
+                                        logger.info(f"[{request_id}] Response status: {response.status_code}")
 
-                                # DEBUG: Log ALL headers received
-                                logger.debug(f"[{request_id}] --- RESPONSE HEADERS ---")
-                                for k, v in response.headers.items():
-                                    logger.debug(f"[{request_id}]   {k}: {v}")
+                                        # DEBUG: Log ALL headers received
+                                        logger.debug(f"[{request_id}] --- RESPONSE HEADERS ---")
+                                        for k, v in response.headers.items():
+                                            logger.debug(f"[{request_id}]   {k}: {v}")
 
-                                # Extract Balance Headers (Handle case sensitivity)
-                                balance_usd = response.headers.get('x-venice-balance-usd') or response.headers.get('X-Venice-Balance-USD')
-                                balance_vcu = response.headers.get('x-venice-balance-vcu') or response.headers.get('X-Venice-Balance-VCU')
-                                
-                                if balance_usd:
-                                    try:
-                                        curr_usd = float(balance_usd)
-                                        curr_vcu = float(balance_vcu) if balance_vcu else 0.0
-                                        
-                                        # Initialize baseline if first run
-                                        if baseline_usd is None: baseline_usd = curr_usd
-                                        if baseline_vcu is None: baseline_vcu = curr_vcu
-                                        
-                                        # Cost = Baseline - Current
-                                        cost_usd = 0.0
-                                        if baseline_usd is not None:
-                                            diff = float(baseline_usd) - curr_usd
-                                            if diff > 0: cost_usd = diff
-                                        
-                                        cost_vcu = 0.0
-                                        if baseline_vcu is not None and balance_vcu:
-                                            cost_vcu = float(baseline_vcu) - curr_vcu
-                                        
-                                        # Update persistent memory for NEXT request
-                                        memory.data["last_balance_vcu"] = curr_vcu
-                                        memory.data["last_balance_usd"] = curr_usd
-                                        memory.save()
-                                        
-                                        event_queue.put({
-                                            "type": "metadata", 
-                                            "data": {
-                                                "usd_balance": f"{curr_usd:.4f}", 
-                                                "usd_cost": f"{cost_usd:.4f}",
-                                                "vcu_cost": f"{cost_vcu:.0f}"
-                                            }
-                                        })
-                                    except: pass
+                                        # Extract Balance Headers (Handle case sensitivity)
+                                        balance_usd = response.headers.get('x-venice-balance-usd') or response.headers.get('X-Venice-Balance-USD')
+                                        balance_vcu = response.headers.get('x-venice-balance-vcu') or response.headers.get('X-Venice-Balance-VCU')
 
-                                # Check Content-Type for error/JSON responses
-                                content_type = response.headers.get("content-type", "")
-                                logger.debug(f"[{request_id}] Content-Type: {content_type}")
-
-                                if "application/json" in content_type:
-                                    # Handle non-stream response (likely an error)
-                                    error_json = response.read().decode('utf-8')
-                                    logger.error(f"[{request_id}] API returned JSON (not stream)!")
-                                    logger.error(f"[{request_id}] API JSON response: {error_json}")
-                                    try:
-                                        err_data = json.loads(error_json)
-                                        err_msg = err_data.get("error", "Unknown API Error")
-                                        if isinstance(err_msg, dict): err_msg = err_msg.get("message", str(err_msg))
-                                        logger.error(f"[{request_id}] Parsed error: {err_msg}")
-
-                                        # Check if it's a timeout error - these can be retried
-                                        if "timed-out" in str(err_msg).lower() or "timeout" in str(err_msg).lower():
-                                            logger.warning(f"[{request_id}] Venice timeout detected - this is a server-side issue")
-                                            event_queue.put({"type": "error", "data": f"Venice API timeout - the model is overloaded. Please try again or switch to a different model."})
-                                        else:
-                                            event_queue.put({"type": "error", "data": f"API Error: {err_msg}"})
-                                    except:
-                                        event_queue.put({"type": "error", "data": f"API returned JSON: {error_json[:200]}"})
-                                    return
-
-                                # Process SSE stream
-                                logger.info(f"[{request_id}] Starting SSE stream processing...")
-                                buffer = ""
-                                tool_calls_buffer = {}
-                                last_chunk_time = time.time()
-                                stream_start_time = time.time()
-                                stall_warned = False
-                                chunk_count = 0
-                                total_content_chars = 0
-                                first_chunk_time = None
-
-                                for chunk in response.iter_text():
-                                    chunk_count += 1
-                                    current_time = time.time()
-
-                                    # Log first chunk timing (time to first token)
-                                    if first_chunk_time is None:
-                                        first_chunk_time = current_time
-                                        ttft = first_chunk_time - api_call_start
-                                        logger.info(f"[{request_id}] ⚡ FIRST CHUNK received! Time-to-first-token: {ttft:.3f}s")
-                                        event_queue.put({"type": "status", "data": get_nathan_status("stream")})
-
-                                    # Log every 50 chunks or every 5 seconds
-                                    time_since_start = current_time - stream_start_time
-                                    if chunk_count % 50 == 0 or (chunk_count > 1 and int(time_since_start) % 5 == 0 and int(time_since_start) > 0):
-                                        logger.debug(f"[{request_id}] Chunk #{chunk_count} | Elapsed: {time_since_start:.1f}s | Content chars: {total_content_chars}")
-
-                                    if stop_signal:
-                                        logger.info(f"[{request_id}] Stop signal received, breaking stream")
-                                        break
-
-                                    # Check for stream stall
-                                    time_since_last = current_time - last_chunk_time
-                                    if time_since_last > stream_timeout:
-                                        logger.error(f"[{request_id}] ⚠️ STREAM STALL DETECTED!")
-                                        logger.error(f"[{request_id}] Time since last chunk: {time_since_last:.1f}s (threshold: {stream_timeout}s)")
-                                        logger.error(f"[{request_id}] Total chunks received: {chunk_count}")
-                                        logger.error(f"[{request_id}] Total content chars: {total_content_chars}")
-                                        logger.error(f"[{request_id}] Total stream time: {time_since_start:.1f}s")
-                                        if not stall_warned:
-                                            event_queue.put({
-                                                "type": "error",
-                                                "data": f"Stream timeout after {stream_timeout}s - model may be stuck. Try again or switch models."
-                                            })
-                                            stall_warned = True
-                                        break
-                                    last_chunk_time = current_time
-                                    buffer += chunk
-                                    while "\n" in buffer:
-                                        line, buffer = buffer.split("\n", 1)
-                                        line = line.strip()
-                                        if line.startswith("data: "):
-                                            data_str = line[6:]
-                                            if data_str == "[DONE]": continue
+                                        if balance_usd:
                                             try:
-                                                data_obj = json.loads(data_str)
-                                                if data_obj.get('choices'):
-                                                    delta = data_obj['choices'][0].get('delta', {})
-                                                    
-                                                    if 'reasoning_content' in delta:
-                                                        event_queue.put({"type": "reasoning", "data": delta['reasoning_content']})
-                                                    
-                                                    if 'content' in delta and delta['content']:
-                                                        c = delta['content']
-                                                        response_content += c
-                                                        total_content_chars += len(c)
-                                                        event_queue.put({"type": "content", "data": c})
+                                                curr_usd = float(balance_usd)
+                                                curr_vcu = float(balance_vcu) if balance_vcu else 0.0
 
-                                                    if 'tool_calls' in delta:
-                                                        for tc in delta['tool_calls']:
-                                                            idx = tc.get('index', 0)
-                                                            if idx not in tool_calls_buffer:
-                                                                tool_calls_buffer[idx] = {"id": tc.get('id'), "name": "", "arguments": ""}
-                                                                logger.debug(f"[{request_id}] New tool call detected at index {idx}")
+                                                # Initialize baseline if first run
+                                                if baseline_usd is None: baseline_usd = curr_usd
+                                                if baseline_vcu is None: baseline_vcu = curr_vcu
 
-                                                            if tc.get('id'): tool_calls_buffer[idx]["id"] = tc['id']
-                                                            if tc.get('function'):
-                                                                if tc['function'].get('name'):
-                                                                    tool_calls_buffer[idx]["name"] += tc['function']['name']
-                                                                if tc['function'].get('arguments'):
-                                                                    tool_calls_buffer[idx]["arguments"] += tc['function']['arguments']
-                                            except: continue
+                                                # Cost = Baseline - Current
+                                                cost_usd = 0.0
+                                                if baseline_usd is not None:
+                                                    diff = float(baseline_usd) - curr_usd
+                                                    if diff > 0: cost_usd = diff
 
-                                # Log stream completion
-                                stream_duration = time.time() - stream_start_time
-                                logger.info(f"[{request_id}] ✓ Stream completed")
-                                logger.info(f"[{request_id}]   Total chunks: {chunk_count}")
-                                logger.info(f"[{request_id}]   Total content chars: {total_content_chars}")
-                                logger.info(f"[{request_id}]   Stream duration: {stream_duration:.2f}s")
-                                logger.info(f"[{request_id}]   Tool calls detected: {len(tool_calls_buffer)}")
-                                if tool_calls_buffer:
-                                    for idx, tc in tool_calls_buffer.items():
-                                        logger.info(f"[{request_id}]     [{idx}] {tc['name']} (args: {len(tc['arguments'])} chars)")
+                                                cost_vcu = 0.0
+                                                if baseline_vcu is not None and balance_vcu:
+                                                    cost_vcu = float(baseline_vcu) - curr_vcu
 
-                                # OPTIMIZATION: Mark API call as successful to exit retry loop
-                                api_success = True
+                                                # Update persistent memory for NEXT request
+                                                memory.data["last_balance_vcu"] = curr_vcu
+                                                memory.data["last_balance_usd"] = curr_usd
+                                                memory.save()
+
+                                                event_queue.put({
+                                                    "type": "metadata",
+                                                    "data": {
+                                                        "usd_balance": f"{curr_usd:.4f}",
+                                                        "usd_cost": f"{cost_usd:.4f}",
+                                                        "vcu_cost": f"{cost_vcu:.0f}"
+                                                    }
+                                                })
+                                            except: pass
+
+                                        # Check Content-Type for error/JSON responses
+                                        content_type = response.headers.get("content-type", "")
+                                        logger.debug(f"[{request_id}] Content-Type: {content_type}")
+
+                                        if "application/json" in content_type:
+                                            # Handle non-stream response (likely an error)
+                                            error_json = response.read().decode('utf-8')
+                                            logger.error(f"[{request_id}] API returned JSON (not stream)!")
+                                            logger.error(f"[{request_id}] API JSON response: {error_json}")
+                                            try:
+                                                err_data = json.loads(error_json)
+                                                err_msg = err_data.get("error", "Unknown API Error")
+                                                if isinstance(err_msg, dict): err_msg = err_msg.get("message", str(err_msg))
+                                                logger.error(f"[{request_id}] Parsed error: {err_msg}")
+
+                                                # Check if it's a timeout error - these can be retried
+                                                if "timed-out" in str(err_msg).lower() or "timeout" in str(err_msg).lower():
+                                                    logger.warning(f"[{request_id}] Venice timeout detected - this is a server-side issue")
+                                                    event_queue.put({"type": "error", "data": f"Venice API timeout - the model is overloaded. Please try again or switch to a different model."})
+                                                else:
+                                                    event_queue.put({"type": "error", "data": f"API Error: {err_msg}"})
+                                            except:
+                                                event_queue.put({"type": "error", "data": f"API returned JSON: {error_json[:200]}"})
+                                            return
+
+                                        # Process SSE stream
+                                        logger.info(f"[{request_id}] Starting SSE stream processing...")
+                                        buffer = ""
+                                        tool_calls_buffer = {}
+                                        last_chunk_time = time.time()
+                                        stream_start_time = time.time()
+                                        stall_warned = False
+                                        chunk_count = 0
+                                        total_content_chars = 0
+                                        first_chunk_time = None
+
+                                        for chunk in response.iter_text():
+                                            chunk_count += 1
+                                            current_time = time.time()
+
+                                            # Log first chunk timing (time to first token)
+                                            if first_chunk_time is None:
+                                                first_chunk_time = current_time
+                                                ttft = first_chunk_time - api_call_start
+                                                logger.info(f"[{request_id}] ⚡ FIRST CHUNK received! Time-to-first-token: {ttft:.3f}s")
+                                                event_queue.put({"type": "status", "data": get_nathan_status("stream")})
+
+                                            # Log every 50 chunks or every 5 seconds
+                                            time_since_start = current_time - stream_start_time
+                                            if chunk_count % 50 == 0 or (chunk_count > 1 and int(time_since_start) % 5 == 0 and int(time_since_start) > 0):
+                                                logger.debug(f"[{request_id}] Chunk #{chunk_count} | Elapsed: {time_since_start:.1f}s | Content chars: {total_content_chars}")
+
+                                            if stop_signal:
+                                                logger.info(f"[{request_id}] Stop signal received, breaking stream")
+                                                break
+
+                                            # Check for stream stall
+                                            time_since_last = current_time - last_chunk_time
+                                            if time_since_last > stream_timeout:
+                                                logger.error(f"[{request_id}] ⚠️ STREAM STALL DETECTED!")
+                                                logger.error(f"[{request_id}] Time since last chunk: {time_since_last:.1f}s (threshold: {stream_timeout}s)")
+                                                logger.error(f"[{request_id}] Total chunks received: {chunk_count}")
+                                                logger.error(f"[{request_id}] Total content chars: {total_content_chars}")
+                                                logger.error(f"[{request_id}] Total stream time: {time_since_start:.1f}s")
+                                                if not stall_warned:
+                                                    event_queue.put({
+                                                        "type": "error",
+                                                        "data": f"Stream timeout after {stream_timeout}s - model may be stuck. Try again or switch models."
+                                                    })
+                                                    stall_warned = True
+                                                break
+                                            last_chunk_time = current_time
+                                            buffer += chunk
+                                            while "\n" in buffer:
+                                                line, buffer = buffer.split("\n", 1)
+                                                line = line.strip()
+                                                if line.startswith("data: "):
+                                                    data_str = line[6:]
+                                                    if data_str == "[DONE]": continue
+                                                    try:
+                                                        data_obj = json.loads(data_str)
+                                                        if data_obj.get('choices'):
+                                                            delta = data_obj['choices'][0].get('delta', {})
+
+                                                            if 'reasoning_content' in delta:
+                                                                event_queue.put({"type": "reasoning", "data": delta['reasoning_content']})
+
+                                                            if 'content' in delta and delta['content']:
+                                                                c = delta['content']
+                                                                response_content += c
+                                                                total_content_chars += len(c)
+                                                                event_queue.put({"type": "content", "data": c})
+
+                                                            if 'tool_calls' in delta:
+                                                                for tc in delta['tool_calls']:
+                                                                    idx = tc.get('index', 0)
+                                                                    if idx not in tool_calls_buffer:
+                                                                        tool_calls_buffer[idx] = {"id": tc.get('id'), "name": "", "arguments": ""}
+                                                                        logger.debug(f"[{request_id}] New tool call detected at index {idx}")
+
+                                                                    if tc.get('id'): tool_calls_buffer[idx]["id"] = tc['id']
+                                                                    if tc.get('function'):
+                                                                        if tc['function'].get('name'):
+                                                                            tool_calls_buffer[idx]["name"] += tc['function']['name']
+                                                                        if tc['function'].get('arguments'):
+                                                                            tool_calls_buffer[idx]["arguments"] += tc['function']['arguments']
+                                                    except: continue
+
+                                        # Log stream completion
+                                        stream_duration = time.time() - stream_start_time
+                                        logger.info(f"[{request_id}] ✓ Stream completed")
+                                        logger.info(f"[{request_id}]   Total chunks: {chunk_count}")
+                                        logger.info(f"[{request_id}]   Total content chars: {total_content_chars}")
+                                        logger.info(f"[{request_id}]   Stream duration: {stream_duration:.2f}s")
+                                        logger.info(f"[{request_id}]   Tool calls detected: {len(tool_calls_buffer)}")
+                                        if tool_calls_buffer:
+                                            for idx, tc in tool_calls_buffer.items():
+                                                logger.info(f"[{request_id}]     [{idx}] {tc['name']} (args: {len(tc['arguments'])} chars)")
+
+                                        # OPTIMIZATION: Mark API call as successful to exit retry loop
+                                        api_success = True
 
                             except httpx.TimeoutException as e:
                                 elapsed = time.time() - api_call_start
@@ -1423,7 +1423,18 @@ def chat():
                             logger.error(f"[{request_id}] ⛔ API call failed after {MAX_API_RETRIES} attempts")
                             event_queue.put({"type": "error", "data": f"API call failed after {MAX_API_RETRIES} retries: {last_api_error}"})
                             return
-                    
+
+                    except Exception as e:
+                        # Catch-all for any unexpected errors in the API section
+                        elapsed = time.time() - api_call_start
+                        logger.error(f"[{request_id}] ⛔ UNEXPECTED ERROR IN API SECTION!")
+                        logger.error(f"[{request_id}] Exception type: {type(e).__name__}")
+                        logger.error(f"[{request_id}] Exception: {str(e)}")
+                        logger.error(f"[{request_id}] Elapsed time: {elapsed:.2f}s")
+                        logger.error(f"[{request_id}] Traceback:\n{traceback.format_exc()}")
+                        event_queue.put({"type": "error", "data": f"Error: {str(e)}"})
+                        return
+
                     if stop_signal:
                         event_queue.put({"type": "status", "data": get_nathan_status("interrupt")})
                         break

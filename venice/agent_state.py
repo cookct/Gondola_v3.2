@@ -322,6 +322,10 @@ class AgentState:
         Detect if the agent is stuck in a loop pattern.
         Returns warning message if loop detected.
         """
+        # Disable loop detection for Claude models
+        if "claude" in self.model_id.lower():
+            return None
+
         # Check for exploration loops earlier (after just 4 calls)
         if len(self.tool_calls) >= 4:
             # Check if last 2 calls repeat a pattern from earlier

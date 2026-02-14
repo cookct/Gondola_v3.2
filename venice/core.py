@@ -15,7 +15,7 @@ import difflib
 MODELS = {
     "claude-opus-45": {
         "name": "Claude Opus 4.5",
-        "type": "text",
+        "type": "vision",
         "provider": "venice",
         "description": "Function Calling · Reasoning · Vision · Code",
         "strength": "Elite Logic & Code",
@@ -35,7 +35,7 @@ MODELS = {
     },
     "openai-gpt-52-codex": {
         "name": "GPT-5.2 Code",
-        "type": "text",
+        "type": "vision",
         "provider": "venice",
         "description": "Function Calling · Reasoning · Vision · Code",
         "strength": "Elite Coding Agent",
@@ -56,7 +56,7 @@ MODELS = {
     },
     "claude-sonnet-45": {
         "name": "Claude Sonnet 4.5",
-        "type": "text",
+        "type": "vision",
         "provider": "venice",
         "description": "Function Calling · Reasoning · Vision · Code",
         "strength": "High Intelligence",

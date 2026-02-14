@@ -127,22 +127,6 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "write_constant",
-            "description": "Recommended for writing code. Saves a string to a Python file as a variable. Handles escaping automatically.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "filename": {"type": "string", "description": "File to write to (e.g. 'script.py')"},
-                    "variable_name": {"type": "string", "description": "Variable name (e.g. 'CODE')"},
-                    "value": {"type": "string", "description": "The raw code/text content."}
-                },
-                "required": ["filename", "variable_name", "value"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "write_file",
             "description": "Create or overwrite a file with automatic syntax verification for Python and JSON.",
             "parameters": {
@@ -575,7 +559,7 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "done",
-            "description": "Signal that a multi-step CODING task is fully complete. IMPORTANT: Only use this after completing file operations (write, edit, create). Do NOT use for simple questions - just respond with text. For conversations and questions, respond directly without calling any tools.",
+            "description": "Signal that a multi-step CODING task is fully complete. IMPORTANT: You MUST provide a natural language summary of your work in the chat window BEFORE calling this tool. Do NOT use for simple questions - just respond with text. For conversations and questions, respond directly without calling any tools.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -805,6 +789,56 @@ TOOL_SCHEMAS = [
                     "n_results": {"type": "integer", "description": "Number of results (default 5)"}
                 },
                 "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "image_search",
+            "description": "Search for images on the web.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "n_results": {"type": "integer", "description": "Number of results (default 10)"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "download_image",
+            "description": "Download an image from any direct URL.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Direct URL to the image"},
+                    "filename": {"type": "string", "description": "Optional: filename to save as (e.g. 'photo.jpg')"}
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "download_placeholder_image",
+            "description": "Download a placeholder image for web design from free placeholder services. Supports picsum (random photos), placehold (solid color with text), and via (custom text).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keyword": {"type": "string", "description": "Optional keyword for image selection or text overlay"},
+                    "width": {"type": "integer", "description": "Image width in pixels (default 800, max 4000)"},
+                    "height": {"type": "integer", "description": "Image height in pixels (default 600, max 4000)"},
+                    "service": {"type": "string", "enum": ["picsum", "placehold", "via"], "description": "Placeholder service (default 'picsum')"},
+                    "filename": {"type": "string", "description": "Output filename (default: 'placeholder_{width}x{height}.jpg')"},
+                    "grayscale": {"type": "boolean", "description": "Convert to grayscale (picsum only)"},
+                    "blur": {"type": "integer", "description": "Blur amount 1-10 (picsum only)"}
+                },
+                "required": []
             }
         }
     },

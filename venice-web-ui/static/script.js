@@ -1539,7 +1539,14 @@ async function sendMessage() {
             }
 
             const contextK = Math.round(model.context_length / 1000);
-            const priceStr = model.price_in > 0 ? `$${model.price_in.toFixed(2)}/$${model.price_out.toFixed(2)}` : 'Free';
+            
+            // Check if model is free (0.0 price) or paid
+            let priceStr;
+            if (model.price_in === 0 && model.price_out === 0) {
+                priceStr = 'Free';
+            } else {
+                priceStr = `$${model.price_in.toFixed(2)}/$${model.price_out.toFixed(2)}`;
+            }
 
             div.innerHTML = `
                 <div class="provider-model-name">${escapeHtml(model.name)}</div>

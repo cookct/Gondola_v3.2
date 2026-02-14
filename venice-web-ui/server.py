@@ -67,6 +67,7 @@ from venice.tools.schema import TOOL_SCHEMAS
 from venice.project_index import ProjectIndex
 from venice.context_manager import ContextManager, ModelConfig
 from venice.agent_state import AgentState
+from venice.persistence import PersistenceManager
 
 app = Flask(__name__)
 
@@ -168,6 +169,7 @@ tools = None
 client = None
 messages = []
 interrupt_flag = threading.Event()
+persistence = None
 
 # NEW: Smart context management globals
 project_index = None  # Compressed project understanding
@@ -183,7 +185,7 @@ def web_symlink_handler(link_path, real_target, inside_workspace):
     return False
 
 def initialize(clear_messages=False):
-    global workspace, memory, tools, client, messages, interrupt_flag
+    global workspace, memory, tools, client, messages, interrupt_flag, persistence
     global project_index, context_manager, agent_state
 
     logger.info("=" * 60)
@@ -215,6 +217,10 @@ def initialize(clear_messages=False):
         agent_state = AgentState()
         logger.debug("Agent state tracker initialized")
 
+        # NEW: Initialize persistence manager
+        persistence = PersistenceManager(project_root=workspace.root_dir)
+        logger.debug("Persistence manager initialized")
+
         api_key = get_api_key()
         if not api_key:
             logger.error("VENICE_API_KEY not found - chat will fail!")
@@ -234,6 +240,14 @@ def initialize(clear_messages=False):
         if memory_context:
             full_prompt += f"\n\n## MEMORY FROM PREVIOUS SESSIONS:\n\n{memory_context}"
             logger.debug(f"Memory context added ({len(memory_context)} chars)")
+
+        # Inject Resurrection Point if available
+        if persistence:
+            last_checkpoint = persistence.get_last_checkpoint()
+            if last_checkpoint and last_checkpoint.get("thought"):
+                resurrection_msg = f"\n\n## RESURRECTION POINT:\nYou were interrupted. Your last state was:\nThought: {last_checkpoint['thought']}\nPending Task: {last_checkpoint['task']}\nContinue where you left off."
+                full_prompt += resurrection_msg
+                logger.info("Resurrected cognitive state from shadow branch")
 
         # Restore conversation from last session if available (unless clearing)
         if clear_messages:
@@ -575,129 +589,6 @@ def set_model():
         return jsonify({"success": True, "model": MODELS[model_id]})
     return jsonify({"success": False, "error": "Invalid model"}), 400
 
-@app.route('/api/provider-models', methods=['GET'])
-def get_provider_models():
-    """Fetch available models from a provider API (Together or Venice)"""
-    provider = request.args.get('provider', 'together')
-
-    try:
-        import httpx
-
-        if provider == 'together':
-            api_key = get_together_api_key()
-            if not api_key:
-                return jsonify({"success": False, "error": "Together API key not configured"}), 400
-
-            with httpx.Client(timeout=30.0) as client:
-                response = client.get(
-                    "https://api.together.xyz/v1/models",
-                    headers={"Authorization": f"Bearer {api_key}"}
-                )
-
-                if response.status_code != 200:
-                    return jsonify({"success": False, "error": f"API returned {response.status_code}"}), 500
-
-                models_data = response.json()
-
-                # Filter for SERVERLESS chat models that support function calling
-                # Serverless models have per-token pricing (input/output > 0)
-                # Dedicated models require hourly pricing and custom endpoints
-                filtered_models = []
-                for model in models_data:
-                    model_type = model.get('type', '')
-                    model_id = model.get('id', '')
-                    pricing = model.get('pricing', {})
-
-                    # Skip non-chat/language/code models
-                    if model_type not in ['chat', 'language', 'code']:
-                        continue
-
-                    # Check if serverless (has per-token pricing)
-                    # Serverless models have input/output pricing > 0
-                    # Dedicated-only models have 0 for per-token but require hourly
-                    input_price = pricing.get('input', 0)
-                    output_price = pricing.get('output', 0)
-                    hourly_price = pricing.get('hourly', 0)
-
-                    # Only include models with per-token pricing (serverless)
-                    # Skip models that only have hourly pricing (dedicated only)
-                    is_serverless = (input_price > 0 or output_price > 0)
-
-                    if not is_serverless:
-                        continue
-
-                    filtered_models.append({
-                        "id": model_id,
-                        "name": model.get('display_name') or model_id.split('/')[-1],
-                        "type": model_type,
-                        "context_length": model.get('context_length', 4096),
-                        "organization": model.get('organization', ''),
-                        "price_in": input_price,
-                        "price_out": output_price,
-                    })
-
-                # Sort by organization then name
-                filtered_models.sort(key=lambda x: (x['organization'], x['name']))
-
-                return jsonify({
-                    "success": True,
-                    "provider": "together",
-                    "models": filtered_models,
-                    "count": len(filtered_models)
-                })
-
-        elif provider == 'venice':
-            api_key = get_api_key()
-            if not api_key:
-                return jsonify({"success": False, "error": "Venice API key not configured"}), 400
-
-            with httpx.Client(timeout=30.0) as client:
-                response = client.get(
-                    "https://api.venice.ai/api/v1/models",
-                    headers={"Authorization": f"Bearer {api_key}"}
-                )
-
-                if response.status_code != 200:
-                    return jsonify({"success": False, "error": f"API returned {response.status_code}"}), 500
-
-                data = response.json()
-                models_list = data.get('data', []) if isinstance(data, dict) else data
-
-                # Filter for text/chat models
-                filtered_models = []
-                for model in models_list:
-                    model_id = model.get('id', '')
-                    model_type = model.get('type', model.get('object', ''))
-
-                    # Include text and chat models
-                    if 'text' in str(model_type).lower() or 'chat' in str(model_type).lower() or model_type == 'model':
-                        filtered_models.append({
-                            "id": model_id,
-                            "name": model.get('name', model_id),
-                            "type": model_type,
-                            "context_length": model.get('context_length', model.get('context_window', 32000)),
-                            "organization": model.get('owned_by', ''),
-                            "price_in": 0,
-                            "price_out": 0,
-                        })
-
-                filtered_models.sort(key=lambda x: x['name'])
-
-                return jsonify({
-                    "success": True,
-                    "provider": "venice",
-                    "models": filtered_models,
-                    "count": len(filtered_models)
-                })
-
-        else:
-            return jsonify({"success": False, "error": f"Unknown provider: {provider}"}), 400
-
-    except Exception as e:
-        logger.error(f"Error fetching provider models: {e}")
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
-
 # Known models with verified function calling support (OpenAI-compatible tool calling)
 # Together AI: https://docs.together.ai/docs/function-calling
 # Venice AI: Uses OpenAI-compatible tool calling for most instruction-tuned models
@@ -796,6 +687,153 @@ def infer_function_calling_config(model_id: str, model_type: str, context_length
     }
 
     return config
+
+@app.route('/api/provider-models', methods=['GET'])
+def get_provider_models():
+    """Fetch available models from a provider API (Together or Venice)"""
+    provider = request.args.get('provider', 'together')
+
+    try:
+        import httpx
+
+        if provider == 'together':
+            api_key = get_together_api_key()
+            if not api_key:
+                return jsonify({"success": False, "error": "Together API key not configured"}), 400
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
+                    "https://api.together.xyz/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}"}
+                )
+
+                if response.status_code != 200:
+                    return jsonify({"success": False, "error": f"API returned {response.status_code}"}), 500
+
+                models_data = response.json()
+
+                # Filter for SERVERLESS chat models that support function calling
+                # Serverless models have per-token pricing (input/output > 0)
+                # Dedicated models require hourly pricing and custom endpoints
+                filtered_models = []
+                for model in models_data:
+                    model_type = model.get('type', '')
+                    model_id = model.get('id', '')
+                    pricing = model.get('pricing', {})
+
+                    # Skip non-chat/language/code models
+                    if model_type not in ['chat', 'language', 'code']:
+                        continue
+
+                    # Check if serverless (has per-token pricing)
+                    # Serverless models have input/output pricing > 0
+                    # Dedicated-only models have 0 for per-token but require hourly
+                    input_price = pricing.get('input', 0)
+                    output_price = pricing.get('output', 0)
+                    hourly_price = pricing.get('hourly', 0)
+
+                    # Only include models with per-token pricing (serverless)
+                    # Skip models that only have hourly pricing (dedicated only)
+                    is_serverless = (input_price > 0 or output_price > 0)
+
+                    if not is_serverless:
+                        continue
+
+                    # Filter for function calling models
+                    fc_config = infer_function_calling_config(model_id, model_type, model.get('context_length', 4096), 'together')
+                    if not fc_config['native_function_calling']:
+                        continue
+
+                    filtered_models.append({
+                        "id": model_id,
+                        "name": model.get('display_name') or model_id.split('/')[-1],
+                        "type": model_type,
+                        "context_length": model.get('context_length', 4096),
+                        "organization": model.get('organization', ''),
+                        "price_in": input_price,
+                        "price_out": output_price,
+                    })
+
+                # Sort by organization then name
+                filtered_models.sort(key=lambda x: (x['organization'], x['name']))
+
+                return jsonify({
+                    "success": True,
+                    "provider": "together",
+                    "models": filtered_models,
+                    "count": len(filtered_models)
+                })
+
+        elif provider == 'venice':
+            api_key = get_api_key()
+            if not api_key:
+                return jsonify({"success": False, "error": "Venice API key not configured"}), 400
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
+                    "https://api.venice.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}"}
+                )
+
+                if response.status_code != 200:
+                    return jsonify({"success": False, "error": f"API returned {response.status_code}"}), 500
+
+                data = response.json()
+                models_list = data.get('data', []) if isinstance(data, dict) else data
+
+                # Filter for text/chat models that support function calling
+                filtered_models = []
+                for model in models_list:
+                    model_id = model.get('id', '')
+                    model_type = model.get('type', model.get('object', ''))
+
+                    # Include text and chat models
+                    if 'text' in str(model_type).lower() or 'chat' in str(model_type).lower() or model_type == 'model':
+                        # Filter for function calling models
+                        # Use model_spec context if available, otherwise fall back to top-level
+                        model_spec = model.get('model_spec', {})
+                        context_len = model_spec.get('availableContextTokens') or model.get('context_length') or model.get('context_window') or 32000
+                        
+                        fc_config = infer_function_calling_config(model_id, model_type, context_len, 'venice')
+                        if not fc_config['native_function_calling']:
+                            continue
+
+                        # Extract pricing from model_spec
+                        pricing = model_spec.get('pricing', {})
+                        price_in = 0
+                        price_out = 0
+                        
+                        if 'input' in pricing:
+                            price_in = pricing['input'].get('usd', 0)
+                        if 'output' in pricing:
+                            price_out = pricing['output'].get('usd', 0)
+
+                        filtered_models.append({
+                            "id": model_id,
+                            "name": model_spec.get('name') or model.get('name', model_id), # Prefer name from spec
+                            "type": model_type,
+                            "context_length": context_len,
+                            "organization": model.get('owned_by', ''),
+                            "price_in": price_in,
+                            "price_out": price_out,
+                        })
+
+                filtered_models.sort(key=lambda x: x['name'])
+
+                return jsonify({
+                    "success": True,
+                    "provider": "venice",
+                    "models": filtered_models,
+                    "count": len(filtered_models)
+                })
+
+        else:
+            return jsonify({"success": False, "error": f"Unknown provider: {provider}"}), 400
+
+    except Exception as e:
+        logger.error(f"Error fetching provider models: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/models/add', methods=['POST'])
 def add_model():
@@ -1057,6 +1095,9 @@ def chat():
     else:
         messages.append({"role": "user", "content": user_message})
 
+    # Save immediately to ensure user message survives restart even if processing fails
+    memory.save_conversation(messages)
+
     logger.info(f"[{request_id}] Total messages in context: {len(messages)}")
     interrupt_flag.clear()
 
@@ -1074,7 +1115,7 @@ def chat():
 
         def run_llm_and_tools():
             nonlocal stop_signal, baseline_usd, baseline_vcu
-            global agent_state, project_index, context_manager
+            global agent_state, project_index, context_manager, persistence
             try:
                 agent_turns = 0
                 consecutive_loop_warnings = 0
@@ -1628,6 +1669,7 @@ def chat():
                         assistant_msg["tool_calls"] = native_tool_calls
 
                     messages.append(assistant_msg)
+                    memory.save_conversation(messages)
 
                     if not native_tool_calls:
                         # Check if this is an empty response (no content AND no tool calls)
@@ -1776,6 +1818,13 @@ def chat():
                             if tool_name == 'edit_file':
                                 agent_state.record_file_edit(args_dict.get('filename', ''))
 
+                            # NEW: Create cognitive checkpoint after successful edit
+                            if tool_name in ("write_file", "edit_file", "replace_lines") and result.get("success"):
+                                thought = response_content[:100] if response_content else "Performing edit"
+                                task = f"Complete work in {args_dict.get('filename')}"
+                                if persistence:
+                                    persistence.checkpoint(thought, task)
+
                             result_str = json.dumps(result)
 
                             # NEW: Compress large results
@@ -1795,6 +1844,7 @@ def chat():
                                 "name": tool_name,
                                 "content": result_str
                             })
+                            memory.save_conversation(messages)
 
                             # Emit tool_done event for frontend UI
                             event_queue.put({

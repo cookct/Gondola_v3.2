@@ -4,6 +4,7 @@ Web Operations - Search and fetch web content
 
 import json
 import re
+import os
 from typing import List, Dict, Optional
 from urllib.parse import quote_plus, urlparse
 import httpx
@@ -16,91 +17,73 @@ class WebOpsMixin(Tools):
 
     def web_search(self, query: str, n_results: int = 5) -> Dict:
         """
-        Search the web for current information.
-        
-        Uses DuckDuckGo (no API key required) or falls back to other search engines.
-        
-        Args:
-            query: Search query
-            n_results: Number of results to return (default 5)
-            
-        Returns:
-            {"success": True, "results": [...]} or {"success": False, "error": str}
+        Search the web for current information using Google with Bing fallback.
         """
         self.next_step(f"Searching web for: {query[:50]}...")
         
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
+        }
+
+        # Try Google First
         try:
-            # Try DuckDuckGo HTML scraping (no API key needed)
-            ddg_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
-            
-            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-                response = client.get(
-                    ddg_url,
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    }
-                )
-                
-                if response.status_code != 200:
-                    return {"success": False, "error": f"Search failed: HTTP {response.status_code}"}
-                
-                html = response.text
-                
-                # Parse results
-                results = []
-                
-                # DuckDuckGo result pattern
-                result_pattern = r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
-                snippet_pattern = r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>'
-                
-                urls = re.findall(result_pattern, html, re.DOTALL | re.IGNORECASE)
-                snippets = re.findall(snippet_pattern, html, re.DOTALL | re.IGNORECASE)
-                
-                for i, (url, title) in enumerate(urls[:n_results]):
-                    if url.startswith('//'):
-                        url = 'https:' + url
-                    elif url.startswith('/'):
-                        continue  # Skip internal links
+            google_url = f"https://www.google.com/search?q={quote_plus(query)}&num={n_results + 3}"
+            with httpx.Client(timeout=20.0, follow_redirects=True, headers=headers) as client:
+                resp = client.get(google_url)
+                if resp.status_code == 200:
+                    html = resp.text
+                    results = []
+                    # Google search result pattern
+                    matches = re.findall(r'<div class="g">.*?<a href="([^"]+)"[^>]*>.*?<h3[^>]*>(.*?)</h3>.*?<div[^>]*class="VwiC3b[^"]*"[^>]*>(.*?)</div>', html, re.DOTALL)
                     
-                    # Clean up title
-                    title = re.sub(r'<[^>]+>', '', title)
-                    title = title.strip()
+                    for url, title, snippet in matches[:n_results]:
+                        if url.startswith('/url?q='):
+                            url = url.split('/url?q=')[1].split('&')[0]
+                        
+                        results.append({
+                            "title": re.sub(r'<[^>]+>', '', title).strip(),
+                            "url": url,
+                            "snippet": re.sub(r'<[^>]+>', '', snippet).strip()
+                        })
                     
-                    snippet = ""
-                    if i < len(snippets):
-                        snippet = re.sub(r'<[^>]+>', '', snippets[i])
-                        snippet = snippet.strip()
-                    
-                    results.append({
-                        "title": title,
-                        "url": url,
-                        "snippet": snippet
-                    })
-                
-                if not results:
-                    # Try alternative parsing
-                    alt_pattern = r'<h[^>]*class="result__title"[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
-                    alt_matches = re.findall(alt_pattern, html, re.DOTALL | re.IGNORECASE)
-                    
-                    for url, title in alt_matches[:n_results]:
-                        if url.startswith('http'):
-                            title = re.sub(r'<[^>]+>', '', title)
-                            results.append({
-                                "title": title.strip(),
-                                "url": url,
-                                "snippet": ""
-                            })
-                
-                UI.step_done(f"Found {len(results)} results")
-                return {
-                    "success": True,
-                    "query": query,
-                    "results": results,
-                    "count": len(results)
-                }
-                
+                    if results:
+                        UI.step_done(f"Found {len(results)} results via Google")
+                        return {"success": True, "query": query, "results": results, "count": len(results)}
+
         except Exception as e:
-            return {"success": False, "error": f"Search failed: {str(e)}"}
+            UI.step_detail(f"Google search failed: {str(e)}. Trying fallback...")
+
+        # Fallback to Bing
+        try:
+            bing_url = f"https://www.bing.com/search?q={quote_plus(query)}"
+            with httpx.Client(timeout=20.0, follow_redirects=True, headers=headers) as client:
+                resp = client.get(bing_url)
+                if resp.status_code == 200:
+                    html = resp.text
+                    results = []
+                    # Bing result pattern
+                    matches = re.findall(r'<li class="b_algo">.*?<h2><a href="([^"]+)"[^>]*>(.*?)</a></h2>.*?<div class="b_caption">.*?<p[^>]*>(.*?)</p>', html, re.DOTALL)
+                    
+                    for url, title, snippet in matches[:n_results]:
+                        results.append({
+                            "title": re.sub(r'<[^>]+>', '', title).strip(),
+                            "url": url,
+                            "snippet": re.sub(r'<[^>]+>', '', snippet).strip()
+                        })
+                    
+                    if results:
+                        UI.step_done(f"Found {len(results)} results via Bing")
+                        return {"success": True, "query": query, "results": results, "count": len(results)}
+
+        except Exception as e:
+            return {"success": False, "error": f"All search providers failed: {str(e)}"}
+
+        return {"success": False, "error": "No results found from any provider"}
 
     def fetch_url(self, url: str, max_length: int = 10000) -> Dict:
         """
@@ -374,3 +357,249 @@ class WebOpsMixin(Tools):
                 
         except Exception as e:
             return {"success": False, "error": f"Search failed: {str(e)}"}
+
+    def download_placeholder_image(self, keyword: str = None, width: int = 800, height: int = 600, 
+                                    service: str = "picsum", filename: str = None, 
+                                    grayscale: bool = False, blur: int = 0) -> Dict:
+        """
+        Download a placeholder image for web design from free placeholder services.
+        
+        Supported services:
+        - picsum: Random photos from Unsplash (default)
+        - placehold: Solid color with text overlay
+        - via: Random images with custom text
+        
+        Args:
+            keyword: Optional keyword for image selection (picsum only, affects seed)
+            width: Image width in pixels (default 800)
+            height: Image height in pixels (default 600)
+            service: Placeholder service - 'picsum', 'placehold', or 'via' (default 'picsum')
+            filename: Output filename (default: 'placeholder_{width}x{height}.jpg')
+            grayscale: Convert to grayscale (picsum only)
+            blur: Blur amount 1-10 (picsum only)
+            
+        Returns:
+            {"success": True, "filename": str, "url": str, "size": int} or {"success": False, "error": str}
+        """
+        self.next_step(f"Downloading placeholder image ({width}x{height})")
+        
+        try:
+            # Validate dimensions
+            if not (1 <= width <= 4000) or not (1 <= height <= 4000):
+                return {"success": False, "error": "Width and height must be between 1 and 4000"}
+            
+            # Build URL based on service
+            if service == "picsum":
+                # Lorem Picsum - random photos
+                seed = keyword or "random"
+                url = f"https://picsum.photos/seed/{seed}/{width}/{height}"
+                if grayscale:
+                    url += "?grayscale"
+                if blur > 0 and blur <= 10:
+                    separator = "&" if grayscale else "?"
+                    url += f"{separator}blur={blur}"
+                ext = "jpg"
+                
+            elif service == "placehold":
+                # Placehold.co - solid color with text
+                text = keyword or f"{width}x{height}"
+                url = f"https://placehold.co/{width}x{height}?text={quote_plus(text)}"
+                ext = "png"
+                
+            elif service == "via":
+                # Via.placeholder - custom text
+                text = keyword or "Placeholder"
+                url = f"https://via.placeholder.com/{width}x{height}?text={quote_plus(text)}"
+                ext = "png"
+                
+            else:
+                return {"success": False, "error": f"Unknown service: {service}. Use 'picsum', 'placehold', or 'via'"}
+            
+            # Determine output filename
+            if not filename:
+                filename = f"placeholder_{width}x{height}.{ext}"
+            
+            # Ensure filename is within workspace
+            output_path = self.workspace._resolve(filename)
+            
+            # Download image
+            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+                response = client.get(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; Gondola/2.0)"
+                    }
+                )
+                
+                if response.status_code != 200:
+                    return {"success": False, "error": f"Download failed: HTTP {response.status_code}"}
+                
+                # Save to file
+                with open(output_path, 'wb') as f:
+                    f.write(response.content)
+                
+                file_size = len(response.content)
+                
+                UI.step_detail(f"Saved: {filename}")
+                UI.step_detail(f"Size: {file_size:,} bytes")
+                UI.step_detail(f"URL: {url}")
+                UI.step_done("Image downloaded")
+                
+                return {
+                    "success": True,
+                    "filename": filename,
+                    "path": output_path,
+                    "url": url,
+                    "size": file_size,
+                    "width": width,
+                    "height": height,
+                    "service": service
+                }
+                
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": f"Download failed: {str(e)}"}
+
+    def download_image(self, url: str, filename: str = None) -> Dict:
+        """
+        Smart download: works with direct image URLs or webpage URLs (hunts for the main image).
+        """
+        self.next_step(f"Processing image request: {url[:60]}...")
+        
+        try:
+            # Validate URL
+            parsed = urlparse(url)
+            if not parsed.scheme or not parsed.netloc:
+                return {"success": False, "error": "Invalid URL"}
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": f"{parsed.scheme}://{parsed.netloc}/"
+            }
+
+            target_url = url
+            is_direct = any(url.lower().split('?')[0].endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'])
+
+            if not is_direct:
+                UI.step_detail("URL looks like a webpage. Hunting for main image...")
+                with httpx.Client(timeout=20.0, follow_redirects=True, headers=headers) as client:
+                    resp = client.get(url)
+                    if resp.status_code == 200:
+                        html = resp.text
+                        
+                        # 1. Look for OpenGraph image
+                        og_match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+                        if not og_match:
+                            og_match = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html, re.IGNORECASE)
+                        
+                        # 2. Look for Twitter image
+                        if not og_match:
+                            og_match = re.search(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+
+                        # 3. Look for large images in <img> tags (heuristic)
+                        if not og_match:
+                            img_matches = re.findall(r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp))["\']', html, re.IGNORECASE)
+                            if img_matches:
+                                # Prioritize images with 'hero', 'main', or 'product' in name
+                                for img in img_matches:
+                                    if any(word in img.lower() for word in ['hero', 'main', 'product', 'full']):
+                                        target_url = img
+                                        break
+                                if target_url == url: target_url = img_matches[0]
+
+                        if og_match:
+                            found_url = og_match.group(1)
+                            if found_url.startswith('//'): found_url = 'https:' + found_url
+                            elif found_url.startswith('/'): found_url = f"{parsed.scheme}://{parsed.netloc}{found_url}"
+                            target_url = found_url
+                            UI.step_detail(f"Found 'hero' image: {target_url[:60]}...")
+
+            # Final download logic
+            with httpx.Client(timeout=60.0, follow_redirects=True, headers=headers) as client:
+                response = client.get(target_url)
+                
+                if response.status_code != 200:
+                    return {"success": False, "error": f"Download failed: HTTP {response.status_code}"}
+                
+                # Check content type
+                content_type = response.headers.get('content-type', '')
+                if 'image' not in content_type:
+                    # Some sites serve images with generic octet-stream
+                    if 'application/octet-stream' not in content_type:
+                        return {"success": False, "error": f"Resulting URL is not an image (Content-Type: {content_type})"}
+
+                # Determine filename
+                if not filename:
+                    filename = os.path.basename(urlparse(target_url).path)
+                    if not filename or '.' not in filename:
+                        filename = "downloaded_photo.jpg"
+                
+                output_path = self.workspace._resolve(filename)
+                with open(output_path, 'wb') as f:
+                    f.write(response.content)
+                
+                UI.step_done(f"Saved: {filename} ({len(response.content):,} bytes)")
+                
+                return {
+                    "success": True,
+                    "filename": filename,
+                    "path": str(output_path),
+                    "source_url": target_url,
+                    "size": len(response.content)
+                }
+                
+        except Exception as e:
+            UI.step_error(str(e))
+            return {"success": False, "error": str(e)}
+
+    def image_search(self, query: str, n_results: int = 10) -> Dict:
+        """
+        Search for images using Bing Images (easier to scrape direct links).
+        """
+        self.next_step(f"Hunting for images: {query[:50]}...")
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Referer": "https://www.bing.com/"
+        }
+
+        try:
+            url = f"https://www.bing.com/images/search?q={quote_plus(query)}&first=1"
+            with httpx.Client(timeout=30.0, follow_redirects=True, headers=headers) as client:
+                resp = client.get(url)
+                if resp.status_code != 200:
+                    return {"success": False, "error": f"Image search failed: HTTP {resp.status_code}"}
+                
+                html = resp.text
+                images = []
+                matches = re.findall(r'm="([^"]+)"', html)
+                
+                for m_json in matches:
+                    try:
+                        data_str = m_json.replace('&quot;', '"')
+                        data = json.loads(data_str)
+                        img_url = data.get('murl')
+                        
+                        if img_url and img_url not in [i['url'] for i in images]:
+                            images.append({
+                                "title": data.get('t', 'Image'),
+                                "url": img_url,
+                                "type": "direct",
+                                "thumbnail": data.get('turl')
+                            })
+                            if len(images) >= n_results:
+                                break
+                    except:
+                        continue
+
+                if not images:
+                    return self.web_search(f"{query} image direct link", n_results=n_results)
+
+                UI.step_done(f"Found {len(images)} direct image links")
+                return {"success": True, "query": query, "images": images}
+                
+        except Exception as e:
+            return {"success": False, "error": f"Image search failed: {str(e)}"}

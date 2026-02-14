@@ -357,43 +357,6 @@ class CodeOpsMixin(Tools):
             UI.step_error(str(e))
             return {"success": False, "error": str(e)}
 
-    def write_constant(self, filename, variable_name, value):
-        """Robustly write a string constant to a file, handling all escaping automatically.
-        
-        NOTE: This creates a Python variable assignment like: MY_VAR = "value"
-        Do NOT use this for writing executable scripts - use write_file instead.
-        """
-        self.next_step(f"Writing constant '{variable_name}' to {filename}")
-        try:
-            # Warn if this looks like executable code (common misuse)
-            if isinstance(value, str):
-                code_indicators = ['def ', 'class ', 'import ', 'from ', 'if __name__']
-                if any(indicator in value for indicator in code_indicators):
-                    UI.step_detail(f"{Colors.YELLOW}⚠ WARNING: Value looks like executable code.{Colors.RESET}")
-                    UI.step_detail(f"{Colors.YELLOW}  Use write_file for scripts, not write_constant.{Colors.RESET}")
-            
-            # Format as a valid Python assignment using repr() for perfect escaping
-            if isinstance(value, str) and '\n' in value:
-                # For multiline strings, use triple quotes but ESCAPE any existing triple quotes
-                safe_value = value.replace('"""', '\\"\\"\\"')
-                content = f'{variable_name} = """{safe_value}"""'
-            else:
-                content = f'{variable_name} = {repr(value)}'
-
-            result = self.write_file(filename, content)
-            
-            # Add clarification to the result
-            if result.get("success"):
-                result["note"] = f"Created Python variable assignment: {variable_name} = <your_string>"
-                result["usage"] = f"Import with: from {os.path.splitext(filename)[0]} import {variable_name}"
-            
-            return result
-        
-        except Exception as e:
-            UI.step_error(str(e))
-            return {"success": False, "error": str(e)}
-
-    def undo_edit(self, filename):
         """Restore the most recent backup of a file"""
         self.next_step(f"Undoing last edit to {filename}")
 

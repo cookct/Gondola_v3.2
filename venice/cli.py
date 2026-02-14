@@ -231,9 +231,14 @@ def main():
 
     # Switch to vision model if not already
     if MODELS[current_model]['type'] != 'vision':
-     old_model = current_model
-     current_model = "claude-opus-45"
-     UI.info(f"Switched to {MODELS[current_model]['name']} for image analysis")
+     # Find first available vision model
+     vision_model = next((m_id for m_id, m_cfg in MODELS.items() if m_cfg.get('type') == 'vision'), None)
+     if vision_model:
+      current_model = vision_model
+      UI.info(f"Switched to {MODELS[current_model]['name']} for image analysis")
+     else:
+      UI.error("No vision-capable models found in configuration")
+      continue
 
     # Read and encode image
     import base64

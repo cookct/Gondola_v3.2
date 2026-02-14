@@ -175,7 +175,8 @@ def _parse_python_style_call(response_content):
                    'remember', 'recall', 'forget', 'write_constant', 'replace_lines',
                    'insert_at_line', 'delete_lines', 'append_to_file', 'list_backups',
                    'restore_backup', 'undo_edit', 'set_preference', 'semantic_search',
-                   'get_skeleton', 'symbol_jump', 'inspect_type']
+                   'get_skeleton', 'symbol_jump', 'inspect_type', 'web_search', 'fetch_url',
+                   'search_docs', 'search_stackoverflow', 'search_github', 'download_placeholder_image', 'download_image', 'image_search']
 
     for match in re.finditer(func_pattern, response_content):
         func_name = match.group(1)
@@ -449,6 +450,23 @@ def execute_tool(tools: CombinedTools, tool_call: dict):
             args.get("max_length", 10000)
         ),
         # --- Previously missing tools ---
+        "image_search": lambda: tools.image_search(
+            args.get("query"),
+            args.get("n_results", 10)
+        ),
+        "download_placeholder_image": lambda: tools.download_placeholder_image(
+            args.get("keyword"),
+            args.get("width", 800),
+            args.get("height", 600),
+            args.get("service", "picsum"),
+            args.get("filename"),
+            args.get("grayscale", False),
+            args.get("blur", 0)
+        ),
+        "download_image": lambda: tools.download_image(
+            args.get("url"),
+            args.get("filename")
+        ),
         "append_to_file": lambda: tools.append_to_file(
             args.get("filename"),
             args.get("content")

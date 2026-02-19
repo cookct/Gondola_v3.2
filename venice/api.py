@@ -16,6 +16,78 @@ from venice.tools.schema import TOOL_SCHEMAS
 # Get logger from parent module
 logger = logging.getLogger('gondola.api')
 
+# Build a lookup of tool schemas for validation
+_TOOL_SCHEMA_MAP = {}
+for schema in TOOL_SCHEMAS:
+    if schema.get("type") == "function":
+        func = schema.get("function", {})
+        name = func.get("name")
+        if name:
+            _TOOL_SCHEMA_MAP[name] = func
+
+
+def validate_tool_args(tool_name: str, args: dict) -> dict:
+    """
+    Validate tool arguments against schema before execution.
+    Returns None if valid, or error dict if invalid.
+
+    This catches malformed args from cheap models BEFORE they cause crashes.
+    """
+    schema = _TOOL_SCHEMA_MAP.get(tool_name)
+    if not schema:
+        return None  # Unknown tool - let execute_tool handle it
+
+    params = schema.get("parameters", {})
+    properties = params.get("properties", {})
+    required = params.get("required", [])
+
+    errors = []
+
+    # Check required arguments
+    for req_arg in required:
+        if req_arg not in args or args[req_arg] is None:
+            errors.append(f"Missing required argument: '{req_arg}'")
+
+    # Check argument types
+    for arg_name, arg_value in args.items():
+        if arg_name in ["tool", "name"]:  # Skip meta fields
+            continue
+        if arg_name not in properties:
+            continue  # Unknown arg, might be okay
+
+        expected_type = properties[arg_name].get("type")
+        if expected_type and arg_value is not None:
+            if expected_type == "string" and not isinstance(arg_value, str):
+                # Try to coerce to string
+                args[arg_name] = str(arg_value)
+            elif expected_type == "integer" and not isinstance(arg_value, int):
+                try:
+                    args[arg_name] = int(arg_value)
+                except (ValueError, TypeError):
+                    errors.append(f"Argument '{arg_name}' must be an integer, got: {type(arg_value).__name__}")
+            elif expected_type == "boolean" and not isinstance(arg_value, bool):
+                # Coerce common boolean strings
+                if isinstance(arg_value, str):
+                    args[arg_name] = arg_value.lower() in ("true", "yes", "1")
+                else:
+                    args[arg_name] = bool(arg_value)
+            elif expected_type == "array" and not isinstance(arg_value, list):
+                if isinstance(arg_value, str):
+                    # Try to parse as JSON array
+                    try:
+                        args[arg_name] = json.loads(arg_value)
+                    except:
+                        # Treat as single-item array
+                        args[arg_name] = [arg_value]
+
+    if errors:
+        return {
+            "success": False,
+            "error": f"Invalid arguments for '{tool_name}': {'; '.join(errors)}. Check the tool schema and provide all required arguments with correct types."
+        }
+
+    return None  # Valid
+
 
 def _get_key_from_config(key_name, env_var_name):
     """
@@ -339,7 +411,7 @@ def execute_tool(tools: CombinedTools, tool_call: dict):
             logger.debug(f"Tool '{name}' - parsed arguments from function object")
         except Exception as e:
             logger.error(f"Tool '{name}' - failed to parse JSON arguments: {e}")
-            return {"success": False, "error": "Invalid JSON in tool arguments"}
+            return {"success": False, "error": f"Invalid JSON in tool arguments: {e}. Check that all strings are properly quoted and all braces are balanced."}
     else:
         name = tool_call.get("tool") or tool_call.get("name")
         args = tool_call
@@ -348,6 +420,12 @@ def execute_tool(tools: CombinedTools, tool_call: dict):
     if not name:
         logger.error("No tool name specified in tool_call")
         return {"success": False, "error": "No tool name specified"}
+
+    # PRE-VALIDATION: Catch bad args before execution (helps cheap models)
+    validation_error = validate_tool_args(name, args)
+    if validation_error:
+        logger.warning(f"Tool '{name}' failed validation: {validation_error['error']}")
+        return validation_error
 
     logger.info(f"execute_tool: {name}")
     logger.debug(f"Tool args: {json.dumps({k: v for k, v in args.items() if k not in ['content', 'old_text', 'new_text']})[:500]}")

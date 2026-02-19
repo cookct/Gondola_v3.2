@@ -44,6 +44,7 @@ class ContextManager:
     - Compress large tool results
     - Implement sliding window for long conversations
     - Inject project context efficiently
+    - Track truncation so model knows what was cut
     """
     model_config: ModelConfig
     project_context: str = ""  # Cached project index overview
@@ -56,6 +57,28 @@ class ContextManager:
     MAX_TOOL_RESULT_CHARS: int = 3000
     MAX_FILE_CONTENT_CHARS: int = 5000
     KEEP_RECENT_MESSAGES: int = 4  # Keep last N messages in full
+
+    # TRUNCATION AWARENESS: Track what was cut so model knows
+    truncation_notices: List[str] = field(default_factory=list)
+
+    def clear_truncation_notices(self):
+        """Clear truncation notices at start of new turn."""
+        self.truncation_notices = []
+
+    def add_truncation_notice(self, notice: str):
+        """Add a truncation notice."""
+        if notice not in self.truncation_notices:
+            self.truncation_notices.append(notice)
+
+    def get_truncation_warning(self) -> Optional[str]:
+        """Get a warning message about truncated content, or None if nothing was truncated."""
+        if not self.truncation_notices:
+            return None
+        return (
+            "⚠️ CONTEXT NOTICE: The following content was truncated to fit token limits. "
+            "Do NOT reference content that may have been cut:\n• " +
+            "\n• ".join(self.truncation_notices)
+        )
 
     def estimate_tokens(self, text: str) -> int:
         """Rough token estimate (4 chars = 1 token on average)."""
@@ -90,14 +113,15 @@ class ContextManager:
             return self._compress_file_content(result)
         elif tool_name == 'list_files':
             return self._compress_file_list(result)
-        elif tool_name == 'search_content':
+        elif tool_name in ('search_content', 'search_file_content'):
             return self._compress_search_results(result)
         elif tool_name == 'run_command':
             return self._compress_command_output(result)
         elif tool_name == 'map_project':
             return self._compress_project_map(result)
         else:
-            # Generic truncation
+            # Generic truncation with awareness
+            self.add_truncation_notice(f"Tool '{tool_name}': result truncated from {len(result_str)} to {self.MAX_TOOL_RESULT_CHARS} chars")
             return result_str[:self.MAX_TOOL_RESULT_CHARS] + "\n... (truncated)"
 
     def _compress_file_content(self, result: Any) -> str:
@@ -119,9 +143,13 @@ class ContextManager:
         if total_lines > 80:
             head = '\n'.join(lines[:50])
             tail = '\n'.join(lines[-30:])
-            return f"{head}\n\n... [{total_lines - 80} lines omitted from middle] ...\n\n{tail}"
+            omitted = total_lines - 80
+            # TRUNCATION AWARENESS: Track what was cut
+            self.add_truncation_notice(f"File '{filename}': lines 51-{total_lines - 30} were omitted ({omitted} lines)")
+            return f"{head}\n\n... [{omitted} lines omitted from middle - lines 51 to {total_lines - 30}] ...\n\n{tail}"
 
         # Simple truncation for other cases
+        self.add_truncation_notice(f"File '{filename}': content truncated to {self.MAX_FILE_CONTENT_CHARS} chars")
         return content[:self.MAX_FILE_CONTENT_CHARS] + f"\n... (truncated, {total_lines} total lines)"
 
     def _compress_file_list(self, result: Any) -> str:
@@ -136,6 +164,9 @@ class ContextManager:
         if len(files) <= 50:
             return json.dumps({'files': files, 'count': len(files)}, indent=2)
 
+        # TRUNCATION AWARENESS
+        self.add_truncation_notice(f"File listing: summarized {len(files)} files (showing directory groups)")
+
         # Group by directory and summarize
         by_dir: Dict[str, List[str]] = {}
         for f in files:
@@ -149,7 +180,7 @@ class ContextManager:
                 by_dir[dir_name] = []
             by_dir[dir_name].append(file_name)
 
-        summary_lines = [f"Found {len(files)} files:\n"]
+        summary_lines = [f"Found {len(files)} files (summarized - use pattern filter for specific files):\n"]
         for dir_name in sorted(by_dir.keys())[:20]:
             dir_files = by_dir[dir_name]
             if len(dir_files) > 5:
@@ -167,19 +198,25 @@ class ContextManager:
         """Compress search results - keep top matches, summarize rest."""
         if isinstance(result, dict):
             matches = result.get('matches', [])
+            pattern = result.get('pattern', 'search')
         elif isinstance(result, list):
             matches = result
+            pattern = 'search'
         else:
             return str(result)[:self.MAX_TOOL_RESULT_CHARS]
 
         if len(matches) <= 10:
             return json.dumps(result, indent=2)
 
+        # TRUNCATION AWARENESS: Track what was cut
+        self.add_truncation_notice(f"Search results: showing 10 of {len(matches)} matches")
+
         # Keep first 10 matches in full
         summary = {
             'matches': matches[:10],
             'total_matches': len(matches),
             'showing': 10,
+            'note': f'Showing top 10 of {len(matches)} matches. Use more specific search if needed.',
             'additional_files': list(set(m.get('file', m) if isinstance(m, dict) else str(m)
                                          for m in matches[10:]))[:20]
         }
@@ -191,10 +228,12 @@ class ContextManager:
             output = result.get('output', '') or result.get('stdout', '')
             stderr = result.get('stderr', '')
             exit_code = result.get('exit_code', result.get('returncode', 0))
+            command = result.get('command', 'command')
         else:
             output = str(result)
             stderr = ''
             exit_code = 0
+            command = 'command'
 
         # Always keep stderr in full (usually contains errors)
         if stderr:
@@ -202,10 +241,14 @@ class ContextManager:
         else:
             stderr_section = ""
 
+        original_len = len(output)
         # Truncate stdout if very long
         if len(output) > self.MAX_TOOL_RESULT_CHARS - len(stderr_section):
-            output = output[:self.MAX_TOOL_RESULT_CHARS - len(stderr_section) - 100]
+            truncate_at = self.MAX_TOOL_RESULT_CHARS - len(stderr_section) - 100
+            output = output[:truncate_at]
             output += "\n... (output truncated)"
+            # TRUNCATION AWARENESS
+            self.add_truncation_notice(f"Command output: truncated from {original_len} to {truncate_at} chars")
 
         return f"Exit code: {exit_code}\n{output}{stderr_section}"
 

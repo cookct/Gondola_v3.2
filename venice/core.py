@@ -2,8 +2,13 @@
 Core foundations for Venice CLI: Colors, UI, and Model definitions
 """
 import os
+import sys
 import threading
 import difflib
+import logging
+
+# Fallback logger for when UI printer fails
+_ui_fallback_logger = logging.getLogger('venice.ui')
 
 # Available models with capability flags for agent behavior
 # Function calling config options:
@@ -169,17 +174,27 @@ class UI:
 
     @classmethod
     def print(cls, *args, **kwargs):
-        """Thread-safe print that prevents race conditions in output"""
+        """Thread-safe print with graceful fallback for non-CLI environments"""
         sep = kwargs.get('sep', ' ')
         end = kwargs.get('end', '\n')
         text = sep.join(str(arg) for arg in args) + end
-        
-        # FIXED: Hold lock during both printer retrieval AND call
-        # This prevents race condition where printer could be changed
-        # between reading _printer and calling it
-        with cls._printer_lock:
-            printer = cls._printer
-            printer(text)
+
+        # Strip ANSI codes for plain text fallback
+        import re
+        plain_text = re.sub(r'\x1b\[[0-9;]*m', '', text)
+
+        try:
+            with cls._printer_lock:
+                printer = cls._printer
+                printer(text)
+        except Exception:
+            # Fallback: write to stderr without ANSI codes
+            try:
+                sys.stderr.write(plain_text)
+                sys.stderr.flush()
+            except Exception:
+                # Last resort: log it
+                _ui_fallback_logger.debug(plain_text.strip())
 
     TOP_LEFT = "┌"
     TOP_RIGHT = "┐"

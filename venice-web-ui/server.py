@@ -200,12 +200,9 @@ def initialize(clear_messages=False):
         memory = Memory(workspace.root_dir, conversation_dir=sandbox_dir)
         logger.debug(f"Memory initialized, root: {workspace.root_dir}, conversation_dir: {sandbox_dir}")
 
-        tools = CombinedTools(workspace, memory)
-        logger.debug("Tools initialized")
-
         interrupt_flag.clear()
 
-        # NEW: Build project index for smart context
+        # Build project index BEFORE tools (tools depend on it)
         logger.info("Building project index...")
         index_start = time.time()
         project_index = ProjectIndex(WORKSPACE_DIR)
@@ -213,9 +210,13 @@ def initialize(clear_messages=False):
         index_time = time.time() - index_start
         logger.info(f"Project index built: {project_index.file_count()} files in {index_time:.2f}s")
 
-        # NEW: Initialize agent state tracker
+        # Initialize agent state BEFORE tools (tools depend on it)
         agent_state = AgentState()
         logger.debug("Agent state tracker initialized")
+
+        # NOW initialize tools with all dependencies
+        tools = CombinedTools(workspace, memory, project_index=project_index, agent_state=agent_state)
+        logger.debug("Tools initialized with project_index and agent_state")
 
         # NEW: Initialize persistence manager
         persistence = PersistenceManager(project_root=workspace.root_dir)
@@ -1149,6 +1150,17 @@ def chat():
                 agent_state.model_id = model_id
                 agent_state.max_turns = MAX_AGENT_TURNS
 
+                # SET EXPLORATION BUDGET: Tighter for cheap models, looser for premium
+                if "claude" in model_id.lower():
+                    agent_state.set_exploration_budget(15)  # Claude is disciplined
+                elif "kimi" in model_id.lower() or "k2" in model_id.lower():
+                    agent_state.set_exploration_budget(8)   # Kimi is capable but needs guardrails
+                elif "gpt" in model_id.lower():
+                    agent_state.set_exploration_budget(12)  # GPT is pretty good
+                else:
+                    agent_state.set_exploration_budget(6)   # Other models need tight control
+                logger.debug(f"[{request_id}] Exploration budget set to {agent_state.exploration_budget} for model {model_id}")
+
                 # Track consecutive empty responses for nudge injection
                 consecutive_empty_responses = 0
                 MAX_EMPTY_RESPONSES = 3  # Give up after 3 nudges
@@ -1253,8 +1265,10 @@ def chat():
 
                         # NEW: Rebuild system prompt dynamically with project context
                         if project_index and agent_state:
-                            # Only include full project context for the first few turns to save tokens
-                            include_full_context = (agent_turns < 3)
+                            # CACHE FIX: Keep project context throughout session for prompt caching
+                            # Changing context mid-session invalidates cache, causing higher costs
+                            # See CACHE_FIX_APPLIED.md for details
+                            include_full_context = True
                             project_context = context_manager.project_context if (context_manager and include_full_context) else None
                             
                             files_read = agent_state.get_files_read_list()
@@ -1269,6 +1283,16 @@ def chat():
                                 planning_mode=planning_mode,
                                 memory_context=memory_context
                             )
+
+                            # TRUNCATION AWARENESS: Add warning about truncated content
+                            if context_manager:
+                                truncation_warning = context_manager.get_truncation_warning()
+                                if truncation_warning:
+                                    dynamic_prompt += f"\n\n{truncation_warning}"
+                                    logger.debug(f"[{request_id}] Injected truncation warning into system prompt")
+                                # Clear for next turn
+                                context_manager.clear_truncation_notices()
+
                             # Update system message in messages list
                             if messages and messages[0].get('role') == 'system':
                                 messages[0]['content'] = dynamic_prompt
@@ -1433,6 +1457,7 @@ def chat():
                                         chunk_count = 0
                                         total_content_chars = 0
                                         first_chunk_time = None
+                                        api_usage = None  # Will capture usage info for cache detection
 
                                         for chunk in response.iter_text():
                                             chunk_count += 1
@@ -1504,6 +1529,10 @@ def chat():
                                                                             tool_calls_buffer[idx]["name"] += tc['function']['name']
                                                                         if tc['function'].get('arguments'):
                                                                             tool_calls_buffer[idx]["arguments"] += tc['function']['arguments']
+
+                                                        # CACHE DETECTION: Extract usage info (includes cache stats)
+                                                        if 'usage' in data_obj:
+                                                            api_usage = data_obj['usage']
                                                     except: continue
 
                                         # Log stream completion
@@ -1516,6 +1545,27 @@ def chat():
                                         if tool_calls_buffer:
                                             for idx, tc in tool_calls_buffer.items():
                                                 logger.info(f"[{request_id}]     [{idx}] {tc['name']} (args: {len(tc['arguments'])} chars)")
+
+                                        # PROMPT CACHE LOGGING: Check for cache hits/writes
+                                        if api_usage:
+                                            prompt_tokens = api_usage.get('prompt_tokens', 0)
+                                            completion_tokens = api_usage.get('completion_tokens', 0)
+                                            cache_read = api_usage.get('cache_read_input_tokens', 0)
+                                            cache_write = api_usage.get('cache_creation_input_tokens', 0)
+
+                                            logger.info(f"[{request_id}] 📊 API USAGE:")
+                                            logger.info(f"[{request_id}]   Prompt tokens: {prompt_tokens:,}")
+                                            logger.info(f"[{request_id}]   Completion tokens: {completion_tokens:,}")
+
+                                            if cache_read > 0:
+                                                savings = (cache_read / 1_000_000) * 2.70  # ~90% savings at $3/M
+                                                logger.info(f"[{request_id}]   🟢 CACHE HIT: {cache_read:,} tokens read from cache (saved ~${savings:.4f})")
+                                                event_queue.put({"type": "cache", "data": {"hit": cache_read, "savings": savings}})
+                                            if cache_write > 0:
+                                                logger.info(f"[{request_id}]   🔵 CACHE WRITE: {cache_write:,} tokens written to cache")
+                                                event_queue.put({"type": "cache", "data": {"write": cache_write}})
+                                            if cache_read == 0 and cache_write == 0 and prompt_tokens > 10000:
+                                                logger.warning(f"[{request_id}]   ⚠️ NO CACHE: {prompt_tokens:,} prompt tokens without caching")
 
                                         # OPTIMIZATION: Mark API call as successful to exit retry loop
                                         api_success = True
@@ -1707,6 +1757,18 @@ def chat():
                     consecutive_empty_responses = 0
                     tool_choice_override = None  # Reset to auto after successful response
 
+                    # REASONING ENFORCEMENT: Track if model is explaining itself
+                    had_text = bool(response_content and len(response_content.strip()) > 10)
+                    had_tools = len(native_tool_calls) > 0
+                    agent_state.record_response_quality(had_text, had_tools)
+
+                    # Check for silent tool calls warning
+                    reasoning_warning = agent_state.get_reasoning_warning()
+                    if reasoning_warning:
+                        logger.warning(f"[{request_id}] {reasoning_warning}")
+                        # Inject as a user message to encourage explanation
+                        messages.append({"role": "user", "content": reasoning_warning})
+
                     # Execute tools
                     logger.info(f"[{request_id}] Executing {len(native_tool_calls)} tool call(s)")
                     for tc in native_tool_calls:
@@ -1796,6 +1858,17 @@ def chat():
                             tool_warning = agent_state.record_tool_call(tool_name, args_dict, result)
                             if tool_warning:
                                 logger.warning(f"[{request_id}] │  {tool_warning}")
+
+                            # EXPLORATION BUDGET: Track exploration actions
+                            exploration_warning = agent_state.record_exploration_action(tool_name)
+                            if exploration_warning:
+                                logger.warning(f"[{request_id}] │  {exploration_warning}")
+                                # Inject warning into result so model sees it
+                                if isinstance(result, dict):
+                                    result['_exploration_warning'] = exploration_warning
+
+                            # PRODUCTIVE ACTION: Reset exploration pressure after writes
+                            agent_state.record_productive_action(tool_name)
 
                             # NEW: Track file reads and populate cache
                             if tool_name == 'read_file' and isinstance(result, dict) and result.get('success'):
@@ -2085,9 +2158,15 @@ def forget():
         global messages
         initialize(clear_messages=True)
         
-        return jsonify({"success": True, "message": "Memory and conversation cleared."})
+        # Force refresh the session history display
+        return jsonify({
+            "success": True, 
+            "message": "Memory and conversation cleared.",
+            "sessions": []  # Return empty sessions to update UI immediately
+        })
     except Exception as e:
         logger.error(f"Forget error: {e}")
+        return jsonify({"success": False, "error": str(e)})
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':

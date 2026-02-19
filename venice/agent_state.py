@@ -79,6 +79,15 @@ class AgentState:
     staged_changes: Dict[str, str] = field(default_factory=dict)  # filepath -> new_content
     transaction_active: bool = False
 
+    # EXPLORATION BUDGET: Limit exploration for cheap models
+    exploration_budget: int = 8  # Max exploration actions before requiring action/done
+    exploration_count: int = 0   # Current exploration action count
+    last_productive_turn: int = 0  # Last turn where a write/edit/done occurred
+
+    # REASONING ENFORCEMENT: Track if model is explaining itself
+    last_response_had_text: bool = False  # Did last response include explanation text?
+    silent_tool_calls: int = 0  # Consecutive tool calls without explanation
+
     def start_transaction(self):
         """Start a new multi-file transaction."""
         self.staged_changes.clear()
@@ -433,3 +442,115 @@ class AgentState:
         self.task_phase = "exploring"
         self.done_called = False
         self.session_start = time.time()
+        self.exploration_count = 0
+        self.last_productive_turn = 0
+        self.silent_tool_calls = 0
+        self.last_response_had_text = False
+
+    # ============================================================================
+    # EXPLORATION BUDGET ENFORCEMENT
+    # ============================================================================
+
+    def set_exploration_budget(self, budget: int):
+        """Set exploration budget based on model capability."""
+        self.exploration_budget = budget
+
+    def record_exploration_action(self, tool_name: str) -> Optional[str]:
+        """
+        Record an exploration action (read, search, list).
+        Returns warning if budget exceeded.
+        """
+        exploration_tools = {'read_file', 'list_files', 'search_content', 'search_file_content',
+                            'map_project', 'get_skeleton', 'get_file_info', 'symbol_jump'}
+
+        if tool_name in exploration_tools:
+            self.exploration_count += 1
+
+            if self.exploration_count > self.exploration_budget:
+                over_budget = self.exploration_count - self.exploration_budget
+                return (
+                    f"⚠️ EXPLORATION BUDGET EXCEEDED: You've used {self.exploration_count} exploration actions "
+                    f"(budget: {self.exploration_budget}). You are {over_budget} over budget. "
+                    f"STOP exploring and either: (1) Make your changes, or (2) Call done() with your answer. "
+                    f"Do NOT call more read/search/list tools."
+                )
+            elif self.exploration_count == self.exploration_budget:
+                return (
+                    f"⚠️ EXPLORATION BUDGET REACHED: You've used all {self.exploration_budget} exploration actions. "
+                    f"Your next action MUST be a write, edit, or done() call."
+                )
+
+        return None
+
+    def record_productive_action(self, tool_name: str):
+        """Record a productive action (write, edit, done) - resets exploration pressure."""
+        productive_tools = {'write_file', 'edit_file', 'replace_lines', 'insert_at_line',
+                           'delete_lines', 'append_to_file', 'done'}
+
+        if tool_name in productive_tools:
+            self.last_productive_turn = self.turn_count
+            # Give back some exploration budget after being productive
+            self.exploration_count = max(0, self.exploration_count - 3)
+
+    def get_exploration_status(self) -> Dict[str, Any]:
+        """Get exploration budget status."""
+        return {
+            'budget': self.exploration_budget,
+            'used': self.exploration_count,
+            'remaining': max(0, self.exploration_budget - self.exploration_count),
+            'over_budget': self.exploration_count > self.exploration_budget,
+            'turns_since_productive': self.turn_count - self.last_productive_turn
+        }
+
+    # ============================================================================
+    # REASONING ENFORCEMENT
+    # ============================================================================
+
+    def record_response_quality(self, had_text: bool, had_tool_calls: bool):
+        """
+        Track whether the model is explaining itself.
+        Returns warning if model is being too silent.
+        """
+        self.last_response_had_text = had_text
+
+        if had_tool_calls and not had_text:
+            self.silent_tool_calls += 1
+        else:
+            self.silent_tool_calls = 0
+
+    def get_reasoning_warning(self) -> Optional[str]:
+        """Get warning if model is making silent tool calls."""
+        if self.silent_tool_calls >= 2:
+            return (
+                "⚠️ SILENT OPERATION WARNING: You've made tool calls without explaining your reasoning. "
+                "Before your next tool call, briefly explain what you're doing and why. "
+                "Example: 'I'll check the config file to find the database settings.' then call the tool."
+            )
+        return None
+
+    def check_reasoning_before_action(self, response_text: str, tool_name: str) -> Optional[str]:
+        """
+        Check if model explained reasoning before calling a tool.
+        For cheap models, enforce "think before act" pattern.
+        """
+        # Skip enforcement for Claude models (they're good at this)
+        if "claude" in self.model_id.lower():
+            return None
+
+        # Skip for simple/quick tools
+        quick_tools = {'done', 'get_file_info'}
+        if tool_name in quick_tools:
+            return None
+
+        # Check if response had substantive text before tool call
+        # Strip whitespace and check for meaningful content
+        text = response_text.strip() if response_text else ""
+
+        # Require at least some explanation (10+ chars of actual text)
+        if len(text) < 10:
+            return (
+                f"💭 THINK FIRST: Before calling `{tool_name}`, briefly explain your intent. "
+                f"Example: 'I need to find the configuration settings, so I'll search for config files.'"
+            )
+
+        return None

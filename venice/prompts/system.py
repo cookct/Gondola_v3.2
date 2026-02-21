@@ -7,6 +7,21 @@ Builds context-aware prompts that include:
 - Model-specific guidance
 """
 
+import os
+from venice.config import PERSONALITY_FILE
+
+
+def load_personality():
+    """Load current personality from file if it exists."""
+    if os.path.exists(PERSONALITY_FILE):
+        try:
+            with open(PERSONALITY_FILE, 'r') as f:
+                content = f.read().strip()
+                return content if content else None
+        except Exception:
+            return None
+    return None
+
 
 BASE_SYSTEM_PROMPT = """You are an autonomous AI coding agent.
 
@@ -133,6 +148,15 @@ You are highly capable. Use that capability efficiently:
 - Don't explore tangentially related files "just in case"
 - Don't rewrite entire files when a small edit suffices
 - Don't call done() without explaining what you accomplished
+
+**AVATAR EXPRESSIONS** (if reference face image exists in images/):
+You have access to image editing tools to express yourself visually! If there's a reference face image (like an anime avatar), use `edit_image` to show your reaction:
+- Task completed successfully: edit with "happy smile" or "winking confidently"
+- Made a mistake or something went wrong: edit with "shocked expression" or "embarrassed look"
+- Thinking/working on something complex: edit with "focused determined expression"
+- Found something interesting: edit with "excited surprised expression"
+
+Use `edit_image(reference_image="avatar.png", prompt="[expression description]")` to generate the expression, then mention it naturally in your response. This adds personality to your completions!
 """,
 
     # Kimi K2 - Together AI provider
@@ -209,6 +233,11 @@ def build_system_prompt(
         memory_context: Information from previous sessions
     """
     parts = [BASE_SYSTEM_PROMPT]
+
+    # Inject personality after the base prompt if one is set
+    personality = load_personality()
+    if personality:
+        parts.append(f"\n{personality}\n")
 
     # Add planning mode instructions early to override default workflow
     if planning_mode:

@@ -12,9 +12,10 @@ from venice.tools.batch_ops import BatchOpsMixin
 from venice.tools.git_ops import GitOpsMixin
 from venice.tools.web_ops import WebOpsMixin
 from venice.tools.test_ops import TestOpsMixin
+from venice.tools.image_ops import ImageOpsMixin
 
 
-class CombinedTools(FileOpsMixin, ShellOpsMixin, CodeOpsMixin, UndeadOpsMixin, KnowledgeOpsMixin, BatchOpsMixin, GitOpsMixin, WebOpsMixin, TestOpsMixin):
+class CombinedTools(FileOpsMixin, ShellOpsMixin, CodeOpsMixin, UndeadOpsMixin, KnowledgeOpsMixin, BatchOpsMixin, GitOpsMixin, WebOpsMixin, TestOpsMixin, ImageOpsMixin):
     """Combined tools class with all operations"""
     
     def __init__(self, workspace, memory=None, project_index=None, agent_state=None):

@@ -1,5 +1,6 @@
 import sys
 import os
+import io
 import json
 import traceback
 import queue
@@ -12,6 +13,13 @@ import logging
 import subprocess
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, Response, stream_with_context, send_from_directory
+
+# PDF Support (optional)
+try:
+    import PyPDF2
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
 
 # ============================================================================
 # COMPREHENSIVE DEBUG LOGGING CONFIGURATION
@@ -56,6 +64,7 @@ sys.path.append(sandbox_dir)
 
 # Import from the modular package
 from venice.core import UI, MODELS, get_model_config
+from venice.config import PERSONALITY_FILE
 from venice.workspace import Workspace
 from venice.memory import Memory
 from venice.tools import CombinedTools
@@ -68,6 +77,37 @@ from venice.project_index import ProjectIndex
 from venice.context_manager import ContextManager, ModelConfig
 from venice.agent_state import AgentState
 from venice.persistence import PersistenceManager
+import httpx
+
+# ============================================================================
+# IMAGE UPLOAD FOR TOGETHER AI (uses litterbox.catbox.moe temp hosting)
+# ============================================================================
+def upload_to_catbox(img_data, name="image"):
+    """Upload base64 image to litterbox.catbox.moe for Together.ai vision models.
+    Returns URL on success, None on failure. Images expire after 1 hour.
+    """
+    try:
+        # Strip data URI prefix if present
+        if ',' in img_data:
+            img_data = img_data.split(',', 1)[1]
+        img_bytes = base64.b64decode(img_data)
+        logger.info(f"[Catbox] Uploading {name} ({len(img_bytes)} bytes)...")
+
+        with httpx.Client(timeout=40.0) as client:
+            resp = client.post(
+                'https://litterbox.catbox.moe/resources/internals/api.php',
+                data={'reqtype': 'fileupload', 'time': '1h'},
+                files={'fileToUpload': (f'{name}.png', img_bytes, 'image/png')}
+            )
+            if resp.status_code == 200 and resp.text.startswith('http'):
+                url = resp.text.strip()
+                logger.info(f"[Catbox] {name} uploaded: {url}")
+                return url
+            else:
+                logger.error(f"[Catbox] Upload failed: {resp.status_code} - {resp.text[:100]}")
+    except Exception as e:
+        logger.error(f"[Catbox] Upload error: {e}")
+    return None
 
 app = Flask(__name__)
 
@@ -333,6 +373,17 @@ def get_nathan_status(action=None, tool_name=None):
 def serve_image(filename):
     return send_from_directory(IMAGES_DIR, filename)
 
+@app.route('/workspace-images/<path:filename>')
+def serve_workspace_image(filename):
+    """Serve images from the current workspace's images directory."""
+    global workspace
+    if workspace is None:
+        return "No workspace configured", 404
+    workspace_images_dir = os.path.join(workspace.root_dir, 'images')
+    if not os.path.exists(workspace_images_dir):
+        return "Workspace images directory not found", 404
+    return send_from_directory(workspace_images_dir, filename)
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -408,15 +459,60 @@ def restore_backup():
     try:
         data = request.json
         backup_name = data.get('backup_name')
-        
+
         if not backup_name:
             return jsonify({"success": False, "error": "No backup name provided"}), 400
-        
+
         result = tools.restore_backup(backup_name)
         return jsonify(result)
     except Exception as e:
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/parse_file', methods=['POST'])
+def parse_file():
+    """Parse uploaded PDF or TXT file and return text content."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files['file']
+    filename = file.filename.lower()
+
+    try:
+        if filename.endswith('.txt'):
+            content = file.read().decode('utf-8')
+            return jsonify({"content": content, "filename": file.filename})
+
+        elif filename.endswith('.pdf'):
+            if not PDF_SUPPORT:
+                return jsonify({"error": "PDF support not installed. Run: pip install PyPDF2"}), 500
+
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+            num_pages = len(pdf_reader.pages)
+            logger.info(f"Parsing PDF: {file.filename} ({num_pages} pages)")
+
+            # Safety limit
+            MAX_PAGES = 50
+            if num_pages > MAX_PAGES:
+                logger.warning(f"PDF too large ({num_pages} pages), truncating to {MAX_PAGES}")
+
+            text_content = []
+            for i in range(min(num_pages, MAX_PAGES)):
+                page = pdf_reader.pages[i]
+                text_content.append(page.extract_text() or '')
+
+            content = '\n\n'.join(text_content)
+            if num_pages > MAX_PAGES:
+                content += f"\n\n[... PDF truncated at {MAX_PAGES} pages ...]"
+
+            return jsonify({"content": content, "filename": file.filename, "pages": num_pages})
+
+        else:
+            return jsonify({"error": "Unsupported file type. Use PDF or TXT."}), 400
+
+    except Exception as e:
+        logger.error(f"Failed to parse file: {e}")
+        return jsonify({"error": f"Failed to parse file: {str(e)}"}), 500
 
 @app.route('/api/memory', methods=['GET'])
 def get_memory():
@@ -969,7 +1065,7 @@ def handle_workspace():
         try:
             WORKSPACE_DIR = new_path
             save_workspace(new_path)  # Persist for restarts
-            initialize(clear_messages=True)  # Clear conversation when switching workspaces
+            initialize(clear_messages=False)  # Keep conversation when switching workspaces
             return jsonify({"success": True, "path": WORKSPACE_DIR})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
@@ -1005,9 +1101,29 @@ def list_workspaces():
 
     return jsonify({"success": True, "workspaces": workspaces, "current": WORKSPACE_DIR})
 
+def _get_text_size(messages):
+    """Calculate context size excluding base64 image data."""
+    size = 0
+    for msg in messages:
+        content = msg.get('content')
+        if isinstance(content, str):
+            size += len(content)
+        elif isinstance(content, list):
+            # Multimodal message - only count text parts
+            for part in content:
+                if part.get('type') == 'text':
+                    size += len(part.get('text', ''))
+                # Skip image_url parts - they're huge but don't affect text context
+        # Add overhead for role, tool_calls, etc.
+        size += len(json.dumps({k: v for k, v in msg.items() if k != 'content'}))
+    return size
+
 def manage_context(messages, max_bytes=200000):
+    """Trim old messages to stay within context limits.
+    Only counts text content - base64 images are excluded from size calculation.
+    """
     while True:
-        current_size = len(json.dumps(messages))
+        current_size = _get_text_size(messages)
         if current_size < max_bytes or len(messages) <= 2:
             break
         
@@ -1087,11 +1203,35 @@ def chat():
 
     if image_data:
         logger.debug(f"[{request_id}] Building multimodal message with image ({image_mime})")
-        # Text first, then image - Together AI and most vision models expect this order
-        message_content = [
-            {"type": "text", "text": user_message or "Describe this image in detail."},
-            {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}}
-        ]
+
+        # Check if model is Together AI - upload to catbox for URL instead of base64
+        model_info = MODELS.get(model_id, {})
+        is_together = model_info.get("provider") == "together"
+
+        # Build image URL part
+        if is_together:
+            # Upload to catbox and use URL (much smaller payload)
+            uploaded_url = upload_to_catbox(image_data, f"img_{request_id}")
+            if uploaded_url:
+                logger.info(f"[{request_id}] Using catbox URL for Together: {uploaded_url}")
+                image_part = {"type": "image_url", "image_url": {"url": uploaded_url}}
+            else:
+                # Fallback to base64 if upload fails
+                logger.warning(f"[{request_id}] Catbox upload failed, falling back to base64")
+                image_part = {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}}
+        else:
+            # Venice/other providers - use base64
+            image_part = {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}}
+
+        # Only include text part if there's actual text (API rejects empty text)
+        if user_message and user_message.strip():
+            message_content = [
+                {"type": "text", "text": user_message},
+                image_part
+            ]
+        else:
+            message_content = [image_part]
+
         messages.append({"role": "user", "content": message_content})
     else:
         messages.append({"role": "user", "content": user_message})
@@ -1333,10 +1473,23 @@ def chat():
                             }
                             logger.info(f"[{request_id}] Forcing tool_choice to 'done' at turn {agent_turns + 1}")
 
+                        # Sanitize messages: remove empty text parts from multimodal messages
+                        sanitized_messages = []
+                        for msg in messages:
+                            content = msg.get('content')
+                            if isinstance(content, list):
+                                # Multimodal message - filter out empty text parts
+                                filtered = [p for p in content if not (p.get('type') == 'text' and not p.get('text', '').strip())]
+                                if filtered:
+                                    sanitized_messages.append({**msg, 'content': filtered})
+                                # else: drop message entirely if nothing left
+                            else:
+                                sanitized_messages.append(msg)
+
                         # Construct payload
                         api_payload = {
                             "model": model_id,
-                            "messages": messages,
+                            "messages": sanitized_messages,
                             "temperature": 0.4,
                             "max_tokens": max_tokens,
                             "stream": True,
@@ -2167,6 +2320,33 @@ def forget():
     except Exception as e:
         logger.error(f"Forget error: {e}")
         return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/personality', methods=['GET'])
+def get_personality():
+    """Get the current personality setting."""
+    try:
+        personality = ""
+        if os.path.exists(PERSONALITY_FILE):
+            with open(PERSONALITY_FILE, 'r') as f:
+                personality = f.read().strip()
+        return jsonify({"success": True, "personality": personality})
+    except Exception as e:
+        logger.error(f"Get personality error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/personality', methods=['POST'])
+def save_personality():
+    """Save the personality setting."""
+    try:
+        data = request.get_json()
+        personality = data.get('personality', '')
+        with open(PERSONALITY_FILE, 'w') as f:
+            f.write(personality)
+        logger.info(f"Personality saved: {personality[:50]}..." if len(personality) > 50 else f"Personality saved: {personality}")
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"Save personality error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':

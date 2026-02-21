@@ -899,5 +899,38 @@ TOOL_SCHEMAS = [
                 "required": ["filename"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image",
+            "description": "Generate an AI image using Venice qwen-image model. The image will be saved to the workspace images directory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Text description of the image to generate"},
+                    "filename": {"type": "string", "description": "Output filename (auto-generated if not provided)"},
+                    "width": {"type": "integer", "description": "Image width in pixels (default 1024)"},
+                    "height": {"type": "integer", "description": "Image height in pixels (default 1024)"}
+                },
+                "required": ["prompt"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_image",
+            "description": "Edit/transform an existing image using Venice qwen-edit model with a text prompt. Use a previously generated image as reference.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reference_image": {"type": "string", "description": "Path to the reference image file (can be just filename if in images directory)"},
+                    "prompt": {"type": "string", "description": "Text description of the desired transformation"},
+                    "filename": {"type": "string", "description": "Output filename (auto-generated if not provided)"}
+                },
+                "required": ["reference_image", "prompt"]
+            }
+        }
     }
 ]

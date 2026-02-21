@@ -142,6 +142,11 @@ def get_together_api_key():
     return _get_key_from_config("together_api_key", "TOGETHER_API_KEY")
 
 
+def get_brave_api_key():
+    """Retrieve the Brave Search API key from environment or config files."""
+    return _get_key_from_config("brave_api_key", "BRAVE_API_KEY")
+
+
 def _clean_and_parse_json(json_str):
     if json_str.startswith("```json"):
         json_str = json_str[7:]
@@ -645,6 +650,18 @@ def execute_tool(tools: CombinedTools, tool_call: dict):
         "get_file_info": lambda: tools.get_file_info(args.get("filename")),
         "delete_file": lambda: tools.delete_file(args.get("filename")),
         "make_directory": lambda: tools.make_directory(args.get("path")),
+        # --- Image generation tools ---
+        "generate_image": lambda: tools.generate_image(
+            args.get("prompt"),
+            args.get("filename"),
+            args.get("width", 1024),
+            args.get("height", 1024)
+        ),
+        "edit_image": lambda: tools.edit_image(
+            args.get("reference_image"),
+            args.get("prompt"),
+            args.get("filename")
+        ),
     }
 
     if name not in tool_map:

@@ -64,11 +64,24 @@ class FileOpsMixin(Tools):
         """Read file contents"""
         self.next_step(f"Reading {filename}")
 
+        # Binary file extensions that shouldn't be read as text
+        BINARY_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico',
+                            '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
+                            '.exe', '.dll', '.so', '.dylib', '.bin',
+                            '.mp3', '.mp4', '.wav', '.avi', '.mov', '.mkv',
+                            '.woff', '.woff2', '.ttf', '.otf', '.eot'}
+
         try:
             path = self.workspace._resolve(filename)
             if not os.path.exists(path):
                 UI.step_error(f"File not found: {filename}")
                 return {"success": False, "error": f"File '{filename}' does not exist"}
+
+            # Check for binary file extension
+            _, ext = os.path.splitext(filename.lower())
+            if ext in BINARY_EXTENSIONS:
+                UI.step_error(f"Binary file: {filename}")
+                return {"success": False, "error": f"'{filename}' is a binary file and cannot be read as text. Use appropriate tools (e.g., edit_image for images)."}
 
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
@@ -106,8 +119,14 @@ class FileOpsMixin(Tools):
         try:
             path = self.workspace._resolve(filename)
             if not os.path.exists(path):
-                UI.step_error(f"File not found: {filename}")
-                return {"success": False, "error": f"File '{filename}' does not exist"}
+                # Check gondola images directory for image files
+                gondola_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                gondola_path = os.path.join(gondola_root, "images", filename)
+                if os.path.exists(gondola_path):
+                    path = gondola_path
+                else:
+                    UI.step_error(f"File not found: {filename}")
+                    return {"success": False, "error": f"File '{filename}' does not exist"}
 
             stat = os.stat(path)
             info = {

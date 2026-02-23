@@ -34,6 +34,8 @@ class Memory:
             "session_history": [],  # Summary of past sessions
             "key_files": [],  # Files frequently worked on
             "user_preferences": {},  # Learned preferences
+            "last_balance_vcu": 0.0,  # Venice credit balance
+            "last_balance_usd": 0.0,  # USD balance
         }
 
     def save(self):
@@ -110,6 +112,9 @@ class Memory:
     def clear_notes(self):
         """Clear all project notes"""
         self.data["project_notes"] = []
+        # Also clear key files and user preferences for complete reset
+        self.data["key_files"] = []
+        self.data["user_preferences"] = {}
         self.save()
 
     def save_conversation(self, messages):
@@ -155,3 +160,7 @@ class Memory:
                 os.remove(self.conversation_file)
             except (IOError, OSError):
                 pass  # File may not exist or be locked, that's ok
+        
+        # Also clear session history to prevent stale conversations from appearing
+        self.data["session_history"] = []
+        self.save()

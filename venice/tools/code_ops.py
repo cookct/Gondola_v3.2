@@ -377,11 +377,19 @@ class CodeOpsMixin(Tools):
 
     def semantic_search(self, query, max_results=5):
         """Search the project using vector similarity for conceptual matches. Returns file paths and line hints."""
-        self.next_step(f"Semantic search: {query}")
+        # self.next_step(f"Semantic search: {query}")  # Skip UI dependency for standalone use
         
+        # Create project index on-demand if not available
         if not self.project_index:
-            UI.step_error("Project index not available")
-            return {"success": False, "error": "Project index not available"}
+            try:
+                from venice.project_index import ProjectIndex
+                workspace_path = self.workspace.root_dir if hasattr(self.workspace, 'root_dir') else str(self.workspace)
+                self.project_index = ProjectIndex(workspace_path)
+                self.project_index.build()
+                # UI.step_info(f"Built project index with {self.project_index.file_count()} files")
+            except Exception as e:
+                # UI.step_error(f"Failed to build project index: {e}")
+                return {"success": False, "error": f"Project index not available: {e}"}
         
         try:
             results = self.project_index.semantic_search(query, max_results=max_results)

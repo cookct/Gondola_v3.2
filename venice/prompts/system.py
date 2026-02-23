@@ -8,7 +8,7 @@ Builds context-aware prompts that include:
 """
 
 import os
-from venice.config import PERSONALITY_FILE
+from venice.config import PERSONALITY_FILE, AVATAR_EXPRESSIONS_FILE, EDIT_MODEL_FILE
 
 
 def load_personality():
@@ -21,6 +21,52 @@ def load_personality():
         except Exception:
             return None
     return None
+
+
+def is_avatar_expressions_enabled():
+    """Check if avatar expressions feature is enabled."""
+    if os.path.exists(AVATAR_EXPRESSIONS_FILE):
+        try:
+            with open(AVATAR_EXPRESSIONS_FILE, 'r') as f:
+                return f.read().strip().lower() == 'true'
+        except Exception:
+            return False
+    return False
+
+
+def set_avatar_expressions_enabled(enabled: bool):
+    """Enable or disable avatar expressions feature."""
+    try:
+        with open(AVATAR_EXPRESSIONS_FILE, 'w') as f:
+            f.write('true' if enabled else 'false')
+        return True
+    except Exception:
+        return False
+
+
+def get_edit_model():
+    """Get the current image edit model. Defaults to qwen-edit."""
+    if os.path.exists(EDIT_MODEL_FILE):
+        try:
+            with open(EDIT_MODEL_FILE, 'r') as f:
+                model = f.read().strip()
+                if model in ('qwen-edit', 'seedream-v4-edit'):
+                    return model
+        except Exception:
+            pass
+    return 'qwen-edit'
+
+
+def set_edit_model(model: str):
+    """Set the image edit model."""
+    if model not in ('qwen-edit', 'seedream-v4-edit'):
+        return False
+    try:
+        with open(EDIT_MODEL_FILE, 'w') as f:
+            f.write(model)
+        return True
+    except Exception:
+        return False
 
 
 BASE_SYSTEM_PROMPT = """You are an autonomous AI coding agent.
@@ -148,15 +194,6 @@ You are highly capable. Use that capability efficiently:
 - Don't explore tangentially related files "just in case"
 - Don't rewrite entire files when a small edit suffices
 - Don't call done() without explaining what you accomplished
-
-**AVATAR EXPRESSIONS** (if reference face image exists in images/):
-You have access to image editing tools to express yourself visually! If there's a reference face image (like an anime avatar), use `edit_image` to show your reaction:
-- Task completed successfully: edit with "happy smile" or "winking confidently"
-- Made a mistake or something went wrong: edit with "shocked expression" or "embarrassed look"
-- Thinking/working on something complex: edit with "focused determined expression"
-- Found something interesting: edit with "excited surprised expression"
-
-Use `edit_image(reference_image="avatar.png", prompt="[expression description]")` to generate the expression, then mention it naturally in your response. This adds personality to your completions!
 """,
 
     # Kimi K2 - Together AI provider
@@ -209,6 +246,24 @@ PLANNING_MODE_PROMPT = """
 """
 
 
+AVATAR_EXPRESSIONS_PROMPT = """
+## AVATAR EXPRESSIONS
+
+You have an avatar face image (avatar.png). Use edit_image to change YOUR expression.
+
+The avatar already exists - you are editing YOUR OWN FACE to show a different expression.
+Do NOT describe a character. Do NOT describe appearance. Just describe the expression change.
+
+Examples:
+- `edit_image(prompt="smiling happily")`
+- `edit_image(prompt="shocked and surprised")`
+- `edit_image(prompt="winking playfully")`
+- `edit_image(prompt="looking embarrassed")`
+
+This edits your existing avatar face to show that expression. Use it to react to events.
+"""
+
+
 def build_system_prompt(
     model_id: str = None,
     project_context: str = None,
@@ -257,6 +312,10 @@ def build_system_prompt(
     # Add model-specific guidance
     if model_id and model_id in MODEL_SPECIFIC_GUIDANCE:
         parts.append(MODEL_SPECIFIC_GUIDANCE[model_id])
+
+    # Add avatar expressions prompt if enabled
+    if is_avatar_expressions_enabled():
+        parts.append(AVATAR_EXPRESSIONS_PROMPT)
 
     # Add project context if available
     if project_context:

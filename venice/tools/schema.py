@@ -921,15 +921,13 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "edit_image",
-            "description": "Edit/transform an existing image using Venice qwen-edit model with a text prompt. Use a previously generated image as reference.",
+            "description": "Generate an expression image. Just provide a prompt like 'happy smile' or 'shocked expression'. Uses avatar.png automatically.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "reference_image": {"type": "string", "description": "Path to the reference image file (can be just filename if in images directory)"},
-                    "prompt": {"type": "string", "description": "Text description of the desired transformation"},
-                    "filename": {"type": "string", "description": "Output filename (auto-generated if not provided)"}
+                    "prompt": {"type": "string", "description": "Expression description (e.g. 'happy smile', 'winking', 'shocked')"}
                 },
-                "required": ["reference_image", "prompt"]
+                "required": ["prompt"]
             }
         }
     }

@@ -1,11 +1,61 @@
+// Global function to make an image the avatar
+async function makeAvatar(imgSrc) {
+    if (!confirm('Set this image as your avatar?')) return;
+
+    try {
+        // Fetch the image and convert to base64
+        let imageB64;
+        if (imgSrc.startsWith('data:')) {
+            imageB64 = imgSrc.split(',')[1];
+        } else {
+            const response = await fetch(imgSrc);
+            const blob = await response.blob();
+            imageB64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        const res = await fetch('/api/make-avatar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: imageB64 })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            alert('Avatar saved!');
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Failed to save avatar: ' + e.message);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Configure marked to make expression images clickable for lightbox
+    const renderer = new marked.Renderer();
+    const originalImage = renderer.image.bind(renderer);
+    renderer.image = function(href, title, text) {
+        if (href && (href.includes('/workspace-expressions/') || href.includes('/workspace-images/'))) {
+            return `<div class="image-with-avatar-btn">
+                <img src="${href}" alt="${text || ''}" class="expression-image" style="max-width: 400px; max-height: 400px; border-radius: 12px; cursor: pointer;" onclick="document.getElementById('lightbox-img').src='${href}'; document.getElementById('image-lightbox').classList.add('active'); document.body.style.overflow='hidden';">
+                <button class="make-avatar-btn" onclick="makeAvatar('${href}')">Make Avatar</button>
+            </div>`;
+        }
+        return originalImage(href, title, text);
+    };
+    marked.setOptions({ renderer });
+
     const chatHistory = document.getElementById('chat-history');
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
     const clearBtn = document.getElementById('clear-chat');
     const stopBtn = document.getElementById('stop-btn');
     const agentStatus = document.getElementById('agent-status');
-    
+
     // Model select
     const modelSelect = document.getElementById('model-select');
     const planningBtn = document.getElementById('planning-mode-btn');
@@ -25,6 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Global State
     let currentImageData = null;
     let currentImageMime = null;
+    let currentDocContext = null;  // For PDF/TXT content
+    let currentDocName = null;
     let conversationHistory = [];
     let pendingContent = '';
     let currentContentDiv = null;
@@ -50,6 +102,127 @@ document.addEventListener('DOMContentLoaded', () => {
     let sessionTokensOut = 0;
     let currentTurn = 0;
     let maxTurns = 50;
+
+    // Lightbox state
+    const lightbox = {
+        el: null,
+        img: null,
+        isZoomed: false,
+        isDragging: false,
+        wasDragged: false,
+        posX: 0,
+        posY: 0,
+        startX: 0,
+        startY: 0,
+        scale: 1,
+        baseScale: 2.5,
+        dragThreshold: 5,
+
+        init() {
+            this.el = document.getElementById('image-lightbox');
+            this.img = document.getElementById('lightbox-img');
+            if (!this.el || !this.img) return;
+
+            // Close button
+            this.el.querySelector('.lightbox-close')?.addEventListener('click', () => this.close());
+
+            // Overlay click to close
+            this.el.querySelector('.lightbox-overlay')?.addEventListener('click', () => {
+                if (this.scale <= 1) this.close();
+            });
+
+            // Wheel zoom
+            this.el.addEventListener('wheel', (e) => {
+                if (!this.el.classList.contains('active')) return;
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                const newScale = Math.max(1, Math.min(5, this.scale * delta));
+                if (newScale === this.scale) return;
+                this.scale = newScale;
+                if (this.scale > 1) {
+                    this.img.classList.add('zoomed');
+                } else {
+                    this.img.classList.remove('zoomed');
+                    this.posX = 0;
+                    this.posY = 0;
+                }
+                this.img.style.transition = 'transform 0.1s ease-out';
+                this.img.style.transform = `translate(${this.posX}px, ${this.posY}px) scale(${this.scale})`;
+            }, { passive: false });
+
+            // Image click to toggle zoom
+            this.img.addEventListener('click', (e) => {
+                if (this.wasDragged) { this.wasDragged = false; return; }
+                e.stopPropagation();
+                if (this.scale > 1) {
+                    this.resetZoom();
+                } else {
+                    this.scale = this.baseScale;
+                    this.img.classList.add('zoomed');
+                    this.img.style.transition = 'transform 0.3s ease';
+                    this.img.style.transform = `scale(${this.scale})`;
+                }
+            });
+
+            // Drag
+            this.el.addEventListener('mousedown', (e) => {
+                if (this.scale <= 1) return;
+                this.isDragging = true;
+                this.wasDragged = false;
+                this.startX = e.clientX - this.posX;
+                this.startY = e.clientY - this.posY;
+                this.img.classList.add('dragging');
+                this.img.style.transition = 'none';
+                e.preventDefault();
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!this.isDragging || this.scale <= 1) return;
+                this.posX = e.clientX - this.startX;
+                this.posY = e.clientY - this.startY;
+                this.img.style.transform = `translate(${this.posX}px, ${this.posY}px) scale(${this.scale})`;
+                this.wasDragged = true;
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (this.isDragging) {
+                    this.isDragging = false;
+                    this.img.classList.remove('dragging');
+                }
+            });
+
+            // Escape to close
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && this.el.classList.contains('active')) this.close();
+            });
+        },
+
+        open(src) {
+            if (!this.el) this.init();
+            this.img.src = src;
+            this.el.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            this.resetZoom();
+        },
+
+        close() {
+            this.el.classList.remove('active');
+            document.body.style.overflow = '';
+            this.resetZoom();
+        },
+
+        resetZoom() {
+            this.scale = 1;
+            this.posX = 0;
+            this.posY = 0;
+            this.img.classList.remove('zoomed', 'dragging');
+            this.img.style.transition = 'none';
+            this.img.style.transform = 'translate(0px, 0px) scale(1)';
+        }
+    };
+
+    // Initialize lightbox
+    lightbox.init();
 
     // Block creation functions for unified chat stream
     function createTurnContainer() {
@@ -326,7 +499,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     await handleSummarize();
                     return;
                 }
-                userInput.value = btn.dataset.prompt;
+                if (text === 'Compact') {
+                    await handleCompact();
+                    return;
+                }
+                if (text === 'Personality' || btn.id === 'personality-btn') {
+                    // This is handled by a separate listener at the bottom
+                    return;
+                }
+                
+                const prompt = btn.dataset.prompt;
+                if (!prompt) return;
+                
+                userInput.value = prompt;
                 sendMessage();
             });
         });
@@ -888,25 +1073,84 @@ async function handleSummarize() {
     }
 }
 
+async function handleCompact() {
+    if (!conversationHistory || conversationHistory.length === 0) {
+        alert('No conversation to compact');
+        return;
+    }
+
+    try {
+        const compactBtn = document.getElementById('compact-btn');
+        compactBtn.innerHTML = '<span class="macro-icon">⏳</span><span class="macro-text">Compacting...</span>';
+        compactBtn.disabled = true;
+
+        const res = await fetch('/api/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                history: conversationHistory,
+                keep_last_messages: 2
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            conversationHistory = data.new_history;
+            await displayConversationHistory();
+            updateContextPulse(conversationHistory);
+            addSystemMessage('Context compacted. Keeping last 2 messages + summary.');
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Failed to compact: ' + e.message);
+    } finally {
+        const compactBtn = document.getElementById('compact-btn');
+        compactBtn.innerHTML = '<span class="macro-icon">📦</span><span class="macro-text">Compact</span>';
+        compactBtn.disabled = false;
+    }
+}
+
 async function sendMessage() {
         const text = userInput.value.trim();
-        if (!text && !currentImageData) return;
+        if (!text && !currentImageData && !currentDocContext) return;
+
+        // Build the message - prepend document context if present
+        let fullMessage = text;
+        if (currentDocContext) {
+            const docHeader = `[ATTACHED FILE: ${currentDocName}]\n\`\`\`\n${currentDocContext}\n\`\`\`\n\n`;
+            fullMessage = docHeader + (text || 'Please analyze this document.');
+        }
 
         if (currentImageData) {
             appendMessageWithImage('user', text, `data:${currentImageMime};base64,${currentImageData}`);
+        } else if (currentDocContext) {
+            appendMessage('user', `📄 [${currentDocName}] ${text || '(analyze document)'}`);
         } else {
             appendMessage('user', text);
         }
-        
+
         const payload = {
-            message: text || '',
+            message: fullMessage,
             image: currentImageData,
             image_mime: currentImageMime,
             model: modelSelect.value,
             planning_mode: planningBtn ? planningBtn.classList.contains('active') : false
         };
         
-        conversationHistory.push({ role: 'user', content: payload.message });
+        // Match server's message format - multimodal when image present
+        if (currentImageData) {
+            conversationHistory.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: payload.message || '' },
+                    { type: 'image_url', image_url: { url: `data:${currentImageMime};base64,${currentImageData}` } }
+                ]
+            });
+        } else {
+            conversationHistory.push({ role: 'user', content: payload.message });
+        }
         userInput.value = '';
         userInput.style.height = '44px';
         userInput.style.overflowY = 'hidden';
@@ -953,7 +1197,9 @@ async function sendMessage() {
                     if (event && data) {
                         try {
                             handleSSEEvent(event, JSON.parse(data));
-                        } catch (e) {}
+                        } catch (e) {
+                            console.error('SSE event error:', event, e);
+                        }
                     }
                 }
             }
@@ -982,6 +1228,7 @@ async function sendMessage() {
     }
 
     function handleSSEEvent(event, data) {
+        console.log('SSE event received:', event, typeof data === 'object' ? JSON.stringify(data).slice(0,100) : data);
         switch (event) {
             case 'metadata':
                 if (data.usd_balance !== undefined) updateBalanceDisplay(data.usd_balance);
@@ -1037,6 +1284,8 @@ async function sendMessage() {
                 break;
 
             case 'tool_done':
+                console.log('tool_done event:', data);
+                console.log('currentToolBlock:', currentToolBlock);
                 // Mark tool as complete
                 if (currentToolBlock) {
                     const success = data.success !== false;
@@ -1044,13 +1293,23 @@ async function sendMessage() {
                     currentToolBlock.classList.add(success ? 'success' : 'error');
                     const statusEl = currentToolBlock.querySelector('.tool-block-status');
                     statusEl.textContent = success ? '✓' : '✗ ' + (data.error || 'failed');
+
                     // Auto-collapse successful (unless auto-expand on), always expand errors
                     if (!success) {
                         currentToolBlock.classList.add('expanded');
-                    } else if (!autoExpandTools) {
+                    } else if (!autoExpandTools && !data.url) {
                         currentToolBlock.classList.remove('expanded');
                     }
                     currentToolBlock = null;
+                }
+                // Display expression image in chat if URL present
+                if (data.url && currentTurnContainer) {
+                    const imgDiv = document.createElement('div');
+                    imgDiv.className = 'expression-image-container image-with-avatar-btn';
+                    imgDiv.innerHTML = `<img src="${data.url}" class="expression-image" style="max-width: 350px; max-height: 350px; border-radius: 12px; cursor: pointer; margin: 10px 0;" onclick="document.getElementById('lightbox-img').src='${data.url}'; document.getElementById('image-lightbox').classList.add('active'); document.body.style.overflow='hidden';">
+                        <button class="make-avatar-btn" onclick="makeAvatar('${data.url}')">Make Avatar</button>`;
+                    currentTurnContainer.appendChild(imgDiv);
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
                 }
                 // Clear block tracking after tool completes
                 currentBlockType = null;
@@ -1251,12 +1510,32 @@ async function sendMessage() {
 
     function appendMessageWithImage(role, text, imageSrc) {
         const div = createMessageDiv(role);
+
+        // Container for image + button
+        const imgContainer = document.createElement('div');
+        imgContainer.className = 'image-with-avatar-btn';
+
         const img = document.createElement('img');
         img.src = imageSrc;
         img.className = 'chat-image';
-        div.appendChild(img);
+        img.style.cursor = 'pointer';
+        img.onclick = () => {
+            document.getElementById('lightbox-img').src = imageSrc;
+            document.getElementById('image-lightbox').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        };
+        imgContainer.appendChild(img);
+
+        // Make Avatar button
+        const avatarBtn = document.createElement('button');
+        avatarBtn.className = 'make-avatar-btn';
+        avatarBtn.textContent = 'Make Avatar';
+        avatarBtn.onclick = () => makeAvatar(imageSrc);
+        imgContainer.appendChild(avatarBtn);
+
+        div.appendChild(imgContainer);
+
         if (text) {
-            // Also markdown for image captions
             const textDiv = document.createElement('div');
             textDiv.innerHTML = marked.parse(text);
             div.appendChild(textDiv);
@@ -1351,18 +1630,70 @@ async function sendMessage() {
 
     function clearImageUpload() {
         currentImageData = null; currentImageMime = null;
+        currentDocContext = null; currentDocName = null;
         imageInput.value = ''; imagePreviewContainer.style.display = 'none';
+        imagePreview.style.display = 'block';
         document.getElementById('upload-btn').classList.remove('has-image');
     }
 
-    imageInput.addEventListener('change', (e) => {
+    imageInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
-        if (!file || !file.type.startsWith('image/')) return;
+        if (!file) return;
+
+        const ext = file.name.split('.').pop().toLowerCase();
+
+        // Handle PDF and TXT files - parse server-side
+        if (ext === 'pdf' || ext === 'txt') {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                imageName.textContent = `Parsing ${file.name}...`;
+                imagePreviewContainer.style.display = 'flex';
+                imagePreview.src = '';
+                imagePreview.style.display = 'none';
+
+                const response = await fetch('/api/parse_file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to parse file');
+                }
+
+                const result = await response.json();
+                currentDocContext = result.content;
+                currentDocName = file.name;
+                currentImageData = null;
+                currentImageMime = null;
+
+                imageName.textContent = `📄 ${file.name} (${result.content.length.toLocaleString()} chars)`;
+                document.getElementById('upload-btn').classList.add('has-image');
+                console.log(`[PDF/TXT] Loaded ${file.name}: ${result.content.length} chars`);
+
+            } catch (err) {
+                alert(`Error parsing file: ${err.message}`);
+                clearImageUpload();
+            }
+            return;
+        }
+
+        // Handle images - existing flow
+        if (!file.type.startsWith('image/')) {
+            alert('Unsupported file type. Use images, PDF, or TXT.');
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = (event) => {
             currentImageData = event.target.result.split(',')[1];
             currentImageMime = file.type;
+            currentDocContext = null;
+            currentDocName = null;
             imagePreview.src = event.target.result;
+            imagePreview.style.display = 'block';
             imageName.textContent = file.name;
             imagePreviewContainer.style.display = 'flex';
             document.getElementById('upload-btn').classList.add('has-image');
@@ -1778,5 +2109,167 @@ async function sendMessage() {
             statusEl.style.display = 'none';
         }, 3000);
     }
+
+    // ============================================
+    // PERSONALITY MODAL
+    // ============================================
+
+    const personalityModal = document.getElementById('personality-modal');
+    const personalityText = document.getElementById('personality-text');
+    const personalityBtn = document.getElementById('personality-btn');
+    const personalityCloseBtn = document.getElementById('personality-modal-close');
+    const personalityCancelBtn = document.getElementById('personality-modal-cancel');
+    const personalitySaveBtn = document.getElementById('personality-modal-save');
+
+    // Load personality from localStorage on init
+    let currentPersonality = localStorage.getItem('personality') || '';
+
+    function openPersonalityModal() {
+        personalityText.value = currentPersonality;
+        personalityModal.style.display = 'flex';
+        personalityText.focus();
+    }
+
+    function closePersonalityModal() {
+        personalityModal.style.display = 'none';
+    }
+
+    async function savePersonality() {
+        const text = personalityText.value.trim();
+        currentPersonality = text;
+        localStorage.setItem('personality', text);
+
+        // Also save to server for persistence across server restarts
+        try {
+            const res = await fetch('/api/personality', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({personality: text})
+            });
+            const data = await res.json();
+            if (data.success) {
+                showStatus('Personality saved', 'success');
+            } else {
+                showStatus('Saved locally only', 'error');
+            }
+        } catch (e) {
+            showStatus('Saved locally only', 'error');
+        }
+
+        closePersonalityModal();
+    }
+
+    // Modal event listeners
+    if (personalityBtn) {
+        personalityBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openPersonalityModal();
+        });
+    }
+    if (personalityCloseBtn) {
+        personalityCloseBtn.addEventListener('click', closePersonalityModal);
+    }
+    if (personalityCancelBtn) {
+        personalityCancelBtn.addEventListener('click', closePersonalityModal);
+    }
+    if (personalitySaveBtn) {
+        personalitySaveBtn.addEventListener('click', savePersonality);
+    }
+
+    // Close modal on backdrop click
+    if (personalityModal) {
+        personalityModal.addEventListener('click', (e) => {
+            if (e.target === personalityModal) {
+                closePersonalityModal();
+            }
+        });
+    }
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && personalityModal.style.display === 'flex') {
+            closePersonalityModal();
+        }
+    });
+
+    // Load personality from server on init (server is source of truth)
+    async function loadPersonalityFromServer() {
+        try {
+            const res = await fetch('/api/personality');
+            const data = await res.json();
+            if (data.success && data.personality !== undefined) {
+                currentPersonality = data.personality;
+                localStorage.setItem('personality', data.personality);
+            }
+        } catch (e) {
+            // Use localStorage value if server fails
+            console.log('Failed to load personality from server:', e);
+        }
+    }
+    loadPersonalityFromServer();
+
+    // Avatar Expressions Toggle
+    const avatarExpressionsToggle = document.getElementById('avatar-expressions-toggle');
+
+    async function loadAvatarExpressionsSetting() {
+        try {
+            const res = await fetch('/api/avatar-expressions');
+            const data = await res.json();
+            if (data.success && avatarExpressionsToggle) {
+                avatarExpressionsToggle.checked = data.enabled;
+            }
+        } catch (e) {
+            console.log('Failed to load avatar expressions setting:', e);
+        }
+    }
+
+    if (avatarExpressionsToggle) {
+        avatarExpressionsToggle.addEventListener('change', async () => {
+            try {
+                await fetch('/api/avatar-expressions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: avatarExpressionsToggle.checked })
+                });
+            } catch (e) {
+                console.log('Failed to save avatar expressions setting:', e);
+            }
+        });
+    }
+
+    loadAvatarExpressionsSetting();
+
+    // Edit Model Toggle (qwen-edit vs seedream-v4-edit)
+    const editModelToggle = document.getElementById('edit-model-toggle');
+
+    async function loadEditModelSetting() {
+        try {
+            const res = await fetch('/api/edit-model');
+            const data = await res.json();
+            if (data.success && editModelToggle) {
+                editModelToggle.checked = data.model === 'seedream-v4-edit';
+            }
+        } catch (e) {
+            console.log('Failed to load edit model setting:', e);
+        }
+    }
+
+    if (editModelToggle) {
+        editModelToggle.addEventListener('change', async () => {
+            try {
+                const model = editModelToggle.checked ? 'seedream-v4-edit' : 'qwen-edit';
+                await fetch('/api/edit-model', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model })
+                });
+            } catch (e) {
+                console.log('Failed to save edit model setting:', e);
+            }
+        });
+    }
+
+    loadEditModelSetting();
 
 }); // End DOMContentLoaded

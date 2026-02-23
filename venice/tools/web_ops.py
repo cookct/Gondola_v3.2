@@ -10,80 +10,105 @@ from urllib.parse import quote_plus, urlparse
 import httpx
 from venice.tools.base import Tools
 from venice.core import UI
+from venice.config import SCRIPT_DIR
 
+# Try to import duckduckgo_search, but don't crash if missing
+try:
+    from duckduckgo_search import DDGS
+    HAS_DDGS = True
+except ImportError:
+    HAS_DDGS = False
 
 class WebOpsMixin(Tools):
     """Mixin for web search and fetch operations"""
 
     def web_search(self, query: str, n_results: int = 5) -> Dict:
         """
-        Search the web for current information using Google with Bing fallback.
+        Search the web using Brave Search API (if configured) or DuckDuckGo.
         """
         self.next_step(f"Searching web for: {query[:50]}...")
         
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1"
-        }
+        # 1. Try Brave Search API
+        brave_key = os.environ.get("BRAVE_API_KEY")
+        
+        # If not in env, check config file
+        if not brave_key:
+            try:
+                config_path = os.path.join(SCRIPT_DIR, "app_config.json")
+                if os.path.exists(config_path):
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+                        brave_key = config.get("brave_api_key")
+            except Exception:
+                pass
 
-        # Try Google First
-        try:
-            google_url = f"https://www.google.com/search?q={quote_plus(query)}&num={n_results + 3}"
-            with httpx.Client(timeout=20.0, follow_redirects=True, headers=headers) as client:
-                resp = client.get(google_url)
-                if resp.status_code == 200:
-                    html = resp.text
-                    results = []
-                    # Google search result pattern
-                    matches = re.findall(r'<div class="g">.*?<a href="([^"]+)"[^>]*>.*?<h3[^>]*>(.*?)</h3>.*?<div[^>]*class="VwiC3b[^"]*"[^>]*>(.*?)</div>', html, re.DOTALL)
+        if brave_key:
+            try:
+                headers = {
+                    "X-Subscription-Token": brave_key,
+                    "Accept": "application/json"
+                }
+                # Brave allows up to 20 results per page
+                count = min(n_results, 20)
+                url = f"https://api.search.brave.com/res/v1/web/search?q={quote_plus(query)}&count={count}"
+                
+                with httpx.Client(timeout=20.0) as client:
+                    resp = client.get(url, headers=headers)
                     
-                    for url, title, snippet in matches[:n_results]:
-                        if url.startswith('/url?q='):
-                            url = url.split('/url?q=')[1].split('&')[0]
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        results = []
                         
-                        results.append({
-                            "title": re.sub(r'<[^>]+>', '', title).strip(),
-                            "url": url,
-                            "snippet": re.sub(r'<[^>]+>', '', snippet).strip()
-                        })
+                        # Parse Brave response
+                        web_results = data.get('web', {}).get('results', [])
+                        for r in web_results:
+                            results.append({
+                                "title": r.get('title', ''),
+                                "url": r.get('url', ''),
+                                "snippet": r.get('description', '') or r.get('snippet', '')
+                            })
+                        
+                        if results:
+                            UI.step_done(f"Found {len(results)} results via Brave API")
+                            return {"success": True, "query": query, "results": results, "count": len(results)}
                     
-                    if results:
-                        UI.step_done(f"Found {len(results)} results via Google")
-                        return {"success": True, "query": query, "results": results, "count": len(results)}
+                    elif resp.status_code == 429:
+                        UI.step_error("Brave API rate limit exceeded. Falling back...")
+                    elif resp.status_code == 403:
+                         UI.step_error("Brave API key invalid. Falling back...")
+                    else:
+                        UI.step_error(f"Brave API error: HTTP {resp.status_code}")
 
-        except Exception as e:
-            UI.step_detail(f"Google search failed: {str(e)}. Trying fallback...")
+            except Exception as e:
+                UI.step_error(f"Brave Search failed: {str(e)}")
 
-        # Fallback to Bing
+        # 2. Fallback to DuckDuckGo
+        if not HAS_DDGS:
+            msg = "DuckDuckGo fallback unavailable (library missing). Install 'duckduckgo-search' or set BRAVE_API_KEY."
+            return {"success": False, "error": msg}
+
         try:
-            bing_url = f"https://www.bing.com/search?q={quote_plus(query)}"
-            with httpx.Client(timeout=20.0, follow_redirects=True, headers=headers) as client:
-                resp = client.get(bing_url)
-                if resp.status_code == 200:
-                    html = resp.text
-                    results = []
-                    # Bing result pattern
-                    matches = re.findall(r'<li class="b_algo">.*?<h2><a href="([^"]+)"[^>]*>(.*?)</a></h2>.*?<div class="b_caption">.*?<p[^>]*>(.*?)</p>', html, re.DOTALL)
-                    
-                    for url, title, snippet in matches[:n_results]:
+            results = []
+            # Use 'html' backend for stability
+            with DDGS() as ddgs:
+                ddgs_resp = ddgs.text(query, max_results=n_results, backend="html")
+                if ddgs_resp:
+                    for r in ddgs_resp:
                         results.append({
-                            "title": re.sub(r'<[^>]+>', '', title).strip(),
-                            "url": url,
-                            "snippet": re.sub(r'<[^>]+>', '', snippet).strip()
+                            "title": r.get('title', ''),
+                            "url": r.get('href', ''),
+                            "snippet": r.get('body', '')
                         })
-                    
-                    if results:
-                        UI.step_done(f"Found {len(results)} results via Bing")
-                        return {"success": True, "query": query, "results": results, "count": len(results)}
+
+            if results:
+                UI.step_done(f"Found {len(results)} results via DuckDuckGo")
+                return {"success": True, "query": query, "results": results, "count": len(results)}
+            
+            return {"success": False, "error": "No results found (Brave: " + ("skipped/failed" if not brave_key else "failed") + ", DDG: empty)"}
 
         except Exception as e:
-            return {"success": False, "error": f"All search providers failed: {str(e)}"}
-
-        return {"success": False, "error": "No results found from any provider"}
+            UI.step_error(f"Search failed: {str(e)}")
+            return {"success": False, "error": f"Search failed: {str(e)}"}
 
     def fetch_url(self, url: str, max_length: int = 10000) -> Dict:
         """

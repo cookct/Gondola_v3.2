@@ -658,8 +658,8 @@ def execute_tool(tools: CombinedTools, tool_call: dict):
             args.get("height", 1024)
         ),
         "edit_image": lambda: tools.edit_image(
-            args.get("reference_image"),
             args.get("prompt"),
+            args.get("reference_image", "avatar.png"),
             args.get("filename")
         ),
     }

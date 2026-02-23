@@ -54,8 +54,8 @@ class ContextManager:
     total_tokens_estimate: int = 0
 
     # Compression settings
-    MAX_TOOL_RESULT_CHARS: int = 3000
-    MAX_FILE_CONTENT_CHARS: int = 5000
+    MAX_TOOL_RESULT_CHARS: int = 20000
+    MAX_FILE_CONTENT_CHARS: int = 20000
     KEEP_RECENT_MESSAGES: int = 4  # Keep last N messages in full
 
     # TRUNCATION AWARENESS: Track what was cut so model knows

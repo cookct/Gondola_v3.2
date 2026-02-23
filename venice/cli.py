@@ -87,6 +87,56 @@ from venice.agent_state import AgentState
 from venice.persistence import PersistenceManager
 
 
+def _resize_image_for_context(image_b64: str, max_size: int = 512) -> str:
+    """Resize image to fit within max_size for context inclusion.
+    Returns resized base64 string."""
+    try:
+        from PIL import Image
+        import io
+
+        # Decode base64
+        image_bytes = base64.b64decode(image_b64)
+        img = Image.open(io.BytesIO(image_bytes))
+
+        # Resize if larger than max_size
+        if img.width > max_size or img.height > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+        # Convert to RGB if RGBA (removes alpha channel issues)
+        if img.mode == 'RGBA':
+            img = img.convert('RGB')
+
+        # Re-encode as JPEG for smaller size
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=85)
+        return base64.b64encode(buffer.getvalue()).decode('utf-8')
+    except Exception as e:
+        logger.warning(f"Failed to resize image for context: {e}")
+        return image_b64  # Return original if resize fails
+
+
+def _prune_old_images(messages: list, max_images: int = 2):
+    """Remove old images from message history to save context tokens.
+    Keeps only the most recent max_images images."""
+    image_indices = []
+    for i, msg in enumerate(messages):
+        content = msg.get("content")
+        if isinstance(content, list):
+            for item in content:
+                if item.get("type") == "image_url":
+                    image_indices.append(i)
+                    break
+
+    # Remove oldest images if we have too many
+    while len(image_indices) > max_images:
+        idx = image_indices.pop(0)
+        # Convert multipart content to text-only
+        msg = messages[idx]
+        if isinstance(msg.get("content"), list):
+            text_parts = [item.get("text", "") for item in msg["content"] if item.get("type") == "text"]
+            msg["content"] = " ".join(text_parts) if text_parts else "[image removed from context]"
+
+
 def main():
  import argparse
 
@@ -252,12 +302,11 @@ def main():
 
     UI.info(f"Analyzing: {os.path.basename(image_path)}")
 
-    # Add image message
+    # Add image message (no prompt - let model use conversation context)
     messages.append({
      "role": "user",
      "content": [
-      {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_data}"}},
-      {"type": "text", "text": "Describe this image in detail. What do you see?"}
+      {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_data}"}}
      ]
     })
     # Continue to the API call below
@@ -783,11 +832,36 @@ def main():
          result["syntax_line"] = syntax_result.get("line")
 
       # Add tool result message (use compressed result if applicable)
-      messages.append({
-       "role": "tool",
-       "tool_call_id": tc_id,
-       "content": result_str
-      })
+      # If result contains an image, add it as a separate user message so agent can see it
+      if result.get("image_base64"):
+       image_b64 = result.pop("image_base64")  # Remove from JSON to avoid bloat
+       # Resize image for context to avoid Venice validation errors
+       image_b64 = _resize_image_for_context(image_b64, max_size=512)
+       result_str = json.dumps(result)  # Re-serialize without the base64
+       # Add tool result as text
+       messages.append({
+        "role": "tool",
+        "tool_call_id": tc_id,
+        "content": result_str
+       })
+       # Add image as user message so vision model can see it
+       # Note: _resize_image_for_context converts to JPEG
+       logger.info(f"[{session_id}] Injecting generated image into context ({len(image_b64)} chars)")
+       messages.append({
+        "role": "user",
+        "content": [
+         {"type": "text", "text": "Here is the image you generated."},
+         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+        ]
+       })
+       # Limit images in context to last 2 - remove old ones to save tokens
+       _prune_old_images(messages, max_images=2)
+      else:
+       messages.append({
+        "role": "tool",
+        "tool_call_id": tc_id,
+        "content": result_str
+       })
 
      # Check if we hit done or max turns
      if tool_name == "done" or agent_turns >= MAX_AGENT_TURNS:

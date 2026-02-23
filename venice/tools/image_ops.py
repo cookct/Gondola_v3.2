@@ -60,6 +60,7 @@ class ImageOpsMixin:
                 "prompt": prompt,
                 "width": width,
                 "height": height,
+                "style_preset": "Pixel Art",
                 "hide_watermark": True,
                 "safe_mode": False
             }
@@ -99,7 +100,8 @@ class ImageOpsMixin:
                         "url": f"/workspace-images/{filename}",
                         "size": len(image_bytes),
                         "prompt": prompt,
-                        "dimensions": f"{width}x{height}"
+                        "dimensions": f"{width}x{height}",
+                        "image_base64": image_b64
                     }
                 else:
                     return {"success": False, "error": "No image returned from API"}
@@ -110,13 +112,13 @@ class ImageOpsMixin:
             UI.step_error(str(e))
             return {"success": False, "error": f"Image generation failed: {str(e)}"}
 
-    def edit_image(self, reference_image: str, prompt: str, filename: str = None) -> Dict:
+    def edit_image(self, prompt: str, reference_image: str = "avatar.png", filename: str = None) -> Dict:
         """
-        Edit/transform an image using Venice qwen-edit model with a reference image.
+        Edit/transform an image using Venice image edit model. Defaults to avatar.png.
 
         Args:
-            reference_image: Path to the reference image file
-            prompt: Text description of the desired transformation
+            prompt: Text description of the desired expression/transformation
+            reference_image: Reference image file (defaults to avatar.png)
             filename: Optional output filename (auto-generated if not provided)
 
         Returns:
@@ -130,46 +132,85 @@ class ImageOpsMixin:
         if not api_key:
             return {"success": False, "error": "Venice API key not configured"}
 
-        # Resolve reference image path
-        ref_path = self.workspace._resolve(reference_image)
-        if not os.path.exists(ref_path):
-            # Try in images directory
-            ref_path = os.path.join(self.workspace.root_dir, "images", reference_image)
+        # Resolve reference image path - ALWAYS use absolute path to gondola images
+        # Get gondola root directory (where venice package lives)
+        gondola_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        gondola_images = os.path.join(gondola_root, "images", reference_image)
+
+        # DEBUG: Log exact path being used
+        import sys
+        print(f"[edit_image DEBUG] __file__: {__file__}", file=sys.stderr)
+        print(f"[edit_image DEBUG] gondola_root: {gondola_root}", file=sys.stderr)
+        print(f"[edit_image DEBUG] Looking for avatar at: {gondola_images}", file=sys.stderr)
+        print(f"[edit_image DEBUG] File exists: {os.path.exists(gondola_images)}", file=sys.stderr)
+        if os.path.exists(gondola_images):
+            stat = os.stat(gondola_images)
+            print(f"[edit_image DEBUG] File size: {stat.st_size}, mtime: {stat.st_mtime}", file=sys.stderr)
+
+        ref_path = None
+        if os.path.exists(gondola_images):
+            # Found in gondola's images directory
+            ref_path = gondola_images
+        else:
+            # Try workspace resolution
+            ref_path = self.workspace._resolve(reference_image)
             if not os.path.exists(ref_path):
-                return {"success": False, "error": f"Reference image not found: {reference_image}"}
+                # Try in workspace images directory
+                ref_path = os.path.join(self.workspace.root_dir, "images", reference_image)
+                if not os.path.exists(ref_path):
+                    return {"success": False, "error": f"Reference image not found: {reference_image}. Checked: {gondola_images}, workspace"}
 
         # Read and encode reference image
         try:
+            # DEBUG: Log exact file being read
+            print(f"[edit_image DEBUG] Reading reference image from: {ref_path}", file=sys.stderr)
+            stat_before = os.stat(ref_path)
+            print(f"[edit_image DEBUG] File size: {stat_before.st_size}, mtime: {stat_before.st_mtime}", file=sys.stderr)
+
             with open(ref_path, 'rb') as f:
                 image_bytes = f.read()
             image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+            print(f"[edit_image DEBUG] Read {len(image_bytes)} bytes, base64 len: {len(image_b64)}", file=sys.stderr)
         except Exception as e:
             return {"success": False, "error": f"Failed to read reference image: {str(e)}"}
 
-        # Ensure images directory exists
-        images_dir = os.path.join(self.workspace.root_dir, "images")
-        os.makedirs(images_dir, exist_ok=True)
+        # Expressions go in gondola root, not workspace
+        gondola_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        expressions_dir = os.path.join(gondola_root, "expressions")
+        os.makedirs(expressions_dir, exist_ok=True)
 
-        # Generate filename if not provided
+        # Generate filename if not provided - include expression description for easy browsing
         if not filename:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            base_name = os.path.splitext(os.path.basename(reference_image))[0]
-            filename = f"edited_{base_name}_{timestamp}.png"
+            # Sanitize prompt for filename
+            safe_prompt = "".join(c if c.isalnum() or c in " -_" else "" for c in prompt[:30]).strip()
+            safe_prompt = safe_prompt.replace(" ", "_")
+            filename = f"expr_{safe_prompt}_{timestamp}.png"
+        else:
+            # Strip any directory path from filename
+            filename = os.path.basename(filename)
 
         # Ensure .png extension
         if not filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
             filename += '.png'
 
-        output_path = os.path.join(images_dir, filename)
+        output_path = os.path.join(expressions_dir, filename)
 
         try:
+            # Force expression-only prompt - don't let agent describe a new character
+            expression_prompt = f"Change the facial expression to: {prompt}. Keep the same person, same style, same character."
+
+            # Get configured edit model
+            from venice.prompts.system import get_edit_model
+            edit_model = get_edit_model()
+
             payload = {
-                "prompt": prompt,
-                "image": image_b64,
-                "modelId": "qwen-edit"
+                "prompt": expression_prompt,
+                "image": image_b64,  # Raw base64, no data URI prefix
+                "modelId": edit_model
             }
 
-            UI.step_detail(f"Calling Venice API (qwen-edit)...")
+            UI.step_detail(f"Calling Venice API ({edit_model})...")
 
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(
@@ -182,32 +223,44 @@ class ImageOpsMixin:
                 )
 
                 if response.status_code != 200:
-                    error_text = response.text[:500]
+                    try:
+                        error_text = response.text[:500]
+                    except:
+                        error_text = f"Status {response.status_code}"
                     return {"success": False, "error": f"API error {response.status_code}: {error_text}"}
 
-                result = response.json()
+                # Handle response - Venice returns binary (image/*) or JSON
+                content_type = response.headers.get("Content-Type", "")
 
-                # Venice edit returns images in "images" array
-                if "images" in result and len(result["images"]) > 0:
-                    edited_b64 = result["images"][0]
-                    edited_bytes = base64.b64decode(edited_b64)
-
-                    with open(output_path, 'wb') as f:
-                        f.write(edited_bytes)
-
-                    UI.step_done(f"Saved: {filename} ({len(edited_bytes):,} bytes)")
-
-                    return {
-                        "success": True,
-                        "filename": filename,
-                        "path": output_path,
-                        "url": f"/workspace-images/{filename}",
-                        "size": len(edited_bytes),
-                        "prompt": prompt,
-                        "reference_image": reference_image
-                    }
+                if "image" in content_type:
+                    # Binary image response
+                    edited_bytes = response.content
                 else:
-                    return {"success": False, "error": "No image returned from API"}
+                    # JSON response with base64 images
+                    result = response.json()
+                    if "images" in result and len(result["images"]) > 0:
+                        edited_bytes = base64.b64decode(result["images"][0])
+                    else:
+                        return {"success": False, "error": "No image returned from API"}
+
+                with open(output_path, 'wb') as f:
+                    f.write(edited_bytes)
+
+                UI.step_done(f"Saved: {filename} ({len(edited_bytes):,} bytes)")
+
+                # Include base64 so agent can see the result
+                image_b64_result = base64.b64encode(edited_bytes).decode('utf-8')
+
+                return {
+                    "success": True,
+                    "filename": filename,
+                    "path": output_path,
+                    "url": f"/workspace-expressions/{filename}",
+                    "size": len(edited_bytes),
+                    "prompt": prompt,
+                    "reference_image": reference_image,
+                    "image_base64": image_b64_result
+                }
 
         except httpx.TimeoutException:
             return {"success": False, "error": "Image editing timed out (120s)"}

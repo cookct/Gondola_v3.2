@@ -80,6 +80,42 @@ from venice.persistence import PersistenceManager
 import httpx
 
 # ============================================================================
+# IMAGE RESIZING FOR CONTEXT
+# ============================================================================
+def resize_image_for_context(image_b64: str, max_size: int = 512) -> str:
+    """Resize image to fit within max_size for API context.
+    Returns resized base64 string."""
+    try:
+        from PIL import Image
+        import io
+
+        # Strip data URI prefix if present
+        if ',' in image_b64:
+            image_b64 = image_b64.split(',', 1)[1]
+
+        # Decode base64
+        image_bytes = base64.b64decode(image_b64)
+        img = Image.open(io.BytesIO(image_bytes))
+
+        # Resize if larger than max_size
+        if img.width > max_size or img.height > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+            logger.info(f"[ImageResize] Resized to {img.width}x{img.height}")
+
+        # Convert to RGB if RGBA (removes alpha channel issues)
+        if img.mode == 'RGBA':
+            img = img.convert('RGB')
+
+        # Re-encode as JPEG for smaller size
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=85)
+        return base64.b64encode(buffer.getvalue()).decode('utf-8')
+    except Exception as e:
+        logger.warning(f"[ImageResize] Failed to resize: {e}")
+        return image_b64  # Return original if resize fails
+
+
+# ============================================================================
 # IMAGE UPLOAD FOR TOGETHER AI (uses litterbox.catbox.moe temp hosting)
 # ============================================================================
 def upload_to_catbox(img_data, name="image"):
@@ -383,6 +419,15 @@ def serve_workspace_image(filename):
     if not os.path.exists(workspace_images_dir):
         return "Workspace images directory not found", 404
     return send_from_directory(workspace_images_dir, filename)
+
+@app.route('/workspace-expressions/<path:filename>')
+def serve_workspace_expression(filename):
+    """Serve expression images from gondola's expressions directory."""
+    gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    expressions_dir = os.path.join(gondola_root, 'expressions')
+    if not os.path.exists(expressions_dir):
+        return "Expressions directory not found", 404
+    return send_from_directory(expressions_dir, filename)
 
 @app.route('/')
 def index():
@@ -1202,6 +1247,9 @@ def chat():
         return jsonify({"response": "Conversation cleared."})
 
     if image_data:
+        # Resize image to avoid Venice validation errors
+        image_data = resize_image_for_context(image_data, max_size=512)
+        image_mime = "image/jpeg"  # Resized images are JPEG
         logger.debug(f"[{request_id}] Building multimodal message with image ({image_mime})")
 
         # Check if model is Together AI - upload to catbox for URL instead of base64
@@ -1915,12 +1963,8 @@ def chat():
                     had_tools = len(native_tool_calls) > 0
                     agent_state.record_response_quality(had_text, had_tools)
 
-                    # Check for silent tool calls warning
-                    reasoning_warning = agent_state.get_reasoning_warning()
-                    if reasoning_warning:
-                        logger.warning(f"[{request_id}] {reasoning_warning}")
-                        # Inject as a user message to encourage explanation
-                        messages.append({"role": "user", "content": reasoning_warning})
+                    # Skip reasoning warnings for Claude models (breaks message sequence + unnecessary)
+                    # Claude models explain themselves properly without prodding
 
                     # Execute tools
                     logger.info(f"[{request_id}] Executing {len(native_tool_calls)} tool call(s)")
@@ -2051,6 +2095,14 @@ def chat():
                                 if persistence:
                                     persistence.checkpoint(thought, task)
 
+                            # Handle image_base64 in result - add as user message for vision models
+                            image_b64_for_context = None
+                            if isinstance(result, dict) and result.get("image_base64"):
+                                image_b64_for_context = result.pop("image_base64")
+                                # Resize for context
+                                image_b64_for_context = resize_image_for_context(image_b64_for_context, max_size=512)
+                                logger.info(f"[{request_id}] │  Extracted image for vision context")
+
                             result_str = json.dumps(result)
 
                             # NEW: Compress large results
@@ -2064,21 +2116,47 @@ def chat():
                             logger.debug(f"[{request_id}] │  Result: {result_str[:300]}{'...' if len(result_str) > 300 else ''}")
                             logger.info(f"[{request_id}] └─ SUCCESS")
 
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc["id"],
-                                "name": tool_name,
-                                "content": result_str
-                            })
+                            # If we have an image, add it as a separate user message so agent can see it
+                            if image_b64_for_context:
+                                # 1. Add tool output (text)
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tc["id"],
+                                    "name": tool_name,
+                                    "content": result_str
+                                })
+                                # 2. Add image as user message
+                                messages.append({
+                                    "role": "user",
+                                    "content": [
+                                        {"type": "text", "text": "Here is the image you generated."},
+                                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64_for_context}"}}
+                                    ]
+                                })
+                                logger.info(f"[{request_id}] │  Added separate image message for vision model")
+                            else:
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tc["id"],
+                                    "name": tool_name,
+                                    "content": result_str
+                                })
+
                             memory.save_conversation(messages)
 
                             # Emit tool_done event for frontend UI
+                            tool_done_data = {
+                                "tool": tool_name,
+                                "success": True
+                            }
+                            # Include result if it has displayable content (like image URLs)
+                            logger.info(f"[{request_id}] result type: {type(result)}, has url: {result.get('url') if isinstance(result, dict) else 'N/A'}")
+                            if isinstance(result, dict) and result.get("url"):
+                                tool_done_data["url"] = result["url"]
+                                logger.info(f"[{request_id}] >>> ADDING IMAGE URL TO EVENT: {result['url']}")
                             event_queue.put({
                                 "type": "tool_done",
-                                "data": {
-                                    "tool": tool_name,
-                                    "success": True
-                                }
+                                "data": tool_done_data
                             })
 
                             if tool_name == "done":
@@ -2347,6 +2425,103 @@ def save_personality():
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Save personality error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/avatar-expressions', methods=['GET'])
+def get_avatar_expressions():
+    """Get the avatar expressions setting."""
+    from venice.prompts.system import is_avatar_expressions_enabled
+    try:
+        enabled = is_avatar_expressions_enabled()
+        return jsonify({"success": True, "enabled": enabled})
+    except Exception as e:
+        logger.error(f"Get avatar expressions error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/avatar-expressions', methods=['POST'])
+def set_avatar_expressions():
+    """Set the avatar expressions setting."""
+    from venice.prompts.system import set_avatar_expressions_enabled
+    try:
+        data = request.get_json()
+        enabled = data.get('enabled', False)
+        set_avatar_expressions_enabled(enabled)
+        logger.info(f"Avatar expressions {'enabled' if enabled else 'disabled'}")
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"Set avatar expressions error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/edit-model', methods=['GET'])
+def get_edit_model_api():
+    """Get the current image edit model."""
+    from venice.prompts.system import get_edit_model
+    try:
+        model = get_edit_model()
+        return jsonify({"success": True, "model": model})
+    except Exception as e:
+        logger.error(f"Get edit model error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/edit-model', methods=['POST'])
+def set_edit_model_api():
+    """Set the image edit model."""
+    from venice.prompts.system import set_edit_model
+    try:
+        data = request.get_json()
+        model = data.get('model', 'qwen-edit')
+        if set_edit_model(model):
+            logger.info(f"Edit model set to: {model}")
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Invalid model"}), 400
+    except Exception as e:
+        logger.error(f"Set edit model error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/make-avatar', methods=['POST'])
+def make_avatar():
+    """Save an image as the new avatar.png, renaming existing avatar to random 5-digit number."""
+    import random
+    try:
+        data = request.get_json()
+        image_b64 = data.get('image')
+        if not image_b64:
+            return jsonify({"success": False, "error": "No image provided"}), 400
+
+        # Strip data URI prefix if present
+        if ',' in image_b64:
+            image_b64 = image_b64.split(',', 1)[1]
+
+        # Gondola images directory
+        gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        images_dir = os.path.join(gondola_root, "images")
+        os.makedirs(images_dir, exist_ok=True)
+
+        avatar_path = os.path.join(images_dir, "avatar.png")
+        logger.info(f"[MakeAvatar] gondola_root: {gondola_root}")
+        logger.info(f"[MakeAvatar] images_dir: {images_dir}")
+        logger.info(f"[MakeAvatar] avatar_path: {avatar_path}")
+        logger.info(f"[MakeAvatar] avatar exists: {os.path.exists(avatar_path)}")
+
+        # Rename existing avatar.png to random 5-digit number
+        if os.path.exists(avatar_path):
+            random_name = f"{random.randint(10000, 99999)}.png"
+            backup_path = os.path.join(images_dir, random_name)
+            os.rename(avatar_path, backup_path)
+            logger.info(f"[MakeAvatar] Renamed existing avatar.png to {random_name}")
+
+        # Save new avatar
+        image_bytes = base64.b64decode(image_b64)
+        with open(avatar_path, 'wb') as f:
+            f.write(image_bytes)
+        logger.info(f"[MakeAvatar] Wrote {len(image_bytes)} bytes to {avatar_path}")
+
+        logger.info(f"Saved new avatar.png ({len(image_bytes)} bytes)")
+        return jsonify({"success": True, "message": "Avatar saved"})
+
+    except Exception as e:
+        logger.error(f"Make avatar error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':

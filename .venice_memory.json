@@ -3,9 +3,74 @@
     {
       "note": "SEMANTIC_SEARCH_FIX: Modified venice/tools/code_ops.py to make semantic_search self-sufficient. Added on-demand ProjectIndex creation when none exists, removing CLI dependency. Change made on 2026-02-12. The fix creates ProjectIndex(workspace_path).build() when self.project_index is None, instead of failing with \"Project index not available\" error.",
       "timestamp": "2026-02-18T19:18:44.645241"
+    },
+    {
+      "note": "User primarily uses the web UI (venice-web-ui/), NOT the CLI. When making changes, prioritize web UI code (server.py, static/script.js, templates/) over CLI code (venice/cli.py). The web UI imports from venice/ core package but has its own frontend layer.",
+      "timestamp": "2026-02-28T07:34:18.226962"
     }
   ],
-  "session_history": [],
+  "session_history": [
+    {
+      "summary": "Found the default model setting in venice/config.py: DEFAULT_MODEL = \"zai-org-glm-5\". The backup version had \"qwen3-235b-a22b-instruct-2507\" as the previous default. The web UI has some endpoints with different fallback defaults like \"moonshotai/Kimi-K2.5\".",
+      "files": [],
+      "timestamp": "2026-02-28T07:30:12.211604"
+    },
+    {
+      "summary": "Checked venice/config.py - the DEFAULT_MODEL is already set to \"zai-org-glm-5\". No changes needed.",
+      "files": [],
+      "timestamp": "2026-02-28T07:30:32.147375"
+    },
+    {
+      "summary": "Confirmed that CLI and Web UI have different default models. CLI uses 'zai-org-glm-5' from venice/config.py, while Web UI has 'moonshotai/Kimi-K2.5' hardcoded in server.py line 1291. Offered options to align them.",
+      "files": [],
+      "timestamp": "2026-02-28T07:31:30.380108"
+    },
+    {
+      "summary": "Updated venice-web-ui/server.py line 1291 to change the default model from 'moonshotai/Kimi-K2.5' to 'zai-org-glm-5'. Both CLI and Web UI now use the same default model.",
+      "files": [],
+      "timestamp": "2026-02-28T07:32:18.833191"
+    },
+    {
+      "summary": "Explained that the Web UI and CLI are tightly integrated - the web UI imports extensively from the venice/ core package (MODELS, API, tools, memory, workspace, etc.). They share the same backend, just have different frontends (terminal vs Flask web). The only thing that was separately hardcoded was the default model, which we just fixed.",
+      "files": [],
+      "timestamp": "2026-02-28T07:33:04.759819"
+    },
+    {
+      "summary": "Saved a memory note that the user primarily uses the web UI, not the CLI. This will help future sessions prioritize web UI code (server.py, static/script.js, templates/) over CLI code. Also offered to make the web UI import DEFAULT_MODEL from config.py for a single source of truth.",
+      "files": [],
+      "timestamp": "2026-02-28T07:34:21.348666"
+    },
+    {
+      "summary": "Explained the remember tool: it saves notes to .venice_memory.json which persist across sessions. The Memory class stores project_notes (last 50), session_history (last 20), key_files (last 30), and user_preferences. These are loaded into the system prompt via get_context() so future sessions can recall them.",
+      "files": [],
+      "timestamp": "2026-02-28T07:35:45.743369"
+    },
+    {
+      "summary": "Verified the remember tool is working by reading .venice_memory.json. It contains the saved note about user preferring web UI (timestamped 2026-02-28T07:34:18), plus session history and key files. The memory system is functioning correctly.",
+      "files": [],
+      "timestamp": "2026-02-28T07:36:53.070331"
+    },
+    {
+      "summary": "Analyzed the trade-offs between tool-based web search vs Venice API native web search. Tool offers more transparency and control but is slower. Native API search is faster and more efficient but less transparent. Offered to check the API configuration to see if native web search is enabled.",
+      "files": [],
+      "timestamp": "2026-02-28T07:38:34.184857"
+    },
+    {
+      "summary": "Found that the app is NOT using Venice's native web search - only tool-based DuckDuckGo search. The venice_parameters only has include_venice_system_prompt: True. To enable native web search, we'd need to add web_search: True to venice_parameters. Offered to enable it if desired.",
+      "files": [],
+      "timestamp": "2026-02-28T07:40:38.836953"
+    },
+    {
+      "summary": "Presented plan to enable Venice native web search by adding 'web_search: True' to venice_parameters in server.py line 1604. This will give the model automatic web search capability alongside the existing tool-based search.",
+      "files": [],
+      "timestamp": "2026-02-28T07:42:12.322302"
+    },
+    {
+      "summary": "Enabled Venice native web search by adding 'web_search: True' to venice_parameters in server.py line 1604. The change is verified and ready - user needs to restart the web UI for it to take effect.",
+      "files": [],
+      "timestamp": "2026-02-28T07:42:52.680438"
+    }
+  ],
   "key_files": [
     "venice-web-ui/templates/index.html",
     "venice-web-ui/static/style.css",
@@ -25,5 +90,5 @@
   ],
   "user_preferences": {},
   "last_balance_vcu": 0.0,
-  "last_balance_usd": 6.50291094
+  "last_balance_usd": 27.31550948
 }

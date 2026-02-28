@@ -254,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         parent.appendChild(block);
         return block;
     }
+    window.createToolBlock = createToolBlock;
 
     function createTextBlock(parent) {
         const msgDiv = document.createElement('div');
@@ -360,6 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
             icon.innerHTML = '<path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor"/>';
         }
     }
+    window.setButtonState = setButtonState;
 
     sendBtn.addEventListener('click', () => {
         if (isProcessing) {
@@ -1158,7 +1160,7 @@ async function sendMessage() {
         userInput.disabled = true;
         userInput.parentElement.classList.add('thinking');
         sendBtn.disabled = false; // Keep enabled for STOP
-        setButtonState(true);
+        window.setButtonState(true);
         agentStatus && (agentStatus.textContent = 'Processing...');
         
         // Create turn container for unified chat stream
@@ -1210,7 +1212,7 @@ async function sendMessage() {
             userInput.disabled = false;
             userInput.placeholder = "Describe a task (e.g., 'Create a flask app in app.py')...";
             userInput.parentElement.classList.remove('thinking');
-            setButtonState(false);
+            window.setButtonState(false);
             agentStatus && (agentStatus.textContent = 'Idle');
             userInput.focus();
         }
@@ -1273,7 +1275,7 @@ async function sendMessage() {
                 if (toolMatch) {
                     const toolName = toolMatch[1];
                     finalizeCurrentBlock();  // Close any previous block before tool
-                    currentToolBlock = createToolBlock(currentTurnContainer, toolName);
+                    currentToolBlock = window.createToolBlock(currentTurnContainer, toolName);
                     currentBlockType = 'tool';
                 }
                 agentStatus && (agentStatus.textContent = data);
@@ -2209,67 +2211,293 @@ async function sendMessage() {
     }
     loadPersonalityFromServer();
 
-    // Avatar Expressions Toggle
-    const avatarExpressionsToggle = document.getElementById('avatar-expressions-toggle');
-
-    async function loadAvatarExpressionsSetting() {
-        try {
-            const res = await fetch('/api/avatar-expressions');
-            const data = await res.json();
-            if (data.success && avatarExpressionsToggle) {
-                avatarExpressionsToggle.checked = data.enabled;
-            }
-        } catch (e) {
-            console.log('Failed to load avatar expressions setting:', e);
-        }
-    }
-
-    if (avatarExpressionsToggle) {
-        avatarExpressionsToggle.addEventListener('change', async () => {
-            try {
-                await fetch('/api/avatar-expressions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: avatarExpressionsToggle.checked })
-                });
-            } catch (e) {
-                console.log('Failed to save avatar expressions setting:', e);
-            }
-        });
-    }
-
-    loadAvatarExpressionsSetting();
-
-    // Edit Model Toggle (qwen-edit vs seedream-v4-edit)
+    // Edit Model & Style Settings
     const editModelToggle = document.getElementById('edit-model-toggle');
+    const stylePresetInput = document.getElementById('style-preset-input');
 
     async function loadEditModelSetting() {
         try {
             const res = await fetch('/api/edit-model');
             const data = await res.json();
-            if (data.success && editModelToggle) {
-                editModelToggle.checked = data.model === 'seedream-v4-edit';
+            if (data.success) {
+                if (editModelToggle) editModelToggle.checked = data.model === 'seedream-v4-edit';
+                if (stylePresetInput) stylePresetInput.value = data.style_preset || 'Pixel Art';
             }
         } catch (e) {
             console.log('Failed to load edit model setting:', e);
         }
     }
 
-    if (editModelToggle) {
-        editModelToggle.addEventListener('change', async () => {
-            try {
-                const model = editModelToggle.checked ? 'seedream-v4-edit' : 'qwen-edit';
-                await fetch('/api/edit-model', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model })
-                });
-            } catch (e) {
-                console.log('Failed to save edit model setting:', e);
-            }
-        });
+    async function saveSettings() {
+        try {
+            const model = editModelToggle.checked ? 'seedream-v4-edit' : 'qwen-edit';
+            const style = stylePresetInput.value.trim();
+            await fetch('/api/edit-model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model, style_preset: style })
+            });
+        } catch (e) {
+            console.log('Failed to save settings:', e);
+        }
     }
 
+    if (editModelToggle) editModelToggle.addEventListener('change', saveSettings);
+    if (stylePresetInput) stylePresetInput.addEventListener('change', saveSettings);
+
     loadEditModelSetting();
+
+    // === Avatar Expression System ===
+
+    const AVATAR_TOOL_MAPPING = {
+        'read_file': 'read_file',
+        'search_file_content': 'search_file_content', 
+        'edit_file': 'edit_file',
+        'write_file': 'write_file',
+        'run_command': 'run_command',
+        'done': 'done',
+        'thinking': 'thinking',
+        'search_docs': 'search_docs',
+        'web_search': 'web_search',
+        'save_knowledge': 'write_file'
+    };
+
+    let currentAvatarState = 'initial';
+    let avatarCycleTimer = null;
+    let toolStartTime = null;
+    let currentToolImages = [];
+    let currentImageIndex = 0;
+    let cyclingThresholdTimer = null;
+
+    const BLANK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+    function getAvatarElement() {
+        return document.getElementById('avatar-image');
+    }
+
+    function getAvatarStatusElement() {
+        return document.getElementById('avatar-status');
+    }
+
+    function updateAvatarStatus(text) {
+        const statusEl = getAvatarStatusElement();
+        if (statusEl) {
+            statusEl.textContent = text;
+        }
+    }
+
+    function stopAvatarCycle() {
+        if (avatarCycleTimer) {
+            clearTimeout(avatarCycleTimer);
+            avatarCycleTimer = null;
+        }
+        if (cyclingThresholdTimer) {
+            clearTimeout(cyclingThresholdTimer);
+            cyclingThresholdTimer = null;
+        }
+    }
+
+    function getRandomInterval() {
+        return 2000; // Fixed 2 second interval
+    }
+
+    function cycleAvatarImage() {
+        if (currentToolImages.length === 0) return;
+        
+        currentImageIndex = (currentImageIndex + 1) % currentToolImages.length;
+        const avatarEl = getAvatarElement();
+        if (avatarEl) {
+            const newSrc = currentToolImages[currentImageIndex];
+            const cacheBustedSrc = newSrc + (newSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+            
+            // Fade out
+            avatarEl.style.opacity = '0';
+            
+            // Wait for fade-out, then change image and fade in when loaded
+            setTimeout(() => {
+                avatarEl.onload = () => {
+                    avatarEl.onload = null;
+                    avatarEl.style.opacity = '1';
+                };
+                avatarEl.src = cacheBustedSrc;
+            }, 250);
+            
+            // Set next interval randomly (add 300ms for fade time)
+            avatarCycleTimer = setTimeout(cycleAvatarImage, getRandomInterval() + 300);
+        }
+    }
+
+    function startAvatarCycle() {
+        stopAvatarCycle();
+        if (currentToolImages.length > 1) {
+            // Start cycling after 5 seconds
+            cyclingThresholdTimer = setTimeout(() => {
+                avatarCycleTimer = setTimeout(cycleAvatarImage, getRandomInterval());
+            }, 5000);
+        }
+    }
+
+    async function loadToolImages(toolName) {
+        console.log('[AVATAR DEBUG] loadToolImages called for:', toolName);
+        try {
+            const response = await fetch(`/api/avatar-images/${toolName}`);
+            const data = await response.json();
+            console.log('[AVATAR DEBUG] API response:', data);
+            if (data.success && data.images && data.images.length > 0) {
+                currentToolImages = data.images;
+                currentImageIndex = 0;
+                console.log('[AVATAR DEBUG] Loaded', data.images.length, 'images');
+                return true;
+            }
+        } catch (e) {
+            console.log('[AVATAR DEBUG] Failed to load avatar images:', e);
+        }
+        currentToolImages = [];
+        return false;
+    }
+
+    async function setAvatarState(toolName, statusText) {
+        console.log('[AVATAR DEBUG] setAvatarState called:', toolName, statusText);
+        const avatarEl = getAvatarElement();
+        if (!avatarEl) {
+            console.log('[AVATAR DEBUG] No avatar element found!');
+            return;
+        }
+        
+        stopAvatarCycle();
+        currentAvatarState = toolName;
+        updateAvatarStatus(statusText);
+        
+        // Load images for this tool state
+        let hasImages = await loadToolImages(toolName);
+        
+        // Generic Fallback: If requested folder is empty, use 'initial' state
+        if (!hasImages) {
+            console.log('[AVATAR] No images for', toolName, '- falling back to initial');
+            hasImages = await loadToolImages('initial');
+            // If even initial fails, we have a bigger problem (handled by hasImages check below)
+        }
+        
+        if (hasImages && currentToolImages.length > 0) {
+            // Pick a random image from the folder
+            currentImageIndex = Math.floor(Math.random() * currentToolImages.length);
+            const newSrc = currentToolImages[currentImageIndex];
+            const cacheBustedSrc = newSrc + (newSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+            
+            // Fade out
+            avatarEl.style.opacity = '0';
+            
+            // Wait for fade-out, then change image and fade in when loaded
+            setTimeout(() => {
+                avatarEl.onload = () => {
+                    avatarEl.onload = null;
+                    avatarEl.style.opacity = '1';
+                };
+                avatarEl.src = cacheBustedSrc;
+            }, 250);
+            console.log('[AVATAR DEBUG] Setting avatar src to:', cacheBustedSrc);
+
+            // Start cycling if we have multiple images and operation is long
+            if (currentToolImages.length > 1) {
+                startAvatarCycle();
+            }
+        } else {
+            console.log('[AVATAR DEBUG] No images, setting blank');
+            avatarEl.style.opacity = '0';
+            setTimeout(() => {
+                avatarEl.onload = () => {
+                    avatarEl.onload = null;
+                    avatarEl.style.opacity = '1';
+                };
+                avatarEl.src = BLANK_IMAGE;
+            }, 250);
+        }
+    }
+
+    function handleToolStart(toolName) {
+        toolStartTime = Date.now();
+        // Dynamic fallback: Use mapping if exists, otherwise try tool name directly
+        const mappedTool = AVATAR_TOOL_MAPPING[toolName] || toolName;
+        const statusText = toolName.replace(/_/g, ' ').toUpperCase();
+        setAvatarState(mappedTool, statusText);
+    }
+
+    function handleToolEnd() {
+        // Show completion state with specific sequence
+        showDoneSequence();
+    }
+
+    async function showDoneSequence() {
+        console.log('[AVATAR DEBUG] Starting done sequence');
+        
+        // Load done images first
+        const hasDoneImages = await loadToolImages('done');
+        if (!hasDoneImages || currentToolImages.length === 0) {
+            // Fallback to simple done state if no images
+            setAvatarState('done', 'COMPLETED');
+            setTimeout(() => {
+                setAvatarState('initial', 'Ready');
+            }, 2000);
+            return;
+        }
+
+        // Custom sequence: 1.png, 2.png, 3.png, 2.png, 4.png
+        const sequence = ['1.png', '2.png', '3.png', '2.png', '4.png'];
+        const timings = [1000, 1000, 1000, 1000, 1000]; // Total: 5 seconds
+        
+        for (let i = 0; i < sequence.length; i++) {
+            const targetImage = sequence[i];
+            const timing = timings[i];
+            
+            // Find the image in currentToolImages
+            const imageIndex = currentToolImages.findIndex(img => img.includes(targetImage));
+            
+            if (imageIndex !== -1) {
+                currentImageIndex = imageIndex;
+                const newSrc = currentToolImages[currentImageIndex];
+                const cacheBustedSrc = newSrc + (newSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+                
+                const avatarEl = getAvatarElement();
+                if (avatarEl) {
+                    avatarEl.src = cacheBustedSrc;
+                    console.log(`[AVATAR DEBUG] Done sequence ${i+1}/6: ${targetImage} (${timing}ms)`);
+                }
+            } else {
+                console.log(`[AVATAR DEBUG] Image ${targetImage} not found in done folder`);
+            }
+            
+            // Wait for the specified timing
+            await new Promise(resolve => setTimeout(resolve, timing));
+        }
+        
+        console.log('[AVATAR DEBUG] Done sequence complete');
+        
+        // Return to initial state
+        setAvatarState('initial', 'Ready');
+    }
+
+    // MONKEY PATCHING (Surgical) - Use local references to avoid infinite recursion
+    const localCreateToolBlock = createToolBlock;
+    window.createToolBlock = function(parent, toolName) {
+        const block = localCreateToolBlock.call(this, parent, toolName);
+        handleToolStart(toolName);
+        return block;
+    };
+
+    const localSetButtonState = setButtonState;
+    window.setButtonState = function(state) {
+        console.log('[AVATAR DEBUG] setButtonState called with:', state);
+        localSetButtonState.call(this, state);
+        if (state === true) {
+            console.log('[AVATAR DEBUG] Setting THINKING state');
+            setAvatarState('thinking', 'THINKING...');
+        } else if (state === false || state === 'ready') {
+            console.log('[AVATAR DEBUG] Calling handleToolEnd');
+            handleToolEnd();
+        }
+    };
+
+    // Initialize
+    setAvatarState('initial', 'Ready');
 
 }); // End DOMContentLoaded

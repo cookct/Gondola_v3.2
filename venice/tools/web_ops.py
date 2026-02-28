@@ -82,16 +82,78 @@ class WebOpsMixin(Tools):
             except Exception as e:
                 UI.step_error(f"Brave Search failed: {str(e)}")
 
-        # 2. Fallback to DuckDuckGo
+        # 2. Try Firecrawl Search (Agent-Friendly Markdown)
+        firecrawl_key = os.environ.get("FIRECRAWL_API_KEY")
+        if not firecrawl_key:
+            try:
+                config_path = os.path.join(SCRIPT_DIR, "app_config.json")
+                if os.path.exists(config_path):
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+                        firecrawl_key = config.get("firecrawl_api_key")
+            except Exception:
+                pass
+
+        if firecrawl_key:
+            try:
+                # Handle 'fc-' prefix if user didn't include it or included it
+                # Firecrawl keys usually start with 'fc-'
+                if not firecrawl_key.startswith('fc-'):
+                    pass # Key format varies, just use as is
+
+                headers = {
+                    "Authorization": f"Bearer {firecrawl_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                payload = {
+                    "query": query,
+                    "limit": n_results,
+                    "scrapeOptions": {
+                        "formats": ["markdown"]
+                    }
+                }
+                
+                with httpx.Client(timeout=60.0) as client:
+                    resp = client.post("https://api.firecrawl.dev/v2/search", headers=headers, json=payload)
+                    
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get('success'):
+                            results = []
+                            # Parse Firecrawl v2 response: data -> web -> [items]
+                            search_data = data.get('data', {})
+                            items = search_data if isinstance(search_data, list) else search_data.get('web', [])
+                            
+                            for item in items:
+                                results.append({
+                                    "title": item.get('title', 'No Title'),
+                                    "url": item.get('url', ''),
+                                    "snippet": (item.get('markdown') or item.get('description') or '')[:500] + "..."
+                                })
+                            
+                            if results:
+                                UI.step_done(f"Found {len(results)} results via Firecrawl")
+                                return {"success": True, "query": query, "results": results, "count": len(results), "source": "firecrawl"}
+                    
+                    UI.step_error(f"Firecrawl error: HTTP {resp.status_code} - {resp.text[:100]}")
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                UI.step_error(f"Firecrawl search failed: {str(e)}")
+
+        # 3. Fallback to DuckDuckGo (if available and enabled)
         if not HAS_DDGS:
-            msg = "DuckDuckGo fallback unavailable (library missing). Install 'duckduckgo-search' or set BRAVE_API_KEY."
+            msg = "Search providers failed. Configure BRAVE_API_KEY or FIRECRAWL_API_KEY."
             return {"success": False, "error": msg}
 
         try:
+            # DDG Logic (legacy fallback)
             results = []
-            # Use 'html' backend for stability
             with DDGS() as ddgs:
-                ddgs_resp = ddgs.text(query, max_results=n_results, backend="html")
+                # Remove backend='html' as it may be deprecated in newer versions
+                ddgs_resp = ddgs.text(query, max_results=n_results)
                 if ddgs_resp:
                     for r in ddgs_resp:
                         results.append({
@@ -102,12 +164,12 @@ class WebOpsMixin(Tools):
 
             if results:
                 UI.step_done(f"Found {len(results)} results via DuckDuckGo")
-                return {"success": True, "query": query, "results": results, "count": len(results)}
+                return {"success": True, "query": query, "results": results, "count": len(results), "source": "duckduckgo"}
             
-            return {"success": False, "error": "No results found (Brave: " + ("skipped/failed" if not brave_key else "failed") + ", DDG: empty)"}
+            return {"success": False, "error": "No results found."}
 
         except Exception as e:
-            UI.step_error(f"Search failed: {str(e)}")
+            UI.step_error(f"DDG Search failed: {str(e)}")
             return {"success": False, "error": f"Search failed: {str(e)}"}
 
     def fetch_url(self, url: str, max_length: int = 10000) -> Dict:

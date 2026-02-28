@@ -1,6 +1,6 @@
 """
 Image Operations Mixin for Venice CLI
-Provides AI image generation and editing tools using Venice qwen-image/qwen-edit models.
+Provides AI image generation and editing tools using Venice seedream-v4/seedream-v4-edit models.
 """
 
 import os
@@ -17,7 +17,7 @@ class ImageOpsMixin:
 
     def generate_image(self, prompt: str, filename: str = None, width: int = 1024, height: int = 1024) -> Dict:
         """
-        Generate an image using Venice qwen-image model.
+        Generate an image using Venice seedream-v4 model.
 
         Args:
             prompt: Text description of the image to generate
@@ -55,17 +55,28 @@ class ImageOpsMixin:
         output_path = os.path.join(images_dir, filename)
 
         try:
+            # Get style preset from config
+            from venice.prompts.system import get_edit_model
+            config = get_edit_model()
+            style_preset = config.get("style_preset", "Pixel Art")
+            
+            # If style_preset is empty string, don't include it in payload
+            if not style_preset:
+                style_preset = None
+
             payload = {
-                "model": "qwen-image",
+                "model": "seedream-v4",
                 "prompt": prompt,
                 "width": width,
                 "height": height,
-                "style_preset": "Pixel Art",
                 "hide_watermark": True,
                 "safe_mode": False
             }
+            
+            if style_preset:
+                payload["style_preset"] = style_preset
 
-            UI.step_detail(f"Calling Venice API (qwen-image)...")
+            UI.step_detail(f"Calling Venice API (seedream-v4)...")
 
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(
@@ -202,7 +213,8 @@ class ImageOpsMixin:
 
             # Get configured edit model
             from venice.prompts.system import get_edit_model
-            edit_model = get_edit_model()
+            config = get_edit_model()
+            edit_model = config.get("model", "seedream-v4-edit")
 
             payload = {
                 "prompt": expression_prompt,

@@ -903,8 +903,9 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "generate_image",
-            "description": "Generate an AI image using Venice qwen-image model. The image will be saved to the workspace images directory.",
+                            "name": "generate_image",
+                            "description": "Generate an AI image using Venice seedream-v4 model. The image will be saved to the workspace images directory.",
+            
             "parameters": {
                 "type": "object",
                 "properties": {

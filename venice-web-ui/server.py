@@ -83,8 +83,8 @@ import httpx
 # IMAGE RESIZING FOR CONTEXT
 # ============================================================================
 def resize_image_for_context(image_b64: str, max_size: int = 512) -> str:
-    """Resize image to fit within max_size for API context.
-    Returns resized base64 string."""
+    """Resize image to fit within max_size and MANDATORY convert to JPEG.
+    Returns JPEG-encoded base64 string."""
     try:
         from PIL import Image
         import io
@@ -97,52 +97,69 @@ def resize_image_for_context(image_b64: str, max_size: int = 512) -> str:
         image_bytes = base64.b64decode(image_b64)
         img = Image.open(io.BytesIO(image_bytes))
 
-        # Resize if larger than max_size
+        # 1. Resize if larger than max_size
         if img.width > max_size or img.height > max_size:
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
             logger.info(f"[ImageResize] Resized to {img.width}x{img.height}")
 
-        # Convert to RGB if RGBA (removes alpha channel issues)
-        if img.mode == 'RGBA':
+        # 2. MANDATORY: Convert to RGB (removes alpha channel, handles grayscale/indexed)
+        if img.mode != 'RGB':
             img = img.convert('RGB')
+            logger.info(f"[ImageResize] Converted {img.mode} to RGB")
 
-        # Re-encode as JPEG for smaller size
+        # 3. MANDATORY: Re-encode as JPEG for consistency and size optimization
         buffer = io.BytesIO()
         img.save(buffer, format='JPEG', quality=85)
         return base64.b64encode(buffer.getvalue()).decode('utf-8')
     except Exception as e:
-        logger.warning(f"[ImageResize] Failed to resize: {e}")
-        return image_b64  # Return original if resize fails
+        logger.warning(f"[ImageResize] Failed to process image: {e}")
+        return image_b64  # Return original if processing fails
 
 
 # ============================================================================
-# IMAGE UPLOAD FOR TOGETHER AI (uses litterbox.catbox.moe temp hosting)
+# IMAGE UPLOAD FOR TOGETHER AI (DEPRECATED - kept for backward compatibility)
+# ============================================================================
+# NOTE: Both Venice AI and Together AI now support base64-encoded images directly.
+# This function is no longer used for Together AI but kept for potential future use.
 # ============================================================================
 def upload_to_catbox(img_data, name="image"):
-    """Upload base64 image to litterbox.catbox.moe for Together.ai vision models.
+    """Upload base64 image to tmpfiles.org for temporary public URL.
     Returns URL on success, None on failure. Images expire after 1 hour.
+    NOTE: This function is deprecated. Use base64 data URLs instead.
     """
     try:
         # Strip data URI prefix if present
         if ',' in img_data:
             img_data = img_data.split(',', 1)[1]
         img_bytes = base64.b64decode(img_data)
-        logger.info(f"[Catbox] Uploading {name} ({len(img_bytes)} bytes)...")
+        logger.info(f"[TmpFiles] Uploading {name} ({len(img_bytes)} bytes)...")
 
         with httpx.Client(timeout=40.0) as client:
             resp = client.post(
-                'https://litterbox.catbox.moe/resources/internals/api.php',
-                data={'reqtype': 'fileupload', 'time': '1h'},
-                files={'fileToUpload': (f'{name}.png', img_bytes, 'image/png')}
+                'https://tmpfiles.org/api/v1/upload',
+                files={'file': (f'{name}.png', img_bytes, 'image/png')}
             )
-            if resp.status_code == 200 and resp.text.startswith('http'):
-                url = resp.text.strip()
-                logger.info(f"[Catbox] {name} uploaded: {url}")
-                return url
-            else:
-                logger.error(f"[Catbox] Upload failed: {resp.status_code} - {resp.text[:100]}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get('status') == 'success':
+                    # Convert to direct download URL by adding /dl/ and enforcing HTTPS
+                    raw_url = data['data']['url']
+                    # Ensure we use the /dl/ path for direct file access
+                    if 'tmpfiles.org/' in raw_url:
+                        url = raw_url.replace('tmpfiles.org/', 'tmpfiles.org/dl/')
+                    else:
+                        url = raw_url
+                    
+                    # Force HTTPS if it's HTTP
+                    if url.startswith('http://'):
+                        url = url.replace('http://', 'https://')
+                        
+                    logger.info(f"[TmpFiles] {name} uploaded: {url}")
+                    return url
+            
+            logger.error(f"[TmpFiles] Upload failed: {resp.status_code} - {resp.text[:100]}")
     except Exception as e:
-        logger.error(f"[Catbox] Upload error: {e}")
+        logger.error(f"[TmpFiles] Upload error: {e}")
     return None
 
 app = Flask(__name__)
@@ -348,63 +365,6 @@ def initialize(clear_messages=False):
 # Initialize on startup
 initialize()
 
-import random
-
-MISFITS_QUOTES = [
-    "I have a gift.",
-    "I'm gracefully tall, you're freakishly short.",
-    "Save me, Barry!",
-    "I appear to have shat myself.",
-    "Pure mindless vandalism!",
-    "Bullseye!",
-    "You look like a panty sniffer.",
-    "That accent is just a noise!",
-    "Strange tingling sensation in my anus.",
-    "I'm pretty sure this breaches the terms of my ASBO.",
-    "We were so beautiful!",
-    "I'm a screw-up and I plan to be a screw-up.",
-    "Where do you get this stuff?",
-    "It just comes to me.",
-    "I'm immortal!",
-    "Kind of put a downer on the whole thing.",
-    "Me? I got done for eating some pick-n-mix."
-]
-
-def get_nathan_status(action=None, tool_name=None):
-    if action == "think":
-        return random.choice([
-            "I have a gift.",
-            "Thinking? It just comes to me.",
-            "Where do you get this stuff?",
-            "I'm immortal! (thinking...)"
-        ])
-    if action == "tool":
-        if tool_name:
-            return f"{random.choice(['Pure mindless vandalism!', 'Bullseye!', 'I have a gift.'])} (using {tool_name})"
-        return random.choice([
-            "Pure mindless vandalism!",
-            "Bullseye!",
-            "I'm pretty sure this breaches the terms of my ASBO.",
-            "I have a gift (for tools)."
-        ])
-    if action == "connect":
-        return random.choice([
-            "That accent is just a noise!",
-            "Save me, Barry!",
-            "Connected. You like that? Oh yeah!"
-        ])
-    if action == "stream":
-        return random.choice([
-            "Strange tingling sensation in my anus (receiving data...)",
-            "We were so beautiful! (streaming...)",
-            "Oh yeah, oh yeah, oh yeah!"
-        ])
-    if action == "nudge":
-        return "Your response was empty? You mentally deficient?! (nudging)"
-    if action == "interrupt":
-        return "Kind of put a downer on the whole thing (interrupted)."
-    return random.choice(MISFITS_QUOTES)
-
 @app.route('/images/<path:filename>')
 def serve_image(filename):
     return send_from_directory(IMAGES_DIR, filename)
@@ -428,6 +388,16 @@ def serve_workspace_expression(filename):
     if not os.path.exists(expressions_dir):
         return "Expressions directory not found", 404
     return send_from_directory(expressions_dir, filename)
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files with no-cache headers for development."""
+    response = send_from_directory('static', filename)
+    if filename.endswith(('.js', '.css')):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
 
 @app.route('/')
 def index():
@@ -651,12 +621,65 @@ def get_conversation():
         "count": len(conversation)
     })
 
+def archive_chat_log(history):
+    """
+    Saves the full chat history to a human-readable Markdown file.
+    Deletes any archived files older than 5 days.
+    """
+    try:
+        # Determine paths
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        gondola_root = os.path.dirname(current_dir)
+        project_root = os.path.dirname(gondola_root)
+        archive_dir = os.path.join(project_root, 'chats', 'archives')
+        os.makedirs(archive_dir, exist_ok=True)
+
+        # 1. Cleanup old files (> 5 days)
+        now = time.time()
+        five_days_sec = 5 * 24 * 60 * 60
+        for f in os.listdir(archive_dir):
+            fpath = os.path.join(archive_dir, f)
+            if os.path.isfile(fpath) and now - os.path.getmtime(fpath) > five_days_sec:
+                try:
+                    os.remove(fpath)
+                    logger.info(f"Deleted old chat archive: {f}")
+                except Exception as e:
+                    logger.error(f"Failed to delete old archive {f}: {e}")
+
+        # 2. Save current log
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"chat_archive_{timestamp}.md"
+        filepath = os.path.join(archive_dir, filename)
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(f"# Chat Archive - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            for msg in history:
+                role = msg.get('role', 'unknown').upper()
+                content = msg.get('content', '')
+                
+                # Handle potential list content (like vision/tool results)
+                if isinstance(content, list):
+                    content = json.dumps(content, indent=2)
+                
+                f.write(f"### {role}\n{content}\n\n---\n\n")
+        
+        logger.info(f"Archived full chat history to: {filepath}")
+        return filepath
+    except Exception as e:
+        logger.error(f"Failed to archive chat log: {e}")
+        return None
+
 @app.route('/api/summarize', methods=['POST'])
 def summarize_session():
     """Summarize the current session and return new history with summary + last 10 messages."""
     try:
         data = request.json
         history = data.get('history', [])
+        
+        # Archive the full log before we truncate anything
+        if history:
+            archive_chat_log(history)
+            
         keep_last_messages = data.get('keep_last_messages', 10)
         
         if not history:
@@ -675,9 +698,24 @@ def summarize_session():
                 session_text += f"Assistant: {msg.get('content', '')}\n"
         
         # Generate summary (using a simple approach for now)
+        user_msgs = [m for m in history if m.get('role') == 'user' and not str(m.get('content', '')).startswith('SYSTEM')]
+        user_msg_count = len(user_msgs)
+        assistant_msg_count = len([m for m in history if m.get('role') == 'assistant'])
+        tool_call_count = len([m for m in history if m.get('role') == 'assistant' and 'tool_calls' in m])
+        
+        # Extract a bit of context from the first few user messages
+        context_preview = ""
+        if user_msgs:
+            previews = [str(m.get('content', ''))[:50] for m in user_msgs[:3]]
+            context_preview = " | ".join(previews)
+            if len(context_preview) > 150:
+                context_preview = context_preview[:147] + "..."
+
         summary = f"Session Summary ({len(history)} messages total):\n"
-        summary += f"- {len([m for m in history if m.get('role') == 'user'])} user messages\n"
-        summary += f"- {len([m for m in history if m.get('role') == 'assistant'])} assistant responses\n"
+        if context_preview:
+            summary += f"- Topics: {context_preview}\n"
+        summary += f"- {user_msg_count} actual user messages\n"
+        summary += f"- {assistant_msg_count} assistant turns ({tool_call_count} with tool actions)\n"
         
         # Add some key actions if detectable
         if 'edit_file' in str(history):
@@ -688,6 +726,12 @@ def summarize_session():
             summary += "- File creation operations\n"
             
         summary += "\nLast actions preserved for continuity."
+        
+        # Save to persistent memory so it appears in system prompt context
+        files_touched = []
+        if agent_state:
+            files_touched = list(agent_state.files_written.union(agent_state.files_edited))
+        memory.add_session_summary(summary, files_touched)
         
         # Build new history: summary + last user messages + their assistant responses
         new_history = [{
@@ -720,7 +764,7 @@ def summarize_session():
 def get_models():
     return jsonify({
         "models": MODELS,
-        "current": "moonshotai/Kimi-K2-Instruct-0905"
+        "current": "moonshotai/Kimi-K2.5"
     })
 
 @app.route('/api/models', methods=['POST'])
@@ -844,6 +888,7 @@ def get_provider_models():
                 return jsonify({"success": False, "error": "Together API key not configured"}), 400
 
             with httpx.Client(timeout=30.0) as client:
+                # 1. Fetch List A (All Models)
                 response = client.get(
                     "https://api.together.xyz/v1/models",
                     headers={"Authorization": f"Bearer {api_key}"}
@@ -854,10 +899,26 @@ def get_provider_models():
 
                 models_data = response.json()
 
+                # 2. Fetch List B (Dedicated Models) for Delta Strategy
+                # We need to subtract these from the main list to get true serverless models
+                response_dedicated = client.get(
+                    "https://api.together.xyz/v1/models?dedicated=true",
+                    headers={"Authorization": f"Bearer {api_key}"}
+                )
+                
+                dedicated_ids = set()
+                if response_dedicated.status_code == 200:
+                    dedicated_data = response_dedicated.json()
+                    dedicated_ids = {m.get('id') for m in dedicated_data}
+                    logger.info(f"Fetched {len(dedicated_ids)} dedicated models to exclude.")
+                else:
+                    logger.warning(f"Failed to fetch dedicated models (status {response_dedicated.status_code}). Serverless detection may be inaccurate.")
+
                 # Filter for SERVERLESS chat models that support function calling
-                # Serverless models have per-token pricing (input/output > 0)
-                # Dedicated models require hourly pricing and custom endpoints
+                # Strategy: Serverless = All Models - Dedicated Models
                 filtered_models = []
+                logger.info(f"Received {len(models_data)} models from Together AI. Starting filter...")
+                
                 for model in models_data:
                     model_type = model.get('type', '')
                     model_id = model.get('id', '')
@@ -867,23 +928,21 @@ def get_provider_models():
                     if model_type not in ['chat', 'language', 'code']:
                         continue
 
-                    # Check if serverless (has per-token pricing)
-                    # Serverless models have input/output pricing > 0
-                    # Dedicated-only models have 0 for per-token but require hourly
-                    input_price = pricing.get('input', 0)
-                    output_price = pricing.get('output', 0)
-                    hourly_price = pricing.get('hourly', 0)
-
-                    # Only include models with per-token pricing (serverless)
-                    # Skip models that only have hourly pricing (dedicated only)
-                    is_serverless = (input_price > 0 or output_price > 0)
-
-                    if not is_serverless:
+                    # DELTA STRATEGY: Exclude if in dedicated list
+                    if model_id in dedicated_ids:
+                        logger.debug(f"Skipping dedicated model: {model_id}")
                         continue
 
                     # Filter for function calling models
                     fc_config = infer_function_calling_config(model_id, model_type, model.get('context_length', 4096), 'together')
+                    
+                    # If inference failed but it's a chat model on Together, allow it (Together standardizes chat models)
+                    if not fc_config['native_function_calling'] and model_type == 'chat' and provider == 'together':
+                        fc_config['native_function_calling'] = True
+                        fc_config['tool_choice_on_nudge'] = 'auto' # Be safer with unknown models
+
                     if not fc_config['native_function_calling']:
+                        logger.debug(f"Skipping no-fc: {model_id} (type={model_type})")
                         continue
 
                     filtered_models.append({
@@ -892,9 +951,11 @@ def get_provider_models():
                         "type": model_type,
                         "context_length": model.get('context_length', 4096),
                         "organization": model.get('organization', ''),
-                        "price_in": input_price,
-                        "price_out": output_price,
+                        "price_in": pricing.get('input', 0),
+                        "price_out": pricing.get('output', 0),
                     })
+                
+                logger.info(f"Filtered down to {len(filtered_models)} models.")
 
                 # Sort by organization then name
                 filtered_models.sort(key=lambda x: (x['organization'], x['name']))
@@ -1227,7 +1288,7 @@ def chat():
     user_message = data.get('message')
     image_data = data.get('image')
     image_mime = data.get('image_mime', 'image/png')
-    model_id = data.get('model', 'moonshotai/Kimi-K2-Instruct-0905')
+    model_id = data.get('model', 'zai-org-glm-5')
     planning_mode = data.get('planning_mode', False)
 
     logger.info(f"[{request_id}] Model: {model_id}")
@@ -1247,35 +1308,20 @@ def chat():
         return jsonify({"response": "Conversation cleared."})
 
     if image_data:
-        # Resize image to avoid Venice validation errors
-        image_data = resize_image_for_context(image_data, max_size=512)
-        image_mime = "image/jpeg"  # Resized images are JPEG
-        logger.debug(f"[{request_id}] Building multimodal message with image ({image_mime})")
+        # Resize image to avoid "possibly corrupt" or "too large" errors
+        # Together AI and Venice both have limits on base64 size
+        image_data = resize_image_for_context(image_data, max_size=1024)
+        image_mime = 'image/jpeg'  # resize_image_for_context always returns JPEG
 
-        # Check if model is Together AI - upload to catbox for URL instead of base64
-        model_info = MODELS.get(model_id, {})
-        is_together = model_info.get("provider") == "together"
-
-        # Build image URL part
-        if is_together:
-            # Upload to catbox and use URL (much smaller payload)
-            uploaded_url = upload_to_catbox(image_data, f"img_{request_id}")
-            if uploaded_url:
-                logger.info(f"[{request_id}] Using catbox URL for Together: {uploaded_url}")
-                image_part = {"type": "image_url", "image_url": {"url": uploaded_url}}
-            else:
-                # Fallback to base64 if upload fails
-                logger.warning(f"[{request_id}] Catbox upload failed, falling back to base64")
-                image_part = {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}}
-        else:
-            # Venice/other providers - use base64
-            image_part = {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}}
+        # Build image URL part directly using base64
+        image_part = {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{image_data}"}}
 
         # Only include text part if there's actual text (API rejects empty text)
+        # Sequence: Image first, then text (often required for vision model token alignment)
         if user_message and user_message.strip():
             message_content = [
-                {"type": "text", "text": user_message},
-                image_part
+                image_part,
+                {"type": "text", "text": user_message}
             ]
         else:
             message_content = [image_part]
@@ -1400,7 +1446,7 @@ def chat():
                     turn_start = time.time()
                     logger.info(f"[{request_id}] --- AGENT TURN {agent_turns + 1} ---")
 
-                    event_queue.put({"type": "status", "data": get_nathan_status("think")})
+                    event_queue.put({"type": "status", "data": "Thinking... (thinking)"})
 
                     # Send turn start event
                     event_queue.put({
@@ -1505,8 +1551,7 @@ def chat():
                         # Update timing right before actual API call for accuracy
                         api_call_start = time.time()
                         logger.info(f"[{request_id}] >>> Initiating API call at {datetime.now().isoformat()}")
-                        event_queue.put({"type": "status", "data": get_nathan_status("connect")})
-
+                        event_queue.put({"type": "status", "data": "Connection established (thinking)"})
                         # Generous timeouts: connect=60s, read=180s (time between chunks), write=60s, pool=60s
                         # The read timeout is high because some models take a long time to produce the first token
 
@@ -1521,9 +1566,19 @@ def chat():
                             }
                             logger.info(f"[{request_id}] Forcing tool_choice to 'done' at turn {agent_turns + 1}")
 
+                        # VISION OPTIMIZATION: Truncate history if image present to avoid 500 error (payload size limit)
+                        # Together AI vision endpoints often fail with 500 if the JSON body is too large (>256KB)
+                        has_image_in_history = any(isinstance(m.get('content'), list) for m in messages)
+                        
+                        request_messages = messages
+                        if has_image_in_history and is_together and len(messages) > 12:
+                            # Keep system prompt (index 0) + last 10 messages
+                            request_messages = [messages[0]] + messages[-10:]
+                            logger.info(f"[{request_id}] Truncated history for Together Vision request: {len(messages)} -> {len(request_messages)} messages")
+
                         # Sanitize messages: remove empty text parts from multimodal messages
                         sanitized_messages = []
-                        for msg in messages:
+                        for msg in request_messages:
                             content = msg.get('content')
                             if isinstance(content, list):
                                 # Multimodal message - filter out empty text parts
@@ -1546,7 +1601,16 @@ def chat():
                         }
                         # Only add venice_parameters for Venice
                         if not is_together:
-                            api_payload["venice_parameters"] = {"include_venice_system_prompt": True}
+                            api_payload["venice_parameters"] = {"include_venice_system_prompt": True, "web_search": True}
+                        else:
+                            # TOGETHER AI FIX: String tool_choice values (auto, required) trigger flag requirements
+                            # We remove them to let the API default to its standard behavior.
+                            # We ONLY keep dicts (e.g. forcing a specific tool like 'done')
+                            tc = api_payload.get("tool_choice")
+                            if isinstance(tc, str):
+                                if "tool_choice" in api_payload:
+                                    del api_payload["tool_choice"]
+                                logger.debug(f"[{request_id}] Removed string tool_choice '{tc}' for Together AI compatibility")
 
                         logger.debug(f"[{request_id}] tool_choice: {effective_tool_choice}")
 
@@ -1577,7 +1641,7 @@ def chat():
                                     ) as response:
                                         connection_time = time.time() - api_call_start
                                         logger.info(f"[{request_id}] <<< Connection established in {connection_time:.3f}s")
-                                        event_queue.put({"type": "status", "data": get_nathan_status("connect")})
+                                        event_queue.put({"type": "status", "data": "Connecting to API... (thinking)"})
                                         logger.info(f"[{request_id}] Response status: {response.status_code}")
 
                                         # DEBUG: Log ALL headers received
@@ -1669,7 +1733,7 @@ def chat():
                                                 first_chunk_time = current_time
                                                 ttft = first_chunk_time - api_call_start
                                                 logger.info(f"[{request_id}] ⚡ FIRST CHUNK received! Time-to-first-token: {ttft:.3f}s")
-                                                event_queue.put({"type": "status", "data": get_nathan_status("stream")})
+                                                event_queue.put({"type": "status", "data": "Streaming response... (acting)"})
 
                                             # Log every 50 chunks or every 5 seconds
                                             time_since_start = current_time - stream_start_time
@@ -1838,7 +1902,7 @@ def chat():
                         return
 
                     if stop_signal:
-                        event_queue.put({"type": "status", "data": get_nathan_status("interrupt")})
+                        event_queue.put({"type": "status", "data": "Interrupted by user (thinking)"})
                         break
                     
                     # Store assistant message
@@ -1937,7 +2001,7 @@ def chat():
                             # Inject a nudge to continue working
                             nudge_msg = "SYSTEM: Your response was empty. The task is not complete. Continue working - use tools to make progress, then call done() when finished."
                             messages.append({"role": "user", "content": nudge_msg})
-                            event_queue.put({"type": "status", "data": get_nathan_status("nudge")})
+                            event_queue.put({"type": "status", "data": "Waiting for model to respond... (thinking)"})
 
                             # OPTIMIZATION: Force tool use after nudge (using model-specific config)
                             tool_choice_override = tool_choice_on_nudge
@@ -1977,7 +2041,9 @@ def chat():
                         logger.info(f"[{request_id}] │  ID: {tool_id}")
                         logger.debug(f"[{request_id}] │  Args: {tool_args[:500]}{'...' if len(tool_args) > 500 else ''}")
 
-                        event_queue.put({"type": "status", "data": get_nathan_status("tool", tool_name)})
+                        # Trigger avatar change in frontend
+                        event_queue.put({"type": "status", "data": f"Executing {tool_name}..."})
+                        
                         tool_start = time.time()
 
                         try:
@@ -2008,6 +2074,9 @@ def chat():
                             class NativeTC:
                                 def __init__(self, d):
                                     self.function = type('Func', (), d['function'])
+
+                            # Trigger avatar change in frontend
+                            event_queue.put({"type": "status", "data": f"Executing {tool_name}..."})
 
                             # OPTIMIZATION: Check tool result cache for read_file
                             if tool_name == 'read_file':
@@ -2427,6 +2496,8 @@ def save_personality():
         logger.error(f"Save personality error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/avatar-expressions', methods=['GET'])
 def get_avatar_expressions():
     """Get the avatar expressions setting."""
@@ -2454,24 +2525,26 @@ def set_avatar_expressions():
 
 @app.route('/api/edit-model', methods=['GET'])
 def get_edit_model_api():
-    """Get the current image edit model."""
+    """Get the current image edit model and style."""
     from venice.prompts.system import get_edit_model
     try:
-        model = get_edit_model()
-        return jsonify({"success": True, "model": model})
+        config = get_edit_model()
+        return jsonify({"success": True, "model": config["model"], "style_preset": config["style_preset"]})
     except Exception as e:
         logger.error(f"Get edit model error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/edit-model', methods=['POST'])
 def set_edit_model_api():
-    """Set the image edit model."""
+    """Set the image edit model and style."""
     from venice.prompts.system import set_edit_model
     try:
         data = request.get_json()
-        model = data.get('model', 'qwen-edit')
-        if set_edit_model(model):
-            logger.info(f"Edit model set to: {model}")
+        model = data.get('model', 'seedream-v4-edit')
+        style = data.get('style_preset', 'Pixel Art')
+        
+        if set_edit_model(model, style):
+            logger.info(f"Edit config set: {model}, style: {style}")
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Invalid model"}), 400
@@ -2524,6 +2597,27 @@ def make_avatar():
         logger.error(f"Make avatar error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/avatar-images/<tool_name>')
+def get_avatar_images(tool_name):
+    """Get list of avatar images for a specific tool."""
+    try:
+        # Build path to tool-specific avatar folder
+        gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        avatars_dir = os.path.join(gondola_root, 'images', 'avatars')
+        tool_dir = os.path.join(avatars_dir, tool_name)
+        
+        images = []
+        if os.path.exists(tool_dir):
+            # Get all image files in the folder
+            for filename in os.listdir(tool_dir):
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                    images.append(f'/images/avatars/{tool_name}/{filename}')
+        
+        return jsonify({"success": True, "images": images})
+    except Exception as e:
+        logger.error(f"Error listing avatar images: {e}")
+        return jsonify({"success": True, "images": []})
+
 if __name__ == '__main__':
 
     logger.info("=" * 70)
@@ -2538,6 +2632,6 @@ if __name__ == '__main__':
 
     print("Starting Gondola Server (Modular) on port 5050...")
 
-    app.run(host='0.0.0.0', port=5050, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5050, debug=True, use_reloader=True)
 
 

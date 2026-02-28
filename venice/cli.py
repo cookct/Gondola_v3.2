@@ -302,10 +302,11 @@ def main():
 
     UI.info(f"Analyzing: {os.path.basename(image_path)}")
 
-    # Add image message (no prompt - let model use conversation context)
+    # Add image message (with a default prompt so Venice models don't ignore it)
     messages.append({
      "role": "user",
      "content": [
+      {"type": "text", "text": "Please analyze this image."},
       {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_data}"}}
      ]
     })

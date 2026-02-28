@@ -234,7 +234,7 @@
         <div class="sidebar-right">
             <div class="sidebar-tabs">
                 <button class="tab-btn" data-tab="add-model">➕ Models</button>
-                <button class="tab-btn active" data-tab="backups">💾 Backups</button>
+                <button class="tab-btn" data-tab="avatar">👤 Avatar</button>
             </div>
             <div class="tab-panel" id="tab-add-model">
                 <div class="add-model-panel">
@@ -277,6 +277,14 @@
                     <div class="add-model-status" id="add-model-status"></div>
                 </div>
             </div>
+            <div class="tab-panel" id="tab-avatar">
+                <div class="avatar-panel">
+                    <div class="avatar-container">
+                        <img id="avatar-image" src="/images/avatars/initial/download.png" alt="Avatar">
+                    </div>
+                    <div id="avatar-status" class="avatar-status">Ready</div>
+                </div>
+            </div>
             <div class="tab-panel active" id="tab-backups">
                 <div class="backups-panel">
                     <div class="backups-header">
@@ -306,21 +314,19 @@
             <div class="modal-body">
                 <p class="modal-description">Add custom personality instructions that will be injected after "You are an autonomous AI coding agent."</p>
                 <textarea id="personality-text" class="personality-textarea" placeholder="e.g., You are a meticulous code reviewer who focuses on security and performance..."></textarea>
-                <div class="toggle-row" style="margin-top: 16px; display: flex; align-items: center; gap: 10px;">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="avatar-expressions-toggle">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span style="color: var(--text-main);">Enable Avatar Expressions</span>
-                    <span style="color: var(--text-dim); font-size: 0.85em;">(Agent generates expression images)</span>
-                </div>
+
                 <div class="toggle-row" style="margin-top: 12px; display: flex; align-items: center; gap: 10px;">
                     <label class="toggle-switch">
-                        <input type="checkbox" id="edit-model-toggle">
+                        <input type="checkbox" id="edit-model-toggle" checked>
                         <span class="toggle-slider"></span>
                     </label>
                     <span style="color: var(--text-main);">Use Seedream</span>
-                    <span style="color: var(--text-dim); font-size: 0.85em;">(Slower but higher quality. Off = Qwen)</span>
+                    <span style="color: var(--text-dim); font-size: 0.85em;">(High Quality. Off = Qwen)</span>
+                </div>
+
+                <div class="input-group" style="margin-top: 12px;">
+                    <label style="color: var(--text-main); font-size: 0.9em; display: block; margin-bottom: 4px;">Image Style Preset</label>
+                    <input type="text" id="style-preset-input" class="text-input" placeholder="e.g. Pixel Art, Cinematic, Origami (Leave empty for none)" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main);">
                 </div>
             </div>
             <div class="modal-footer">

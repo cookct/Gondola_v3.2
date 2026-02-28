@@ -24,46 +24,53 @@ def load_personality():
 
 
 def is_avatar_expressions_enabled():
-    """Check if avatar expressions feature is enabled."""
-    if os.path.exists(AVATAR_EXPRESSIONS_FILE):
-        try:
-            with open(AVATAR_EXPRESSIONS_FILE, 'r') as f:
-                return f.read().strip().lower() == 'true'
-        except Exception:
-            return False
-    return False
+    """Avatar expressions are always enabled - no toggle needed."""
+    return True
 
 
 def set_avatar_expressions_enabled(enabled: bool):
-    """Enable or disable avatar expressions feature."""
-    try:
-        with open(AVATAR_EXPRESSIONS_FILE, 'w') as f:
-            f.write('true' if enabled else 'false')
-        return True
-    except Exception:
-        return False
+    """No-op - avatar expressions are always enabled."""
+    pass
 
+
+import json
 
 def get_edit_model():
-    """Get the current image edit model. Defaults to qwen-edit."""
+    """Get the current image edit configuration. Returns dict with model and style_preset."""
+    default_config = {"model": "seedream-v4-edit", "style_preset": "Pixel Art"}
+    
     if os.path.exists(EDIT_MODEL_FILE):
         try:
             with open(EDIT_MODEL_FILE, 'r') as f:
-                model = f.read().strip()
-                if model in ('qwen-edit', 'seedream-v4-edit'):
-                    return model
+                content = f.read().strip()
+                # Try parsing as JSON first
+                try:
+                    data = json.loads(content)
+                    if isinstance(data, dict):
+                        return {
+                            "model": data.get("model", "seedream-v4-edit"),
+                            "style_preset": data.get("style_preset", "Pixel Art")
+                        }
+                except json.JSONDecodeError:
+                    # Fallback to legacy string format
+                    if content in ('qwen-edit', 'seedream-v4-edit'):
+                        return {"model": content, "style_preset": "Pixel Art"}
         except Exception:
             pass
-    return 'qwen-edit'
+    return default_config
 
 
-def set_edit_model(model: str):
-    """Set the image edit model."""
+def set_edit_model(model: str, style_preset: str = "Pixel Art"):
+    """Set the image edit model and style preset."""
     if model not in ('qwen-edit', 'seedream-v4-edit'):
         return False
     try:
+        data = {
+            "model": model,
+            "style_preset": style_preset
+        }
         with open(EDIT_MODEL_FILE, 'w') as f:
-            f.write(model)
+            json.dump(data, f)
         return True
     except Exception:
         return False
@@ -146,6 +153,23 @@ Keep explanations short (1 sentence) but keep the user informed.
 - Tell the user WHAT you did and WHERE you put it
 - Example: done("Added font size slider to the settings menu in index.html, lines 150-165")
 - Do NOT silently finish - the user needs confirmation
+""",
+
+    # Qwen 3.5 397B (and generic Qwen fallback)
+    "Qwen/Qwen3.5-397B-A17B": """
+## SPECIAL INSTRUCTIONS (Qwen 3.5):
+
+**CRITICAL: YOU MUST CALL done() TO FINISH.**
+Writing a text response is NOT enough. The system will NOT see your answer unless you call `done()`.
+
+1. **Answer the User**: Write your explanation or answer in the chat.
+2. **Call the Tool**: IMMEDIATELY after your text, call the `done()` tool.
+
+Example of correct completion:
+"I have listed the features below... [details]... That covers everything."
+`done("Provided feature list based on file analysis.")`
+
+**If you do not call `done()`, the task is considered INCOMPLETE.**
 """,
 
     "llama-3.3-70b": """
@@ -246,22 +270,7 @@ PLANNING_MODE_PROMPT = """
 """
 
 
-AVATAR_EXPRESSIONS_PROMPT = """
-## AVATAR EXPRESSIONS
 
-You have an avatar face image (avatar.png). Use edit_image to change YOUR expression.
-
-The avatar already exists - you are editing YOUR OWN FACE to show a different expression.
-Do NOT describe a character. Do NOT describe appearance. Just describe the expression change.
-
-Examples:
-- `edit_image(prompt="smiling happily")`
-- `edit_image(prompt="shocked and surprised")`
-- `edit_image(prompt="winking playfully")`
-- `edit_image(prompt="looking embarrassed")`
-
-This edits your existing avatar face to show that expression. Use it to react to events.
-"""
 
 
 def build_system_prompt(
@@ -312,10 +321,6 @@ def build_system_prompt(
     # Add model-specific guidance
     if model_id and model_id in MODEL_SPECIFIC_GUIDANCE:
         parts.append(MODEL_SPECIFIC_GUIDANCE[model_id])
-
-    # Add avatar expressions prompt if enabled
-    if is_avatar_expressions_enabled():
-        parts.append(AVATAR_EXPRESSIONS_PROMPT)
 
     # Add project context if available
     if project_context:

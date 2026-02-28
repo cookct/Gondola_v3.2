@@ -6,7 +6,7 @@ import os
 
 # Default settings
 
-DEFAULT_MODEL = "moonshotai/Kimi-K2.5"
+DEFAULT_MODEL = "zai-org-glm-5"
 
 DEFAULT_WORKSPACE = "."  # Current directory by default
 

@@ -18,6 +18,26 @@ _ui_fallback_logger = logging.getLogger('venice.ui')
 #   - tool_choice_on_nudge: tool_choice to use after empty response nudge
 #   - force_done_at_max: Force done() tool at max turns (default True)
 MODELS = {
+    "zai-org-glm-5": {
+        "name": "GLM 5",
+        "type": "chat",
+        "provider": "venice",
+        "description": "General text model without native vision",
+        "strength": "Text Logic",
+        "rank": 1,
+        "context_limit": 128000,
+        "price_in": 0.0,
+        "price_out": 0.0,
+        "max_tokens": 30000,
+        "native_function_calling": True,
+        "max_agent_turns": 50,
+        "needs_explicit_stop": False,
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True,
+        "native_vision": False
+    },
     "claude-opus-45": {
         "name": "Claude Opus 4.5",
         "type": "vision",

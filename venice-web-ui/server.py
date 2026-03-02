@@ -1066,7 +1066,7 @@ def add_model():
         capabilities = []
         if fc_config['native_function_calling']:
             capabilities.append("Function Calling")
-        if model_type == 'vision' or 'vl' in model_id.lower() or 'vision' in model_id.lower():
+        if model_type == 'vision' or 'vl' in model_id.lower() or 'vision' in model_id.lower() or 'glm' in model_id.lower():
             capabilities.append("Vision")
         capabilities.extend(["Reasoning", "Code"])
         if context_length >= 100000:
@@ -1442,7 +1442,7 @@ def chat():
                 session_tokens_in = 0
                 session_tokens_out = 0
 
-                while not stop_signal:
+                while not stop_signal and not interrupt_flag.is_set():
                     turn_start = time.time()
                     logger.info(f"[{request_id}] --- AGENT TURN {agent_turns + 1} ---")
 
@@ -1589,6 +1589,60 @@ def chat():
                             else:
                                 sanitized_messages.append(msg)
 
+                        # VISION HELPER: Intercept images for non-vision models
+                        is_vision_model = model_info.get("type") == "vision" and model_info.get("native_vision", True) is not False
+                        # Double check we actually have images to process
+                        if not is_vision_model and any(isinstance(m.get('content'), list) for m in sanitized_messages):
+                            logger.info(f"[{request_id}] Non-vision model ({model_id}) detected with images. Invoking Vision Helper (Kimi K2.5)...")
+                            event_queue.put({"type": "status", "data": "Kimi K2.5 analyzing image for text model..."})
+                            
+                            helper_api_key = get_api_key() # Venice API key
+                            if helper_api_key:
+                                try:
+                                    import httpx
+                                    with httpx.Client(timeout=60.0) as helper_client:
+                                        for i, msg in enumerate(sanitized_messages):
+                                            content = msg.get('content')
+                                            if isinstance(content, list) and any(p.get('type') == 'image_url' for p in content):
+                                                # Use Kimi K2.5 to analyze
+                                                helper_payload = {
+                                                    "model": "kimi-k2-5",
+                                                    "messages": [
+                                                        {"role": "system", "content": "You are a vision helper for a text-only AI. Provide a highly detailed, objective description of the provided image(s) so the text-only AI can fully understand what is depicted."},
+                                                        {"role": "user", "content": content}
+                                                    ],
+                                                    "max_tokens": 1000,
+                                                    "venice_parameters": {"include_venice_system_prompt": True}
+                                                }
+                                                
+                                                helper_resp = helper_client.post(
+                                                    "https://api.venice.ai/api/v1/chat/completions",
+                                                    headers={
+                                                        "Authorization": f"Bearer {helper_api_key}",
+                                                        "Content-Type": "application/json"
+                                                    },
+                                                    json=helper_payload
+                                                )
+                                                
+                                                if helper_resp.status_code == 200:
+                                                    desc = helper_resp.json().get('choices', [{}])[0].get('message', {}).get('content', '')
+                                                    logger.info(f"[{request_id}] Vision Helper success: generated {len(desc)} chars")
+                                                    original_text = "\n".join([p.get('text', '') for p in content if p.get('type') == 'text'])
+                                                    new_text = original_text + f"\n\n[System Note: The user provided an image. Vision Assistant described it as follows:\n{desc}]"
+                                                    sanitized_messages[i] = {**msg, 'content': new_text.strip()}
+                                                else:
+                                                    logger.warning(f"[{request_id}] Vision Helper failed: {helper_resp.status_code}")
+                                                    # Fallback to just text
+                                                    text_only = "\n".join([p.get('text', '') for p in content if p.get('type') == 'text'])
+                                                    sanitized_messages[i] = {**msg, 'content': text_only + "\n[System Note: Image was ignored (model lacks vision)]"}
+                                except Exception as e:
+                                    logger.error(f"[{request_id}] Vision Helper exception: {e}")
+                                    for i, msg in enumerate(sanitized_messages):
+                                        content = msg.get('content')
+                                        if isinstance(content, list):
+                                            text_only = "\n".join([p.get('text', '') for p in content if p.get('type') == 'text'])
+                                            sanitized_messages[i] = {**msg, 'content': text_only}
+
                         # Construct payload
                         api_payload = {
                             "model": model_id,
@@ -1625,7 +1679,15 @@ def chat():
                                 retry_delay = RETRY_BASE_DELAY * (2 ** (api_attempt - 2))  # 1s, 2s, 4s...
                                 logger.warning(f"[{request_id}] API retry {api_attempt}/{MAX_API_RETRIES} after {retry_delay:.1f}s delay")
                                 event_queue.put({"type": "status", "data": f"Retrying ({api_attempt}/{MAX_API_RETRIES})..."})
-                                time.sleep(retry_delay)
+                                
+                                # Wait with interrupt support
+                                for _ in range(int(retry_delay * 10)):
+                                    if interrupt_flag.is_set():
+                                        break
+                                    time.sleep(0.1)
+                                    
+                                if interrupt_flag.is_set():
+                                    break
                                 api_call_start = time.time()  # Reset timing for retry
 
                             try:
@@ -1740,7 +1802,7 @@ def chat():
                                             if chunk_count % 50 == 0 or (chunk_count > 1 and int(time_since_start) % 5 == 0 and int(time_since_start) > 0):
                                                 logger.debug(f"[{request_id}] Chunk #{chunk_count} | Elapsed: {time_since_start:.1f}s | Content chars: {total_content_chars}")
 
-                                            if stop_signal:
+                                            if stop_signal or interrupt_flag.is_set():
                                                 logger.info(f"[{request_id}] Stop signal received, breaking stream")
                                                 break
 
@@ -1901,7 +1963,7 @@ def chat():
                         event_queue.put({"type": "error", "data": f"Error: {str(e)}"})
                         return
 
-                    if stop_signal:
+                    if stop_signal or interrupt_flag.is_set():
                         event_queue.put({"type": "status", "data": "Interrupted by user (thinking)"})
                         break
                     
@@ -2048,7 +2110,15 @@ def chat():
 
                         try:
                             # HARD LOCK: Planning Mode enforcement
-                            if planning_mode and tool_name in ['write_file', 'edit_file', 'append_to_file', 'delete_lines', 'replace_lines', 'insert_at_line']:
+                            modification_tools = [
+                                'write_file', 'edit_file', 'append_to_file', 'delete_lines', 'replace_lines', 'insert_at_line',
+                                'multi_edit', 'find_and_replace', 'delete_file', 'move_file', 'copy_file', 
+                                'make_directory', 'delete_directory', 'begin_transaction', 'commit_transaction',
+                                'run_command', 'save_knowledge', 'remember', 'forget', 'set_preference',
+                                'download_image', 'download_placeholder_image', 'generate_image', 'edit_image',
+                                'extract_symbol', 'undo_edit', 'restore_backup'
+                            ]
+                            if planning_mode and tool_name in modification_tools:
                                 logger.warning(f"[{request_id}] │  BLOCKED: {tool_name} called in Planning Mode")
                                 result = {
                                     "success": False,
@@ -2342,7 +2412,11 @@ def chat():
         last_ping = time.time()
         while True:
             try:
-                if interrupt_flag.is_set(): stop_signal = True
+                if interrupt_flag.is_set():
+                    stop_signal = True
+                    logger.info(f"[{request_id}] Interrupt flag set, breaking SSE loop immediately")
+                    yield f"event: error\ndata: {json.dumps('Interrupted by user')}\n\n"
+                    break
                 event = event_queue.get(timeout=0.1)
                 if event is None: break
                 yield f"event: {event['type']}\ndata: {json.dumps(event['data'])}\n\n"
@@ -2356,7 +2430,7 @@ def chat():
                 logger.error(f"[{request_id}] SSE yield error: {str(e)}")
                 yield f"event: error\ndata: {json.dumps(str(e))}\n\n"
                 break
-        logic_thread.join()
+        logic_thread.join(timeout=1.0)
         # Auto-save conversation for crash recovery
         memory.save_conversation(messages)
         yield f"event: done\ndata: {json.dumps({'history_length': len(messages)})}\n\n"
@@ -2601,19 +2675,40 @@ def make_avatar():
 def get_avatar_images(tool_name):
     """Get list of avatar images for a specific tool."""
     try:
+        from PIL import Image
         # Build path to tool-specific avatar folder
         gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         avatars_dir = os.path.join(gondola_root, 'images', 'avatars')
         tool_dir = os.path.join(avatars_dir, tool_name)
         
         images = []
+        durations = []
+        is_animated = []
         if os.path.exists(tool_dir):
             # Get all image files in the folder
-            for filename in os.listdir(tool_dir):
+            for filename in sorted(os.listdir(tool_dir)):
                 if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                    full_path = os.path.join(tool_dir, filename)
                     images.append(f'/images/avatars/{tool_name}/{filename}')
+                    
+                    duration = 2000
+                    animated = False
+                    if filename.lower().endswith('.gif'):
+                        try:
+                            with Image.open(full_path) as img:
+                                if getattr(img, "is_animated", False):
+                                    animated = True
+                                    dur = 0
+                                    for i in range(img.n_frames):
+                                        img.seek(i)
+                                        dur += img.info.get('duration', 100)
+                                    duration = dur if dur > 0 else 2000
+                        except Exception as e:
+                            logger.error(f"Error reading gif duration for {filename}: {e}")
+                    durations.append(duration)
+                    is_animated.append(animated)
         
-        return jsonify({"success": True, "images": images})
+        return jsonify({"success": True, "images": images, "durations": durations, "is_animated": is_animated})
     except Exception as e:
         logger.error(f"Error listing avatar images: {e}")
         return jsonify({"success": True, "images": []})

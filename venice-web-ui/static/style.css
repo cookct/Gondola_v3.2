@@ -2549,6 +2549,31 @@ textarea:focus {
     border-color: var(--accent);
 }
 
+/* Image button container for side-by-side layout */
+.image-btn-container {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+/* Delete Image button */
+.delete-image-btn {
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    background: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+    border: 1px solid rgba(220, 53, 69, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.delete-image-btn:hover {
+    background: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
 /* Avatar Panel */
 .avatar-panel {
     padding: 16px;

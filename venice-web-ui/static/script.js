@@ -424,9 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (data.success) {
-                // Clear conversation history on workspace switch
-                conversationHistory = [];
-                chatHistory.innerHTML = '';
+                // Restore conversation from new workspace (don't just clear)
+                await restoreConversation();
                 appendMessage('system', `Workspace changed to: ${workspaceSelect.options[workspaceSelect.selectedIndex].text}`);
             } else {
                 alert('Error: ' + data.error);
@@ -1513,7 +1512,12 @@ async function sendMessage() {
     function appendMessageWithImage(role, text, imageSrc) {
         const div = createMessageDiv(role);
 
-        // Container for image + button
+        // Track the index in conversation history for deletion
+        // The message will be added to conversationHistory after this function returns
+        // So we use the current length as the index it will have
+        const historyIndex = conversationHistory.length;
+
+        // Container for image + buttons
         const imgContainer = document.createElement('div');
         imgContainer.className = 'image-with-avatar-btn';
 
@@ -1528,13 +1532,54 @@ async function sendMessage() {
         };
         imgContainer.appendChild(img);
 
+        // Button container for side-by-side layout
+        const btnContainer = document.createElement('div');
+        btnContainer.className = 'image-btn-container';
+
+        // Delete Image button (to remove from conversation history)
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-image-btn';
+        deleteBtn.textContent = '🗑️ Remove';
+        deleteBtn.title = 'Remove image from conversation (fixes API errors with non-vision models)';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (!confirm('Remove this image from conversation history?\n\nThis helps fix API errors when switching to non-vision models.')) return;
+            
+            // Remove the image from conversation history
+            if (historyIndex < conversationHistory.length) {
+                const entry = conversationHistory[historyIndex];
+                if (entry && entry.content && Array.isArray(entry.content)) {
+                    // Convert multimodal message to text-only
+                    const textContent = entry.content.find(c => c.type === 'text');
+                    if (textContent) {
+                        entry.content = textContent.text; // Convert to simple text message
+                    } else {
+                        // No text, remove entire message
+                        conversationHistory.splice(historyIndex, 1);
+                    }
+                }
+            }
+            
+            // Remove image from DOM, keep text
+            imgContainer.remove();
+            if (text) {
+                const textDiv = document.createElement('div');
+                textDiv.innerHTML = marked.parse(text);
+                div.appendChild(textDiv);
+            }
+            
+            console.log('[Image] Removed from conversation history at index', historyIndex);
+        };
+        btnContainer.appendChild(deleteBtn);
+
         // Make Avatar button
         const avatarBtn = document.createElement('button');
         avatarBtn.className = 'make-avatar-btn';
         avatarBtn.textContent = 'Make Avatar';
         avatarBtn.onclick = () => makeAvatar(imageSrc);
-        imgContainer.appendChild(avatarBtn);
+        btnContainer.appendChild(avatarBtn);
 
+        imgContainer.appendChild(btnContainer);
         div.appendChild(imgContainer);
 
         if (text) {
@@ -2266,8 +2311,11 @@ async function sendMessage() {
     let avatarCycleTimer = null;
     let toolStartTime = null;
     let currentToolImages = [];
+    let currentToolDurations = [];
+    let currentToolIsAnimated = [];
     let currentImageIndex = 0;
     let cyclingThresholdTimer = null;
+    let isDoneSequenceActive = false;
 
     const BLANK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
@@ -2298,7 +2346,7 @@ async function sendMessage() {
     }
 
     function getRandomInterval() {
-        return 2000; // Fixed 2 second interval
+        return 5000; // 5 second fallback interval
     }
 
     function cycleAvatarImage() {
@@ -2308,7 +2356,9 @@ async function sendMessage() {
         const avatarEl = getAvatarElement();
         if (avatarEl) {
             const newSrc = currentToolImages[currentImageIndex];
-            const cacheBustedSrc = newSrc + (newSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+            // Don't cache-bust animated GIFs
+            const isCurrentAnimated = currentToolIsAnimated[currentImageIndex] || false;
+            const srcToUse = isCurrentAnimated ? newSrc : (newSrc + (newSrc.includes('?') ? '&' : '?') + 't=' + Date.now());
             
             // Fade out
             avatarEl.style.opacity = '0';
@@ -2319,21 +2369,32 @@ async function sendMessage() {
                     avatarEl.onload = null;
                     avatarEl.style.opacity = '1';
                 };
-                avatarEl.src = cacheBustedSrc;
+                avatarEl.src = srcToUse;
             }, 250);
             
-            // Set next interval randomly (add 300ms for fade time)
-            avatarCycleTimer = setTimeout(cycleAvatarImage, getRandomInterval() + 300);
+            // Set next interval based on duration or random interval (add 300ms for fade time)
+            let duration = getRandomInterval();
+            if (currentToolDurations && currentToolDurations.length > currentImageIndex) {
+                duration = currentToolDurations[currentImageIndex] || duration;
+            }
+            avatarCycleTimer = setTimeout(cycleAvatarImage, duration + 300);
         }
     }
 
     function startAvatarCycle() {
         stopAvatarCycle();
         if (currentToolImages.length > 1) {
-            // Start cycling after 5 seconds
+            // Start cycling after the current image's duration or 5 seconds
+            let startDelay = 5000;
+            if (currentToolDurations && currentToolDurations.length > currentImageIndex) {
+                const dur = currentToolDurations[currentImageIndex];
+                if (dur) {
+                    startDelay = dur;
+                }
+            }
             cyclingThresholdTimer = setTimeout(() => {
-                avatarCycleTimer = setTimeout(cycleAvatarImage, getRandomInterval());
-            }, 5000);
+                avatarCycleTimer = setTimeout(cycleAvatarImage, 0);
+            }, startDelay);
         }
     }
 
@@ -2345,18 +2406,29 @@ async function sendMessage() {
             console.log('[AVATAR DEBUG] API response:', data);
             if (data.success && data.images && data.images.length > 0) {
                 currentToolImages = data.images;
+                currentToolDurations = data.durations || [];
+                currentToolIsAnimated = data.is_animated || [];
                 currentImageIndex = 0;
-                console.log('[AVATAR DEBUG] Loaded', data.images.length, 'images');
+                console.log('[AVATAR DEBUG] Loaded', data.images.length, 'images, animated:', currentToolIsAnimated);
                 return true;
             }
         } catch (e) {
             console.log('[AVATAR DEBUG] Failed to load avatar images:', e);
         }
         currentToolImages = [];
+        currentToolDurations = [];
+        currentToolIsAnimated = [];
         return false;
     }
 
     async function setAvatarState(toolName, statusText) {
+        // Skip reset if already in same state (unless it's initial, where we might want to refresh)
+        if (currentAvatarState === toolName && toolName !== 'initial' && !isDoneSequenceActive) {
+            console.log('[AVATAR DEBUG] Already in state:', toolName, '- skipping reset');
+            updateAvatarStatus(statusText);
+            return;
+        }
+
         console.log('[AVATAR DEBUG] setAvatarState called:', toolName, statusText);
         const avatarEl = getAvatarElement();
         if (!avatarEl) {
@@ -2365,6 +2437,7 @@ async function sendMessage() {
         }
         
         stopAvatarCycle();
+        isDoneSequenceActive = false; // Interupt any active sequence
         currentAvatarState = toolName;
         updateAvatarStatus(statusText);
         
@@ -2382,7 +2455,9 @@ async function sendMessage() {
             // Pick a random image from the folder
             currentImageIndex = Math.floor(Math.random() * currentToolImages.length);
             const newSrc = currentToolImages[currentImageIndex];
-            const cacheBustedSrc = newSrc + (newSrc.includes('?') ? '&' : '?') + 't=' + Date.now();
+            // Don't cache-bust animated GIFs - let browser cache them for smooth playback
+            const isCurrentAnimated = currentToolIsAnimated[currentImageIndex] || false;
+            const srcToUse = isCurrentAnimated ? newSrc : (newSrc + (newSrc.includes('?') ? '&' : '?') + 't=' + Date.now());
             
             // Fade out
             avatarEl.style.opacity = '0';
@@ -2393,13 +2468,16 @@ async function sendMessage() {
                     avatarEl.onload = null;
                     avatarEl.style.opacity = '1';
                 };
-                avatarEl.src = cacheBustedSrc;
+                avatarEl.src = srcToUse;
             }, 250);
-            console.log('[AVATAR DEBUG] Setting avatar src to:', cacheBustedSrc);
+            console.log('[AVATAR DEBUG] Setting avatar src to:', srcToUse, '(animated:', isCurrentAnimated + ')');
 
-            // Start cycling if we have multiple images and operation is long
+            // Only cycle if we have multiple images. 
+            // If the current image is an animated GIF, startAvatarCycle will wait for its duration.
             if (currentToolImages.length > 1) {
                 startAvatarCycle();
+            } else if (currentToolImages.length === 1 && isCurrentAnimated) {
+                console.log('[AVATAR DEBUG] Single animated GIF - letting it play naturally, no cycling');
             }
         } else {
             console.log('[AVATAR DEBUG] No images, setting blank');
@@ -2429,6 +2507,8 @@ async function sendMessage() {
 
     async function showDoneSequence() {
         console.log('[AVATAR DEBUG] Starting done sequence');
+        if (isDoneSequenceActive) return; // Already running
+        isDoneSequenceActive = true;
         
         // Load done images first
         const hasDoneImages = await loadToolImages('done');
@@ -2436,7 +2516,10 @@ async function sendMessage() {
             // Fallback to simple done state if no images
             setAvatarState('done', 'COMPLETED');
             setTimeout(() => {
-                setAvatarState('initial', 'Ready');
+                if (isDoneSequenceActive) {
+                    setAvatarState('initial', 'Ready');
+                    isDoneSequenceActive = false;
+                }
             }, 2000);
             return;
         }
@@ -2446,6 +2529,11 @@ async function sendMessage() {
         const timings = [1000, 1000, 1000, 1000, 1000]; // Total: 5 seconds
         
         for (let i = 0; i < sequence.length; i++) {
+            if (!isDoneSequenceActive) {
+                console.log('[AVATAR DEBUG] Done sequence interrupted');
+                return;
+            }
+
             const targetImage = sequence[i];
             const timing = timings[i];
             
@@ -2473,7 +2561,10 @@ async function sendMessage() {
         console.log('[AVATAR DEBUG] Done sequence complete');
         
         // Return to initial state
-        setAvatarState('initial', 'Ready');
+        if (isDoneSequenceActive) {
+            setAvatarState('initial', 'Ready');
+            isDoneSequenceActive = false;
+        }
     }
 
     // MONKEY PATCHING (Surgical) - Use local references to avoid infinite recursion

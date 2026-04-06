@@ -25,6 +25,11 @@
       "summary": "Explained git-based self-improvement workflows for agentic platforms. Recommended git worktree approach: create worktree on feature branch, have agent modify worktree, test separately, merge back to main. This is industry standard SOP used by Cursor, Devin, etc.",
       "files": [],
       "timestamp": "2026-03-02T05:57:09.749273"
+    },
+    {
+      "summary": "Analyzed v2.3 architecture - single-agent design with unified context, direct tool execution, and AgentState tracking. Key insight: v2.3's strength is that ONE agent sees everything (all tool results, file reads, state). Multi-agent v3 likely loses context during delegation between agents, causing it to miss bugs that v2.3 can solve. The lore bug required tracing through multiple files and understanding the full context - something a single agent with complete visibility can do, but fragmented agents might fail at.",
+      "files": [],
+      "timestamp": "2026-04-05T16:53:42.174393"
     }
   ],
   "key_files": [
@@ -32,5 +37,5 @@
   ],
   "user_preferences": {},
   "last_balance_vcu": 0.0,
-  "last_balance_usd": 19.50290566
+  "last_balance_usd": 21.06947646
 }

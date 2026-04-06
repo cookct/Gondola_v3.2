@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Gondola v2.2 (Native Function Calling) Launcher
-# Running on Port 5009
+# Gondola v2.3 (Native Function Calling) Launcher
+# Running on Port 5056 (Default)
+
+PORT=${GONDOLA_PORT:-5056}
 
 # Path to the virtual environment python
 PYTHON_EXEC="/home/anonymous/gemini-workspace/litellm_venv/bin/python"
@@ -13,8 +15,8 @@ SERVER_SCRIPT="venice-web-ui/server.py"
 cd "$(dirname "$0")"
 
 echo "------------------------------------------------"
-echo "Starting Gondola v2.2 (NATIVE)..."
-echo "URL: http://localhost:5009"
+echo "Starting Gondola v2.3 (NATIVE)..."
+echo "URL: http://localhost:$PORT"
 echo "------------------------------------------------"
 
 # Generate ctags index in background

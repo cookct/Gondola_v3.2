@@ -469,7 +469,8 @@ def main():
      try:
       # Build Venice-specific parameters
       venice_params = {
-          "include_venice_system_prompt": True
+          "include_venice_system_prompt": True,
+          "strip_thinking_response": True
       }
       stream = client.chat.completions.create(
        model=current_model,

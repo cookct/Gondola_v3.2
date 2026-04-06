@@ -469,9 +469,8 @@ def main():
      try:
       # Build Venice-specific parameters
       venice_params = {
-          "include_venice_system_prompt": False
+          "include_venice_system_prompt": True
       }
-
       stream = client.chat.completions.create(
        model=current_model,
        messages=sanitized_messages,

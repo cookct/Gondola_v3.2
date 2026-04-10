@@ -1,5 +1,0 @@
-{
-  "venice_api_key": "YOUR_VENICE_API_KEY_HERE",
-  "together_api_key": "YOUR_TOGETHER_API_KEY_HERE",
-  "symlink_mode": "follow"
-}

@@ -1,5 +1,5 @@
 """
-Base Tools class for Venice CLI
+Base Tools class for Venice AI
 """
 
 from venice.core import UI

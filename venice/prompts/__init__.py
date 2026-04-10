@@ -1,3 +1,3 @@
 """
-Prompts package for Venice CLI
+Prompts package for Venice AI
 """

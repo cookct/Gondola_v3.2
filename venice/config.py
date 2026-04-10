@@ -6,11 +6,11 @@ import os
 
 # Default settings
 
-DEFAULT_MODEL = "zai-org-glm-5"
+DEFAULT_MODEL = "glm-5"
 
 DEFAULT_WORKSPACE = "."  # Current directory by default
 
-# SCRIPT_DIR should point to the parent directory (where venice_cli_v2.py lives)
+# SCRIPT_DIR should point to the parent directory
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

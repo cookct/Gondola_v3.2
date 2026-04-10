@@ -1,5 +1,5 @@
 '''
-API utilities for Venice CLI
+API utilities for Venice AI
 '''
 
 import os
@@ -140,6 +140,11 @@ def get_api_key():
 def get_together_api_key():
     """Retrieve the Together API key from environment or config files."""
     return _get_key_from_config("together_api_key", "TOGETHER_API_KEY")
+
+
+def get_zai_api_key():
+    """Retrieve the Z.AI API key from environment or config files."""
+    return _get_key_from_config("zai_api_key", "ZAI_API_KEY")
 
 
 def get_brave_api_key():

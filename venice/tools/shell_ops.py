@@ -1,5 +1,5 @@
 """
-Shell commands, backup, and file management operations for Venice CLI
+Shell commands, backup, and file management operations for Venice AI
 """
 
 import os

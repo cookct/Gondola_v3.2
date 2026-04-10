@@ -1,5 +1,5 @@
 """
-File read/write/edit operations for Venice CLI
+File read/write/edit operations for Venice AI
 """
 
 import os

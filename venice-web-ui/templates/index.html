@@ -233,73 +233,14 @@
 
         <div class="sidebar-right">
             <div class="sidebar-tabs">
-                <button class="tab-btn" data-tab="add-model">➕ Models</button>
-                <button class="tab-btn" data-tab="avatar">👤 Avatar</button>
+                <button class="tab-btn active" data-tab="avatar">👤 Avatar</button>
             </div>
-            <div class="tab-panel" id="tab-add-model">
-                <div class="add-model-panel">
-                    <div class="control-section">
-                        <div class="section-header">🔌 Provider</div>
-                        <select id="provider-select" class="provider-dropdown">
-                            <option value="together">Together AI</option>
-                            <option value="venice">Venice AI</option>
-                        </select>
-                    </div>
-
-                    <div class="control-section">
-                        <div class="section-header">
-                            <span>📦 Available Models</span>
-                            <button id="refresh-provider-models" class="btn-icon" title="Refresh">↻</button>
-                        </div>
-                        <div class="model-filter-row">
-                            <input type="text" id="model-filter" class="model-filter-input" placeholder="Filter models...">
-                        </div>
-                        <div class="provider-models-list" id="provider-models-list">
-                            <div class="loading-indicator">Select a provider and click refresh...</div>
-                        </div>
-                    </div>
-
-                    <div class="control-section" id="model-details-section" style="display: none;">
-                        <div class="section-header">📋 Model Details</div>
-                        <div class="model-details" id="model-details">
-                            <!-- Populated dynamically -->
-                        </div>
-                        <button id="add-model-btn" class="btn-primary add-model-btn">➕ Add to My Models</button>
-                    </div>
-
-                    <div class="control-section">
-                        <div class="section-header">🗂️ Active Models</div>
-                        <div class="active-models-list" id="active-models-list">
-                            <!-- Populated by JS -->
-                        </div>
-                    </div>
-
-                    <div class="add-model-status" id="add-model-status"></div>
-                </div>
-            </div>
-            <div class="tab-panel" id="tab-avatar">
+            <div class="tab-panel active" id="tab-avatar">
                 <div class="avatar-panel">
                     <div class="avatar-container">
-                        <img id="avatar-image" src="/images/avatars/initial/download.png" alt="Avatar">
+                        <img id="avatar-image" src="/images/avatar.png" alt="Avatar">
                     </div>
                     <div id="avatar-status" class="avatar-status">Ready</div>
-                </div>
-            </div>
-            <div class="tab-panel active" id="tab-backups">
-                <div class="backups-panel">
-                    <div class="backups-header">
-                        <button id="refresh-backups" class="btn-icon" title="Refresh">↻</button>
-                        <span class="backup-count" id="backup-count">0 backups</span>
-                    </div>
-                    <div class="backups-list" id="backups-list">
-                        <!-- Populated by JS -->
-                    </div>
-                    <div class="session-history">
-                        <div class="session-header">📜 Session History</div>
-                        <div class="session-list" id="session-list">
-                            <!-- Populated by JS -->
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

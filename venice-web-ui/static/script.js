@@ -55,10 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearBtn = document.getElementById('clear-chat');
     const stopBtn = document.getElementById('stop-btn');
     const agentStatus = document.getElementById('agent-status');
+    const planningBtn = document.getElementById('planning-mode-btn');
 
     // Model select
     const modelSelect = document.getElementById('model-select');
-    const planningBtn = document.getElementById('planning-mode-btn');
 
     // Sidebar elements
     const sidebarLeft = document.querySelector('.sidebar-left');
@@ -274,8 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial load
     fetchModels();
-    fetchBackups();
-    fetchSessionHistory();
     fetchWorkspace();
     fetchBalance();
     initSidebar();
@@ -461,18 +459,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 rightTabPanels.forEach(p => p.classList.remove('active'));
                 const targetPanel = document.querySelector(`.sidebar-right #tab-${tabId}`);
                 if (targetPanel) targetPanel.classList.add('active');
-                if (tabId === 'backups') {
-                    fetchBackups();
-                    fetchSessionHistory();
-                }
-                if (tabId === 'add-model') {
-                    refreshActiveModels();
-                }
             });
         });
-
-        // === ADD MODEL PANEL FUNCTIONALITY ===
-        initAddModelPanel();
 
         // Macro Buttons
         document.querySelectorAll('.macro-btn').forEach(btn => {
@@ -783,18 +771,37 @@ document.addEventListener('DOMContentLoaded', () => {
             modelSelect.innerHTML = '';
             modelMap = data.models; // Store map
             
+            // Group models by provider
+            const providers = {
+                'venice': { name: 'Venice AI', models: [] },
+                'together': { name: 'Together AI', models: [] },
+                'zai': { name: 'Z.ai', models: [] }
+            };
+            
             Object.entries(data.models).forEach(([id, info]) => {
-                const option = document.createElement('option');
-                option.value = id;
+                const provider = info.provider || 'venice';
+                if (providers[provider]) {
+                    providers[provider].models.push({ id, info });
+                }
+            });
+            
+            // Create optgroups for each provider
+            Object.entries(providers).forEach(([providerKey, providerData]) => {
+                if (providerData.models.length === 0) return;
                 
-                // Use explicit provider field from model config
-                const provider = info.provider || 'venice'; // Default to Venice
-                const providerSuffix = provider === 'together' ? ' (T)' : ' (V)';
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = providerData.name;
                 
-                option.textContent = info.name + providerSuffix;
-                option.dataset.provider = provider;
-                if (id === data.current) option.selected = true;
-                modelSelect.appendChild(option);
+                providerData.models.forEach(({ id, info }) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = info.name;
+                    option.dataset.provider = providerKey;
+                    if (id === data.current) option.selected = true;
+                    optgroup.appendChild(option);
+                });
+                
+                modelSelect.appendChild(optgroup);
             });
             
             updateCapabilitiesDisplay(data.current);
@@ -1447,18 +1454,12 @@ async function sendMessage() {
         });
         const tokens = Math.round(totalChars / 4);
         
-        // Dynamic limit
+        // Dynamic limit from selected model
         const currentModelId = modelSelect.value;
         let maxTokens = 200000; // Default fallback
         
         if (modelMap[currentModelId] && modelMap[currentModelId].context_limit) {
             maxTokens = modelMap[currentModelId].context_limit;
-        } else if (currentModelId) {
-            // Try to get from the selected option's data or use a reasonable default
-            const selectedOption = modelSelect.options[modelSelect.selectedIndex];
-            if (selectedOption && selectedOption.dataset && selectedOption.dataset.contextLimit) {
-                maxTokens = parseInt(selectedOption.dataset.contextLimit);
-            }
         }
         
         const percent = Math.min(100, (tokens / maxTokens) * 100);
@@ -1752,51 +1753,6 @@ async function sendMessage() {
     clearBtn.addEventListener('click', () => { if(confirm('Clear history?')) { fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: 'clear'}) }).then(() => { chatHistory.innerHTML = '<div class="message system">Cleared.</div>'; conversationHistory = []; updateContextPulse([]); resetSessionStats(); }); } });
     if (stopBtn) stopBtn.addEventListener('click', () => fetch('/api/interrupt', { method: 'POST' }));
 
-    // Backups/History Functions
-    async function fetchBackups() {
-        try {
-            const res = await fetch('/api/backups');
-            const data = await res.json();
-            const backupsList = document.getElementById('backups-list');
-            const backupCount = document.getElementById('backup-count');
-            if (data.success && data.backups.length > 0) {
-                backupsList.innerHTML = '';
-                backupCount.textContent = `${data.backups.length} backups`;
-                data.backups.forEach(b => {
-                    const div = document.createElement('div');
-                    div.className = 'backup-item';
-                    div.innerHTML = `<div class="backup-filename">${b.name}</div><div class="backup-meta"><span>${b.size} • ${b.modified}</span><button class="btn-restore" data-backup="${b.name}">Restore</button></div>`;
-                    backupsList.appendChild(div);
-                });
-                backupsList.querySelectorAll('.btn-restore').forEach(btn => btn.addEventListener('click', () => restoreBackup(btn.dataset.backup)));
-            } else { backupsList.innerHTML = 'None'; backupCount.textContent = '0'; }
-        } catch (e) {}
-    }
-
-    async function restoreBackup(name) {
-        if (!confirm(`Restore ${name}?`)) return;
-        const res = await fetch('/api/backups/restore', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({backup_name: name}) });
-        const data = await res.json();
-        if (data.success) alert('Restored');
-    }
-
-    async function fetchSessionHistory() {
-        try {
-            const res = await fetch('/api/memory');
-            const data = await res.json();
-            const sessionList = document.getElementById('session-list');
-            if (data.success && data.sessions.length > 0) {
-                sessionList.innerHTML = '';
-                data.sessions.slice().reverse().forEach(s => {
-                    const div = document.createElement('div');
-                    div.className = 'session-item';
-                    div.innerHTML = `<div class="session-date">${s.timestamp.slice(0,10)}</div><div class="session-summary">${s.summary || 'No summary'}</div>`;
-                    sessionList.appendChild(div);
-                });
-            }
-        } catch (e) {}
-    }
-
     function updateBalanceDisplay(usd) {
         if (usd === undefined) return;
         
@@ -1813,348 +1769,6 @@ async function sendMessage() {
                 updateBalanceDisplay(data.usd_balance);
             }
         } catch (e) {}
-    }
-
-    // === ADD MODEL PANEL ===
-    let providerModelsCache = [];
-    let selectedProviderModel = null;
-
-    function initAddModelPanel() {
-        const providerSelect = document.getElementById('provider-select');
-        const refreshBtn = document.getElementById('refresh-provider-models');
-        const modelFilter = document.getElementById('model-filter');
-        const addModelBtn = document.getElementById('add-model-btn');
-
-        // Refresh provider models on button click
-        refreshBtn?.addEventListener('click', () => {
-            const provider = providerSelect?.value || 'together';
-            fetchProviderModels(provider);
-        });
-
-        // Filter models as user types
-        modelFilter?.addEventListener('input', () => {
-            renderProviderModels(providerModelsCache, modelFilter.value);
-        });
-
-        // Provider change
-        providerSelect?.addEventListener('change', () => {
-            // Clear the list and show loading
-            const listEl = document.getElementById('provider-models-list');
-            if (listEl) {
-                listEl.innerHTML = '<div class="loading-indicator">Click refresh to load models...</div>';
-            }
-            selectedProviderModel = null;
-            hideModelDetails();
-        });
-
-        // Add model button
-        addModelBtn?.addEventListener('click', () => {
-            if (selectedProviderModel) {
-                addSelectedModel(selectedProviderModel);
-            }
-        });
-
-        // Initial load of active models
-        refreshActiveModels();
-    }
-
-    async function fetchProviderModels(provider) {
-        const listEl = document.getElementById('provider-models-list');
-        const filterInput = document.getElementById('model-filter');
-
-        if (listEl) {
-            listEl.innerHTML = '<div class="loading-indicator">Loading models from ' + provider + '...</div>';
-        }
-
-        try {
-            const res = await fetch(`/api/provider-models?provider=${provider}`);
-            const data = await res.json();
-
-            if (data.success) {
-                providerModelsCache = data.models;
-                renderProviderModels(data.models, filterInput?.value || '');
-                showStatus(`Loaded ${data.count} models from ${provider}`, 'success');
-            } else {
-                listEl.innerHTML = `<div class="loading-indicator" style="color: var(--ansi-red);">Error: ${data.error}</div>`;
-                showStatus(data.error, 'error');
-            }
-        } catch (e) {
-            listEl.innerHTML = `<div class="loading-indicator" style="color: var(--ansi-red);">Failed to fetch models</div>`;
-            showStatus('Failed to fetch models: ' + e.message, 'error');
-        }
-    }
-
-    function renderProviderModels(models, filterText = '') {
-        const listEl = document.getElementById('provider-models-list');
-        if (!listEl) return;
-
-        const filter = filterText.toLowerCase();
-        const filtered = models.filter(m =>
-            m.name.toLowerCase().includes(filter) ||
-            m.id.toLowerCase().includes(filter) ||
-            (m.organization || '').toLowerCase().includes(filter)
-        );
-
-        if (filtered.length === 0) {
-            listEl.innerHTML = '<div class="loading-indicator">No models match your filter</div>';
-            return;
-        }
-
-        listEl.innerHTML = '';
-
-        filtered.forEach(model => {
-            const div = document.createElement('div');
-            div.className = 'provider-model-item';
-
-            // Check if already added
-            if (modelMap[model.id]) {
-                div.classList.add('already-added');
-            }
-
-            // Mark selected
-            if (selectedProviderModel && selectedProviderModel.id === model.id) {
-                div.classList.add('selected');
-            }
-
-            const contextK = Math.round(model.context_length / 1000);
-            
-            // Check if model is free (0.0 price) or paid
-            let priceStr;
-            if (model.price_in === 0 && model.price_out === 0) {
-                priceStr = 'Free';
-            } else {
-                priceStr = `$${model.price_in.toFixed(2)}/$${model.price_out.toFixed(2)}`;
-            }
-
-            div.innerHTML = `
-                <div class="provider-model-name">${escapeHtml(model.name)}</div>
-                <div class="provider-model-meta">
-                    <span>📐 ${contextK}K</span>
-                    <span>💰 ${priceStr}</span>
-                    <span>🏢 ${model.organization || 'Unknown'}</span>
-                </div>
-            `;
-
-            div.addEventListener('click', () => {
-                if (modelMap[model.id]) {
-                    showStatus('Model already added', 'error');
-                    return;
-                }
-                selectProviderModel(model);
-            });
-
-            listEl.appendChild(div);
-        });
-    }
-
-    function selectProviderModel(model) {
-        selectedProviderModel = model;
-
-        // Update selection visual
-        document.querySelectorAll('.provider-model-item').forEach(el => {
-            el.classList.remove('selected');
-        });
-        event.currentTarget?.classList.add('selected');
-
-        // Show details
-        showModelDetails(model);
-    }
-
-    function showModelDetails(model) {
-        const section = document.getElementById('model-details-section');
-        const detailsEl = document.getElementById('model-details');
-
-        if (!section || !detailsEl) return;
-
-        section.style.display = 'block';
-
-        const provider = document.getElementById('provider-select')?.value || 'together';
-        const contextK = Math.round(model.context_length / 1000);
-
-        detailsEl.innerHTML = `
-            <div class="model-detail-row">
-                <span class="model-detail-label">ID:</span>
-                <span class="model-detail-value">${escapeHtml(model.id)}</span>
-            </div>
-            <div class="model-detail-row">
-                <span class="model-detail-label">Name:</span>
-                <span class="model-detail-value">${escapeHtml(model.name)}</span>
-            </div>
-            <div class="model-detail-row">
-                <span class="model-detail-label">Provider:</span>
-                <span class="model-detail-value">${provider.toUpperCase()}</span>
-            </div>
-            <div class="model-detail-row">
-                <span class="model-detail-label">Type:</span>
-                <span class="model-detail-value">${model.type || 'chat'}</span>
-            </div>
-            <div class="model-detail-row">
-                <span class="model-detail-label">Context:</span>
-                <span class="model-detail-value">${contextK}K tokens</span>
-            </div>
-            <div class="model-detail-row">
-                <span class="model-detail-label">Price (in/out):</span>
-                <span class="model-detail-value">$${(model.price_in || 0).toFixed(2)} / $${(model.price_out || 0).toFixed(2)}</span>
-            </div>
-        `;
-    }
-
-    function hideModelDetails() {
-        const section = document.getElementById('model-details-section');
-        if (section) section.style.display = 'none';
-    }
-
-    async function addSelectedModel(model) {
-        const provider = document.getElementById('provider-select')?.value || 'together';
-        const addBtn = document.getElementById('add-model-btn');
-
-        if (addBtn) {
-            addBtn.disabled = true;
-            addBtn.textContent = 'Adding...';
-        }
-
-        try {
-            const res = await fetch('/api/models/add', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model_id: model.id,
-                    name: model.name,
-                    provider: provider,
-                    type: model.type || 'chat',
-                    context_length: model.context_length,
-                    price_in: model.price_in || 0,
-                    price_out: model.price_out || 0,
-                    description: `${model.type || 'Chat'} model from ${provider}`,
-                    strength: model.organization || 'Custom'
-                })
-            });
-
-            const data = await res.json();
-
-            if (data.success) {
-                // Build status message with auto-configured info
-                let statusMsg = `Added ${model.name}`;
-                if (data.auto_configured) {
-                    const ac = data.auto_configured;
-                    const fcStatus = ac.native_function_calling ? '✓ Tools' : '✗ Tools';
-                    // Shorten the inference source for display
-                    let source = '';
-                    if (ac.inferred_from.includes('verified')) {
-                        source = 'verified';
-                    } else if (ac.inferred_from.includes('Venice')) {
-                        source = 'OpenAI-compat';
-                    } else {
-                        source = 'inferred';
-                    }
-                    statusMsg += ` | ${fcStatus} (${source}) | ${ac.max_agent_turns} turns`;
-                }
-                showStatus(statusMsg, 'success');
-
-                // Update local model map
-                modelMap[model.id] = data.model;
-
-                // Refresh the model dropdown in header
-                fetchModels();
-
-                // Refresh active models list
-                refreshActiveModels();
-
-                // Re-render provider models to show checkmark
-                const filterInput = document.getElementById('model-filter');
-                renderProviderModels(providerModelsCache, filterInput?.value || '');
-
-                // Clear selection
-                selectedProviderModel = null;
-                hideModelDetails();
-            } else {
-                showStatus(data.error, 'error');
-            }
-        } catch (e) {
-            showStatus('Failed to add model: ' + e.message, 'error');
-        } finally {
-            if (addBtn) {
-                addBtn.disabled = false;
-                addBtn.textContent = '➕ Add to My Models';
-            }
-        }
-    }
-
-    function refreshActiveModels() {
-        const listEl = document.getElementById('active-models-list');
-        if (!listEl) return;
-
-        listEl.innerHTML = '';
-
-        Object.entries(modelMap).forEach(([id, model]) => {
-            const div = document.createElement('div');
-            div.className = 'active-model-item';
-
-            const provider = model.provider || 'venice';
-            const providerClass = provider === 'together' ? 'together' : 'venice';
-
-            div.innerHTML = `
-                <span class="active-model-name" title="${id}">${escapeHtml(model.name)}</span>
-                <span class="active-model-provider ${providerClass}">${provider.charAt(0).toUpperCase()}</span>
-                <button class="remove-model-btn" data-model-id="${escapeHtml(id)}" title="Remove">✕</button>
-            `;
-
-            // Remove button handler
-            div.querySelector('.remove-model-btn')?.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const modelId = e.target.dataset.modelId;
-                if (confirm(`Remove ${model.name} from your models?`)) {
-                    await removeModel(modelId);
-                }
-            });
-
-            listEl.appendChild(div);
-        });
-
-        if (Object.keys(modelMap).length === 0) {
-            listEl.innerHTML = '<div class="loading-indicator">No models configured</div>';
-        }
-    }
-
-    async function removeModel(modelId) {
-        try {
-            const res = await fetch('/api/models/remove', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model_id: modelId })
-            });
-
-            const data = await res.json();
-
-            if (data.success) {
-                delete modelMap[modelId];
-                fetchModels();
-                refreshActiveModels();
-
-                // Re-render provider models to remove checkmark
-                const filterInput = document.getElementById('model-filter');
-                renderProviderModels(providerModelsCache, filterInput?.value || '');
-
-                showStatus('Model removed', 'success');
-            } else {
-                showStatus(data.error, 'error');
-            }
-        } catch (e) {
-            showStatus('Failed to remove model: ' + e.message, 'error');
-        }
-    }
-
-    function showStatus(message, type = 'success') {
-        const statusEl = document.getElementById('add-model-status');
-        if (!statusEl) return;
-
-        statusEl.textContent = message;
-        statusEl.className = 'add-model-status ' + type;
-        statusEl.style.display = 'block';
-
-        setTimeout(() => {
-            statusEl.style.display = 'none';
-        }, 3000);
     }
 
     // ============================================
@@ -2588,7 +2202,7 @@ async function sendMessage() {
         }
     };
 
-    // Initialize
+    // Initialize avatar
     setAvatarState('initial', 'Ready');
 
 }); // End DOMContentLoaded

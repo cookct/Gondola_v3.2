@@ -1,5 +1,5 @@
 """
-UI and formatting for Venice CLI (Adapter for venice.core)
+UI and formatting for Venice AI (Adapter for venice.core)
 """
 
 from venice.core import Colors, UI

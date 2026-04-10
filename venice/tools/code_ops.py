@@ -1,5 +1,5 @@
 """
-Code analysis, refactoring, and memory operations for Venice CLI
+Code analysis, refactoring, and memory operations for Venice AI
 """
 
 import os

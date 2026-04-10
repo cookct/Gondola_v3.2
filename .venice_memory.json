@@ -2,40 +2,69 @@
   "project_notes": [],
   "session_history": [
     {
-      "summary": "",
+      "summary": "Analyzed X_AI.md and venice/api.py - Found that the xAI implementation has naming confusion. The function get_zai_api_key() claims to be for \"Z.ai (xAI)\" but these are two different companies. The models configured (zai-org-glm-5, zai-org/GLM-5) are Zhipu AI models, not xAI Grok models. The environment variable XAI_API_KEY is correct per xAI docs, but the actual models and provider configuration are for Zhipu AI, not xAI. To properly support xAI, the app would need Grok model names (grok-4, grok-4.20-reasoning, etc.) and the correct API endpoint (https://api.x.ai/v1).",
       "files": [],
-      "timestamp": "2026-03-01T16:19:32.123283"
+      "timestamp": "2026-04-10T08:42:09.612185"
     },
     {
-      "summary": "",
-      "files": [],
-      "timestamp": "2026-03-01T16:22:17.782578"
+      "summary": "Analyzed X_AI.md and venice/api.py - Found that the xAI implementation has naming confusion. The function get_zai_api_key() claims to be for \"Z.ai (xAI)\" but these are two different companies. The models configured (zai-org-glm-5, zai-org/GLM-5) are Zhipu AI models, not xAI Grok models. The environment variable XAI_API_KEY is correct per xAI docs, but the actual models and provider configuration are for Zhipu AI, not xAI. To properly support xAI, the app would need Grok model names (grok-4, grok-4.20-reasoning, etc.) and the correct API endpoint (https://api.x.ai/v1).",
+      "files": [
+        "venice/config.py",
+        "X_AI.md",
+        "venice/api.py"
+      ],
+      "timestamp": "2026-04-10T08:50:17.269815"
     },
     {
-      "summary": "Explored the avatar expression system in the codebase. Found a robust implementation with:\n\n**Backend (server.py):**\n- `/api/avatar-images/<tool_name>` endpoint that loads tool-specific avatar images from `images/avatars/{tool_name}/`\n- Supports PNG, JPG, JPEG, GIF formats\n- Detects animation duration from GIF metadata\n\n**Frontend (script.js):**\n- `AVATAR_TOOL_MAPPING` maps tools to avatar folders (read_file, search_file_content, edit_file, write_file, run_command, done, thinking, etc.)\n- `setAvatarState()` function triggers avatar changes with fade transitions\n- `loadToolImages()` fetches images from backend API\n- Avatar cycling system for animated GIFs with proper timing\n- Status text updates showing current tool state\n\n**System Integration:**\n- Avatar expressions are always enabled (no toggle needed per system.py)\n- Tools trigger avatar changes via SSE (Server-Sent Events) in the chat stream\n- `handleToolStart` and `handleToolEnd` manage avatar state transitions\n- Special handling for 'done' sequence with completion animation\n\nThe system is well-architected with clear separation between backend image serving and frontend state management. Each tool has its own folder of images that can be cycled through for animation.",
+      "summary": "Fixed Z.AI implementation: Replaced X_AI.md with correct Z.AI docs (API endpoint https://api.z.ai/api/paas/v4, models glm-5.1/glm-5/glm-4.7-flash/glm-4.5-flash), fixed environment variable from XAI_API_KEY to ZAI_API_KEY in venice/api.py, and updated default model from zai-org-glm-5 to glm-5 in venice/config.py. Also discovered a bug: venice/cli.py uses 'client' variable at line 475 but never defines it - OpenAI is imported but never instantiated.",
       "files": [],
-      "timestamp": "2026-03-01T16:42:44.207585"
+      "timestamp": "2026-04-10T08:52:18.412425"
     },
     {
-      "summary": "Analyzed Gondola's memory feature in venice/memory.py. Found: bounded limits exist (50 notes, 20 sessions, 30 key files), but key files never prune deleted files, session history captures low-value entries, notes have no deduplication, and context prioritization is suboptimal. Provided 5 specific recommendations with code examples.",
+      "summary": "Fixed Z.AI implementation: Replaced X_AI.md with correct Z.AI docs, fixed environment variable to ZAI_API_KEY, updated default model to glm-5. CLI bug noted but user confirmed CLI is deprecated/removed.",
       "files": [],
-      "timestamp": "2026-03-02T05:53:02.787199"
+      "timestamp": "2026-04-10T08:53:06.940302"
     },
     {
-      "summary": "Explained git-based self-improvement workflows for agentic platforms. Recommended git worktree approach: create worktree on feature branch, have agent modify worktree, test separately, merge back to main. This is industry standard SOP used by Cursor, Devin, etc.",
+      "summary": "Deleted venice/cli.py (984 lines of dead code). No other files imported it - clean removal.",
       "files": [],
-      "timestamp": "2026-03-02T05:57:09.749273"
+      "timestamp": "2026-04-10T08:54:00.082170"
     },
     {
-      "summary": "Analyzed v2.3 architecture - single-agent design with unified context, direct tool execution, and AgentState tracking. Key insight: v2.3's strength is that ONE agent sees everything (all tool results, file reads, state). Multi-agent v3 likely loses context during delegation between agents, causing it to miss bugs that v2.3 can solve. The lore bug required tracing through multiple files and understanding the full context - something a single agent with complete visibility can do, but fragmented agents might fail at.",
+      "summary": "Removed all CLI references from the codebase. Deleted venice/cli.py and updated 14 files to change \"Venice CLI\" to \"Venice AI\". Updated v2.3_rocks.md to reflect that the web UI is now the primary interface.",
       "files": [],
-      "timestamp": "2026-04-05T16:53:42.174393"
+      "timestamp": "2026-04-10T08:58:51.424304"
+    },
+    {
+      "summary": "No ripple effects found. The venice package imports cleanly. All CLI references have been removed from active code - only session history files contain old references.",
+      "files": [],
+      "timestamp": "2026-04-10T08:59:56.743225"
+    },
+    {
+      "summary": "Fixed avatar image scanning to only look in the immediate tool folder (e.g., images/avatars/read_file/) and not recurse into subdirectories. Changed from recursive scan to flat directory listing with explicit subdirectory skip.",
+      "files": [
+        "venice-web-ui/server.py"
+      ],
+      "timestamp": "2026-04-10T09:02:55.645078"
+    },
+    {
+      "summary": "Session complete. Fixed Z.AI implementation, removed CLI dead code, rebranded to Venice AI, and fixed avatar image scanning.",
+      "files": [],
+      "timestamp": "2026-04-10T09:03:22.127551"
     }
   ],
   "key_files": [
-    "venice-web-ui/static/script.js"
+    "venice-web-ui/static/script.js",
+    "venice-web-ui/static/style.css",
+    "venice-web-ui/server.py",
+    "venice-web-ui/templates/index.html",
+    "app_config.json",
+    "venice/core.py",
+    "venice/api.py",
+    "venice/config.py",
+    "X_AI.md"
   ],
   "user_preferences": {},
   "last_balance_vcu": 0.0,
-  "last_balance_usd": 21.06947646
+  "last_balance_usd": 9.05131865
 }

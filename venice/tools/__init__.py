@@ -1,5 +1,5 @@
 """
-Tools package for Venice CLI
+Tools package for Venice AI
 """
 
 from venice.tools.base import Tools

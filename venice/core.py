@@ -1,5 +1,5 @@
 """
-Core foundations for Venice CLI: Colors, UI, and Model definitions
+Core foundations for Venice AI: Colors, UI, and Model definitions
 """
 import os
 import sys
@@ -161,6 +161,87 @@ MODELS = {
         "preferred_tool_choice": "auto",
         "tool_choice_on_nudge": "required",
         "force_done_at_max": True
+    },
+    "zai-org/GLM-5": {
+        "name": "GLM 5",
+        "type": "chat",
+        "provider": "together",
+        "description": "Function Calling · Reasoning · Code · 200K Context",
+        "strength": "Agentic Engineering",
+        "rank": 1,
+        "context_limit": 200000,
+        "price_in": 1.0,
+        "price_out": 3.2,
+        "max_tokens": 128000,
+        "native_function_calling": True,
+        "max_agent_turns": 50,
+        "needs_explicit_stop": False,
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True,
+        "native_vision": False
+    },
+    # === Z.ai Models ===
+    "glm-5": {
+        "name": "GLM 5",
+        "type": "chat",
+        "provider": "zai",
+        "description": "Function Calling · Reasoning · Code · 200K Context",
+        "strength": "Agentic Engineering",
+        "rank": 1,
+        "context_limit": 200000,
+        "price_in": 1.0,
+        "price_out": 3.2,
+        "max_tokens": 128000,
+        "native_function_calling": True,
+        "max_agent_turns": 50,
+        "needs_explicit_stop": False,
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True,
+        "native_vision": False
+    },
+    "glm-4.7-flash": {
+        "name": "GLM 4.7 Flash",
+        "type": "chat",
+        "provider": "zai",
+        "description": "Function Calling · Fast · FREE",
+        "strength": "Free Tier",
+        "rank": 4,
+        "context_limit": 128000,
+        "price_in": 0.0,
+        "price_out": 0.0,
+        "max_tokens": 30000,
+        "native_function_calling": True,
+        "max_agent_turns": 50,
+        "needs_explicit_stop": False,
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True,
+        "native_vision": False
+    },
+    "glm-4.5-flash": {
+        "name": "GLM 4.5 Flash",
+        "type": "chat",
+        "provider": "zai",
+        "description": "Function Calling · Fast · FREE",
+        "strength": "Free Tier",
+        "rank": 4,
+        "context_limit": 128000,
+        "price_in": 0.0,
+        "price_out": 0.0,
+        "max_tokens": 30000,
+        "native_function_calling": True,
+        "max_agent_turns": 50,
+        "needs_explicit_stop": False,
+        "supports_parallel_tools": True,
+        "preferred_tool_choice": "auto",
+        "tool_choice_on_nudge": "required",
+        "force_done_at_max": True,
+        "native_vision": False
     }
 }
 

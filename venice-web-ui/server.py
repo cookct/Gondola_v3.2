@@ -69,7 +69,7 @@ from venice.workspace import Workspace
 from venice.memory import Memory
 from venice.tools import CombinedTools
 from venice.prompts.system import SYSTEM_PROMPT, build_system_prompt, get_checkpoint_message
-from venice.api import get_api_key, get_together_api_key, execute_tool, parse_tool_call
+from venice.api import get_api_key, get_together_api_key, get_zai_api_key, execute_tool, parse_tool_call
 from venice.tools.schema import TOOL_SCHEMAS
 
 # NEW: Import smart context management modules
@@ -164,6 +164,14 @@ def upload_to_catbox(img_data, name="image"):
 
 app = Flask(__name__)
 
+# Suppress noisy avatar requests from logs
+class AvatarLogFilter(logging.Filter):
+    def filter(self, record):
+        msg = record.getMessage()
+        return "/images/avatars/" not in msg and "/api/avatar-images/" not in msg
+
+logging.getLogger('werkzeug').addFilter(AvatarLogFilter())
+
 # Configuration
 # sandbox_dir is the 'gondola' root
 IMAGES_DIR = os.path.join(sandbox_dir, 'images')
@@ -192,64 +200,6 @@ def save_workspace(path):
         logger.info(f"Saved workspace to config: {path}")
     except Exception as e:
         logger.warning(f"Failed to save workspace: {e}")
-
-# ============================================================================
-# CUSTOM MODELS PERSISTENCE
-# ============================================================================
-CUSTOM_MODELS_FILE = os.path.join(sandbox_dir, 'custom_models.json')
-
-def load_custom_models():
-    """Load user-added models from JSON file and merge into MODELS dict."""
-    if os.path.exists(CUSTOM_MODELS_FILE):
-        try:
-            with open(CUSTOM_MODELS_FILE, 'r') as f:
-                custom_models = json.load(f)
-                count = 0
-                for model_id, model_config in custom_models.items():
-                    if model_id not in MODELS:  # Don't overwrite built-in models
-                        MODELS[model_id] = model_config
-                        count += 1
-                logger.info(f"Loaded {count} custom models from {CUSTOM_MODELS_FILE}")
-                return count
-        except Exception as e:
-            logger.warning(f"Failed to load custom models: {e}")
-    return 0
-
-def save_custom_models():
-    """Save user-added models to JSON file (excludes built-in models)."""
-    # Get the original built-in model IDs from venice/core.py
-    from venice.core import MODELS as BUILTIN_MODELS
-    builtin_ids = set(BUILTIN_MODELS.keys())
-
-    # Filter to only custom (user-added) models
-    custom_models = {
-        model_id: config
-        for model_id, config in MODELS.items()
-        if model_id not in builtin_ids or config.get('_user_added', False)
-    }
-
-    try:
-        with open(CUSTOM_MODELS_FILE, 'w') as f:
-            json.dump(custom_models, f, indent=2)
-        logger.info(f"Saved {len(custom_models)} custom models to {CUSTOM_MODELS_FILE}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to save custom models: {e}")
-        return False
-
-def get_custom_model_ids():
-    """Get list of user-added model IDs (for UI to show which can be removed)."""
-    if os.path.exists(CUSTOM_MODELS_FILE):
-        try:
-            with open(CUSTOM_MODELS_FILE, 'r') as f:
-                custom_models = json.load(f)
-                return set(custom_models.keys())
-        except:
-            pass
-    return set()
-
-# Load custom models on startup
-load_custom_models()
 
 WORKSPACE_DIR = load_saved_workspace()
 print(f"Workspace Dir: {WORKSPACE_DIR}")
@@ -398,6 +348,25 @@ def serve_static(filename):
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
     return response
+
+@app.route('/api/initial-avatar')
+def get_initial_avatar():
+    """Get a random initial avatar image from the initial directory."""
+    import random
+    gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    initial_dir = os.path.join(gondola_root, 'images', 'avatars', 'initial')
+    
+    if os.path.exists(initial_dir):
+        images = [f for f in os.listdir(initial_dir) 
+                  if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+        if images:
+            # Prefer non-animated for initial load
+            static_images = [f for f in images if not f.lower().endswith('.gif')]
+            chosen = random.choice(static_images) if static_images else random.choice(images)
+            return jsonify({"success": True, "image": f"/images/avatars/initial/{chosen}"})
+    
+    # Fallback to main avatar
+    return jsonify({"success": True, "image": "/images/avatar.png"})
 
 @app.route('/')
 def index():
@@ -764,7 +733,7 @@ def summarize_session():
 def get_models():
     return jsonify({
         "models": MODELS,
-        "current": "moonshotai/Kimi-K2.5"
+        "current": "zai-org-glm-5"
     })
 
 @app.route('/api/models', methods=['POST'])
@@ -873,287 +842,6 @@ def infer_function_calling_config(model_id: str, model_type: str, context_length
     }
 
     return config
-
-@app.route('/api/provider-models', methods=['GET'])
-def get_provider_models():
-    """Fetch available models from a provider API (Together or Venice)"""
-    provider = request.args.get('provider', 'together')
-
-    try:
-        import httpx
-
-        if provider == 'together':
-            api_key = get_together_api_key()
-            if not api_key:
-                return jsonify({"success": False, "error": "Together API key not configured"}), 400
-
-            with httpx.Client(timeout=30.0) as client:
-                # 1. Fetch List A (All Models)
-                response = client.get(
-                    "https://api.together.xyz/v1/models",
-                    headers={"Authorization": f"Bearer {api_key}"}
-                )
-
-                if response.status_code != 200:
-                    return jsonify({"success": False, "error": f"API returned {response.status_code}"}), 500
-
-                models_data = response.json()
-
-                # 2. Fetch List B (Dedicated Models) for Delta Strategy
-                # We need to subtract these from the main list to get true serverless models
-                response_dedicated = client.get(
-                    "https://api.together.xyz/v1/models?dedicated=true",
-                    headers={"Authorization": f"Bearer {api_key}"}
-                )
-                
-                dedicated_ids = set()
-                if response_dedicated.status_code == 200:
-                    dedicated_data = response_dedicated.json()
-                    dedicated_ids = {m.get('id') for m in dedicated_data}
-                    logger.info(f"Fetched {len(dedicated_ids)} dedicated models to exclude.")
-                else:
-                    logger.warning(f"Failed to fetch dedicated models (status {response_dedicated.status_code}). Serverless detection may be inaccurate.")
-
-                # Filter for SERVERLESS chat models that support function calling
-                # Strategy: Serverless = All Models - Dedicated Models
-                filtered_models = []
-                logger.info(f"Received {len(models_data)} models from Together AI. Starting filter...")
-                
-                for model in models_data:
-                    model_type = model.get('type', '')
-                    model_id = model.get('id', '')
-                    pricing = model.get('pricing', {})
-
-                    # Skip non-chat/language/code models
-                    if model_type not in ['chat', 'language', 'code']:
-                        continue
-
-                    # DELTA STRATEGY: Exclude if in dedicated list
-                    if model_id in dedicated_ids:
-                        logger.debug(f"Skipping dedicated model: {model_id}")
-                        continue
-
-                    # Filter for function calling models
-                    fc_config = infer_function_calling_config(model_id, model_type, model.get('context_length', 4096), 'together')
-                    
-                    # If inference failed but it's a chat model on Together, allow it (Together standardizes chat models)
-                    if not fc_config['native_function_calling'] and model_type == 'chat' and provider == 'together':
-                        fc_config['native_function_calling'] = True
-                        fc_config['tool_choice_on_nudge'] = 'auto' # Be safer with unknown models
-
-                    if not fc_config['native_function_calling']:
-                        logger.debug(f"Skipping no-fc: {model_id} (type={model_type})")
-                        continue
-
-                    filtered_models.append({
-                        "id": model_id,
-                        "name": model.get('display_name') or model_id.split('/')[-1],
-                        "type": model_type,
-                        "context_length": model.get('context_length', 4096),
-                        "organization": model.get('organization', ''),
-                        "price_in": pricing.get('input', 0),
-                        "price_out": pricing.get('output', 0),
-                    })
-                
-                logger.info(f"Filtered down to {len(filtered_models)} models.")
-
-                # Sort by organization then name
-                filtered_models.sort(key=lambda x: (x['organization'], x['name']))
-
-                return jsonify({
-                    "success": True,
-                    "provider": "together",
-                    "models": filtered_models,
-                    "count": len(filtered_models)
-                })
-
-        elif provider == 'venice':
-            api_key = get_api_key()
-            if not api_key:
-                return jsonify({"success": False, "error": "Venice API key not configured"}), 400
-
-            with httpx.Client(timeout=30.0) as client:
-                response = client.get(
-                    "https://api.venice.ai/api/v1/models",
-                    headers={"Authorization": f"Bearer {api_key}"}
-                )
-
-                if response.status_code != 200:
-                    return jsonify({"success": False, "error": f"API returned {response.status_code}"}), 500
-
-                data = response.json()
-                models_list = data.get('data', []) if isinstance(data, dict) else data
-
-                # Filter for text/chat models that support function calling
-                filtered_models = []
-                for model in models_list:
-                    model_id = model.get('id', '')
-                    model_type = model.get('type', model.get('object', ''))
-
-                    # Include text and chat models
-                    if 'text' in str(model_type).lower() or 'chat' in str(model_type).lower() or model_type == 'model':
-                        # Filter for function calling models
-                        # Use model_spec context if available, otherwise fall back to top-level
-                        model_spec = model.get('model_spec', {})
-                        context_len = model_spec.get('availableContextTokens') or model.get('context_length') or model.get('context_window') or 32000
-                        
-                        fc_config = infer_function_calling_config(model_id, model_type, context_len, 'venice')
-                        if not fc_config['native_function_calling']:
-                            continue
-
-                        # Extract pricing from model_spec
-                        pricing = model_spec.get('pricing', {})
-                        price_in = 0
-                        price_out = 0
-                        
-                        if 'input' in pricing:
-                            price_in = pricing['input'].get('usd', 0)
-                        if 'output' in pricing:
-                            price_out = pricing['output'].get('usd', 0)
-
-                        filtered_models.append({
-                            "id": model_id,
-                            "name": model_spec.get('name') or model.get('name', model_id), # Prefer name from spec
-                            "type": model_type,
-                            "context_length": context_len,
-                            "organization": model.get('owned_by', ''),
-                            "price_in": price_in,
-                            "price_out": price_out,
-                        })
-
-                filtered_models.sort(key=lambda x: x['name'])
-
-                return jsonify({
-                    "success": True,
-                    "provider": "venice",
-                    "models": filtered_models,
-                    "count": len(filtered_models)
-                })
-
-        else:
-            return jsonify({"success": False, "error": f"Unknown provider: {provider}"}), 400
-
-    except Exception as e:
-        logger.error(f"Error fetching provider models: {e}")
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route('/api/models/add', methods=['POST'])
-def add_model():
-    """Add a new model to the runtime MODELS configuration"""
-    global MODELS
-
-    try:
-        data = request.json
-        model_id = data.get('model_id')
-
-        if not model_id:
-            return jsonify({"success": False, "error": "No model_id provided"}), 400
-
-        if model_id in MODELS:
-            return jsonify({"success": False, "error": f"Model '{model_id}' already exists"}), 400
-
-        # Build model config from provided data
-        provider = data.get('provider', 'venice')
-        context_length = data.get('context_length', 32000)
-        model_type = data.get('type', 'chat')
-
-        # AUTO-CONFIGURE: Infer function calling settings from model characteristics
-        fc_config = infer_function_calling_config(model_id, model_type, context_length, provider)
-        inferred_info = fc_config.pop('_inferred', {})
-
-        # Build description based on capabilities
-        capabilities = []
-        if fc_config['native_function_calling']:
-            capabilities.append("Function Calling")
-        if model_type == 'vision' or 'vl' in model_id.lower() or 'vision' in model_id.lower() or 'glm' in model_id.lower():
-            capabilities.append("Vision")
-        capabilities.extend(["Reasoning", "Code"])
-        if context_length >= 100000:
-            capabilities.append("Long Context")
-        description = " · ".join(capabilities)
-
-        new_model = {
-            "name": data.get('name', model_id.split('/')[-1]),
-            "type": model_type,
-            "provider": provider,
-            "description": description,
-            "strength": data.get('strength', data.get('organization', 'Custom Model')),
-            "rank": data.get('rank', 3),
-            "context_limit": context_length,
-            "price_in": data.get('price_in', 0),
-            "price_out": data.get('price_out', 0),
-            "max_tokens": min(data.get('max_tokens', 8000), 32000),
-            "stream_timeout": 180,
-            "_user_added": True,  # Mark as user-added for persistence tracking
-            # Merge inferred function calling config
-            **fc_config
-        }
-
-        # Add to MODELS dict
-        MODELS[model_id] = new_model
-
-        # PERSIST: Save custom models to file
-        save_custom_models()
-
-        # Log what was inferred
-        logger.info(f"Added new model: {model_id} (provider: {provider})")
-        logger.info(f"  Auto-configured: native_fc={fc_config['native_function_calling']}, "
-                   f"max_turns={fc_config['max_agent_turns']}, parallel={fc_config['supports_parallel_tools']}")
-        if inferred_info.get('is_known_fc_model'):
-            logger.info(f"  (Known function-calling model from Together AI docs)")
-
-        # Determine inference source for UI feedback
-        if inferred_info.get('is_known_fc_model'):
-            inferred_from = "verified (known model)"
-        elif inferred_info.get('venice_inference'):
-            inferred_from = "Venice OpenAI-compatible"
-        else:
-            inferred_from = "model type/name patterns"
-
-        return jsonify({
-            "success": True,
-            "model_id": model_id,
-            "model": new_model,
-            "auto_configured": {
-                "native_function_calling": fc_config['native_function_calling'],
-                "max_agent_turns": fc_config['max_agent_turns'],
-                "supports_parallel_tools": fc_config['supports_parallel_tools'],
-                "is_known_fc_model": inferred_info.get('is_known_fc_model', False),
-                "inferred_from": inferred_from
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"Error adding model: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route('/api/models/remove', methods=['POST'])
-def remove_model():
-    """Remove a model from the runtime MODELS configuration"""
-    global MODELS
-
-    try:
-        data = request.json
-        model_id = data.get('model_id')
-
-        if not model_id:
-            return jsonify({"success": False, "error": "No model_id provided"}), 400
-
-        if model_id not in MODELS:
-            return jsonify({"success": False, "error": f"Model '{model_id}' not found"}), 404
-
-        del MODELS[model_id]
-        logger.info(f"Removed model: {model_id}")
-
-        # Persist the change
-        save_custom_models()
-
-        return jsonify({"success": True, "model_id": model_id})
-
-    except Exception as e:
-        logger.error(f"Error removing model: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/workspace', methods=['GET', 'POST'])
 def handle_workspace():
@@ -1481,6 +1169,7 @@ def chat():
                         # Use explicit provider field from model config
                         model_provider = model_info.get("provider", "venice")  # Default to Venice
                         is_together = (model_provider == "together")
+                        is_zai = (model_provider == "zai")
 
                         if is_together:
                             api_key = get_together_api_key()
@@ -1488,6 +1177,13 @@ def chat():
                             if not api_key:
                                 logger.error(f"[{request_id}] Together API Key missing for {model_id}")
                                 event_queue.put({"type": "error", "data": "Together API Key not configured."})
+                                break
+                        elif is_zai:
+                            api_key = get_zai_api_key()
+                            api_base = "https://api.z.ai/api/paas/v4/chat/completions"
+                            if not api_key:
+                                logger.error(f"[{request_id}] Z.ai API Key missing for {model_id}")
+                                event_queue.put({"type": "error", "data": "Z.ai API Key not configured."})
                                 break
                         else:  # venice or default
                             api_key = get_api_key()
@@ -1536,11 +1232,12 @@ def chat():
                         logger.info(f"[{request_id}] ║ API REQUEST TO {model_provider.upper()}")
                         logger.info(f"[{request_id}] ╠══════════════════════════════════════════════════════════")
                         logger.info(f"[{request_id}] ║ Model:          {model_id}")
-                        logger.info(f"[{request_id}] ║ Max Tokens:     {max_tokens}")
-                        logger.info(f"[{request_id}] ║ Stream Timeout: {stream_timeout}s")
-                        logger.info(f"[{request_id}] ║ Context Limit:  {context_limit}")
-                        logger.info(f"[{request_id}] ║ Pricing:        {pricing}")
-                        logger.info(f"[{request_id}] ║ Messages:       {len(messages)}")
+                        logger.info(f"[{request_id}] ║ Endpoint:        {api_base}")
+                        logger.info(f"[{request_id}] ║ Max Tokens:      {max_tokens}")
+                        logger.info(f"[{request_id}] ║ Stream Timeout:  {stream_timeout}s")
+                        logger.info(f"[{request_id}] ║ Context Limit:   {context_limit}")
+                        logger.info(f"[{request_id}] ║ Pricing:         {pricing}")
+                        logger.info(f"[{request_id}] ║ Messages:        {len(messages)}")
                         logger.info(f"[{request_id}] ║ HTTP Timeout:   {stream_timeout + 60.0}s (connect), {stream_timeout}s (read)")
                         logger.info(f"[{request_id}] ╚══════════════════════════════════════════════════════════")
 
@@ -2646,10 +2343,6 @@ def make_avatar():
         os.makedirs(images_dir, exist_ok=True)
 
         avatar_path = os.path.join(images_dir, "avatar.png")
-        logger.info(f"[MakeAvatar] gondola_root: {gondola_root}")
-        logger.info(f"[MakeAvatar] images_dir: {images_dir}")
-        logger.info(f"[MakeAvatar] avatar_path: {avatar_path}")
-        logger.info(f"[MakeAvatar] avatar exists: {os.path.exists(avatar_path)}")
 
         # Rename existing avatar.png to random 5-digit number
         if os.path.exists(avatar_path):
@@ -2673,7 +2366,7 @@ def make_avatar():
 
 @app.route('/api/avatar-images/<tool_name>')
 def get_avatar_images(tool_name):
-    """Get list of avatar images for a specific tool."""
+    """Get list of avatar images for a specific tool (top-level folder only, no subdirectories)."""
     try:
         from PIL import Image
         # Build path to tool-specific avatar folder
@@ -2684,11 +2377,17 @@ def get_avatar_images(tool_name):
         images = []
         durations = []
         is_animated = []
-        if os.path.exists(tool_dir):
-            # Get all image files in the folder
+        
+        # Only scan the tool directory itself, NOT subdirectories
+        if os.path.exists(tool_dir) and os.path.isdir(tool_dir):
             for filename in sorted(os.listdir(tool_dir)):
+                full_path = os.path.join(tool_dir, filename)
+                
+                # Skip subdirectories - only process files
+                if os.path.isdir(full_path):
+                    continue
+                    
                 if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                    full_path = os.path.join(tool_dir, filename)
                     images.append(f'/images/avatars/{tool_name}/{filename}')
                     
                     duration = 2000
@@ -2714,7 +2413,7 @@ def get_avatar_images(tool_name):
         return jsonify({"success": True, "images": []})
 
 if __name__ == '__main__':
-    port = int(os.environ.get("GONDOLA_PORT", 5056))
+    port = int(os.environ.get("GONDOLA_PORT", 5058))
     logger.info("=" * 70)
     logger.info("STARTING GONDOLA SERVER")
     logger.info(f"Port: {port}")

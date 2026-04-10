@@ -1,5 +1,5 @@
 """
-Knowledge Operations Mixin for Venice CLI
+Knowledge Operations Mixin for Venice AI
 Handles saving and retrieving knowledge nuggets for AI models.
 """
 

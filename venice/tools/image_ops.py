@@ -1,5 +1,5 @@
 """
-Image Operations Mixin for Venice CLI
+Image Operations Mixin for Venice AI
 Provides AI image generation and editing tools using Venice seedream-v4/seedream-v4-edit models.
 """
 

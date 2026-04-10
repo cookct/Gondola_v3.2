@@ -2413,13 +2413,13 @@ def get_avatar_images(tool_name):
         return jsonify({"success": True, "images": []})
 
 if __name__ == '__main__':
-    port = int(os.environ.get("GONDOLA_PORT", 5058))
+    port = int(os.environ.get("CORTEX_PORT", 5058))
     logger.info("=" * 70)
-    logger.info("STARTING GONDOLA SERVER")
+    logger.info("STARTING CORTEX SERVER")
     logger.info(f"Port: {port}")
     logger.info(f"Log file: {LOG_FILE}")
     logger.info("=" * 70)
-    print(f"Starting Gondola Server (Modular) on port {port}...")
+    print(f"Starting Cortex Server on port {port}...")
     app.run(host='0.0.0.0', port=port, debug=True, use_reloader=True)
 
 

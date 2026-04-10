@@ -229,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.createElement('div');
         container.className = 'turn-container active';
         chatHistory.appendChild(container);
+        forceScrollToBottom();  // Scroll when new turn starts
         return container;
     }
 
@@ -237,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
         details.className = 'thinking-block';
         details.innerHTML = `<summary>Thinking...</summary><div class="thinking-content"></div>`;
         parent.appendChild(details);
+        forceScrollToBottom();  // Scroll when thinking block appears
         return details.querySelector('.thinking-content');
     }
 
@@ -252,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="tool-block-content"></div>
         `;
         parent.appendChild(block);
+        forceScrollToBottom();  // Scroll when tool block appears
         return block;
     }
     window.createToolBlock = createToolBlock;
@@ -263,6 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         contentDiv.className = 'content-block';
         msgDiv.appendChild(contentDiv);
         parent.appendChild(msgDiv);
+        forceScrollToBottom();  // Scroll when text block appears
         return contentDiv;
     }
 
@@ -1174,6 +1178,10 @@ async function sendMessage() {
         currentBlockType = null;
         currentBlockElement = null;
         currentToolBlock = null;
+        isStreaming = true;  // Enable aggressive auto-scroll
+        chatAutoScroll = true;  // Reset auto-scroll on new message
+        userScrolledUp = false;  // Clear any previous scroll-up state
+        hideScrollIndicator();
         scrollToBottom();
 
         try {
@@ -1215,6 +1223,7 @@ async function sendMessage() {
             appendMessage('system', 'Error: ' + e.message);
         } finally {
             stopBuffering();
+            isStreaming = false;  // Disable aggressive auto-scroll
             userInput.disabled = false;
             userInput.placeholder = "Describe a task (e.g., 'Create a flask app in app.py')...";
             userInput.parentElement.classList.remove('thinking');
@@ -1271,7 +1280,7 @@ async function sendMessage() {
                 if (currentToolBlock) {
                     const content = currentToolBlock.querySelector('.tool-block-content');
                     content.innerHTML += ansiToHtml(data);
-                    scrollToBottom();
+                    forceScrollToBottom();  // Always scroll on tool output
                 }
                 break;
 
@@ -1317,7 +1326,7 @@ async function sendMessage() {
                     imgDiv.innerHTML = `<img src="${data.url}" class="expression-image" style="max-width: 350px; max-height: 350px; border-radius: 12px; cursor: pointer; margin: 10px 0;" onclick="document.getElementById('lightbox-img').src='${data.url}'; document.getElementById('image-lightbox').classList.add('active'); document.body.style.overflow='hidden';">
                         <button class="make-avatar-btn" onclick="makeAvatar('${data.url}')">Make Avatar</button>`;
                     currentTurnContainer.appendChild(imgDiv);
-                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                    forceScrollToBottom();
                 }
                 // Clear block tracking after tool completes
                 currentBlockType = null;
@@ -1331,6 +1340,7 @@ async function sendMessage() {
             case 'done':
                 flushBuffers();
                 stopBuffering();
+                isStreaming = false;  // Disable aggressive auto-scroll
                 if (currentTurnContainer) currentTurnContainer.classList.remove('active');
                 if (currentContentDiv && currentContentDiv.dataset.raw) {
                     conversationHistory.push({ role: 'assistant', content: currentContentDiv.dataset.raw });
@@ -1339,6 +1349,8 @@ async function sendMessage() {
                 currentBlockElement = null;
                 currentToolBlock = null;
                 updateContextPulse(conversationHistory);
+                // Final scroll to ensure we're at bottom
+                forceScrollToBottom();
                 break;
 
             case 'session_info':
@@ -1439,7 +1451,12 @@ async function sendMessage() {
             currentContentDiv.dataset.raw = (currentContentDiv.dataset.raw || '') + pendingContent;
             currentContentDiv.innerHTML = marked.parse(currentContentDiv.dataset.raw);
             pendingContent = '';
-            scrollToBottom();
+            // During streaming, always force scroll
+            if (isStreaming) {
+                forceScrollToBottom();
+            } else {
+                scrollToBottom();
+            }
         }
     }
 
@@ -1507,7 +1524,7 @@ async function sendMessage() {
         // Render Markdown for BOTH user and assistant to preserve lists/formatting
         div.innerHTML = marked.parse(text);
         chatHistory.appendChild(div);
-        scrollToBottom();
+        forceScrollToBottom();
     }
 
     function appendMessageWithImage(role, text, imageSrc) {
@@ -1592,17 +1609,60 @@ async function sendMessage() {
         scrollToBottom();
     }
 
-    // SMART AUTO-SCROLL LOGIC
+    // AGGRESSIVE AUTO-SCROLL LOGIC
     let chatAutoScroll = true;
     let userScrolledUp = false;
-    const SCROLL_THRESHOLD = 100; // pixels from bottom to trigger auto-scroll
+    let isStreaming = false;  // Track if we're actively streaming
+    let scrollRAF = null;     // RequestAnimationFrame handle for smooth scrolling
     
-    // Check if user is near bottom
+    // Check if user is near bottom - generous threshold
     function isNearBottom() {
-        // Reduced threshold to 10px for stricter auto-scroll
         const scrollBottom = chatHistory.scrollHeight - chatHistory.scrollTop - chatHistory.clientHeight;
-        return scrollBottom <= 10;
+        return scrollBottom <= 50;  // 50px threshold - more forgiving
     }
+    
+    // AGGRESSIVE scroll to bottom - always works during streaming
+    function scrollToBottom(force = false) {
+        // During streaming, ALWAYS scroll unless user explicitly scrolled up
+        if (isStreaming || force || chatAutoScroll) {
+            // Cancel any pending scroll
+            if (scrollRAF) cancelAnimationFrame(scrollRAF);
+            
+            // Immediate scroll
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            
+            // Double-tap with RAF for layout updates
+            scrollRAF = requestAnimationFrame(() => {
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            });
+        }
+    }
+    
+    // Force scroll - bypasses all checks
+    function forceScrollToBottom() {
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+        requestAnimationFrame(() => {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        });
+    }
+    
+    // MutationObserver to catch ANY content changes and scroll
+    const scrollObserver = new MutationObserver((mutations) => {
+        // During streaming, always scroll on content changes
+        if (isStreaming) {
+            forceScrollToBottom();
+        } else if (chatAutoScroll) {
+            scrollToBottom();
+        }
+    });
+    
+    // Observe the chat history for any changes
+    scrollObserver.observe(chatHistory, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true
+    });
     
     // Smart scroll handler - detects user intent
     chatHistory.addEventListener('scroll', () => {
@@ -1613,7 +1673,7 @@ async function sendMessage() {
         chatAutoScroll = nearBottom;
         
         // Detect if user scrolled up (manually)
-        if (!nearBottom && wasNearBottom) {
+        if (!nearBottom && wasNearBottom && !isStreaming) {
             userScrolledUp = true;
             showScrollIndicator();
         }
@@ -1621,6 +1681,7 @@ async function sendMessage() {
         // Detect if user scrolled back to bottom
         if (nearBottom && userScrolledUp) {
             userScrolledUp = false;
+            chatAutoScroll = true;
             hideScrollIndicator();
         }
     });
@@ -1628,13 +1689,12 @@ async function sendMessage() {
     // Mouse wheel handler - pause auto-scroll on wheel up
     chatHistory.addEventListener('wheel', (e) => {
         if (e.deltaY < 0) {
-            // Only pause if actually moving away from bottom
-            if (!isNearBottom()) {
-                userScrolledUp = true;
-                chatAutoScroll = false;
-                showScrollIndicator();
-            }
+            // Scrolling up - user wants to see history
+            userScrolledUp = true;
+            chatAutoScroll = false;
+            showScrollIndicator();
         } else if (e.deltaY > 0 && isNearBottom()) {
+            // Scrolling down near bottom - re-engage auto-scroll
             userScrolledUp = false;
             chatAutoScroll = true;
             hideScrollIndicator();
@@ -1651,7 +1711,8 @@ async function sendMessage() {
             scrollIndicator.onclick = () => {
                 chatAutoScroll = true;
                 userScrolledUp = false;
-                scrollToBottom(true);
+                isStreaming = false;
+                forceScrollToBottom();
                 hideScrollIndicator();
             };
             chatHistory.parentElement.appendChild(scrollIndicator);
@@ -1662,17 +1723,6 @@ async function sendMessage() {
     function hideScrollIndicator() {
         if (scrollIndicator) {
             scrollIndicator.classList.remove('visible');
-        }
-    }
-    
-    // Enhanced scroll to bottom with force option
-    function scrollToBottom(force = false) {
-        if (chatAutoScroll || force) {
-            // Set twice to ensure layout engine catches up
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-            requestAnimationFrame(() => {
-                chatHistory.scrollTop = chatHistory.scrollHeight;
-            });
         }
     }
 

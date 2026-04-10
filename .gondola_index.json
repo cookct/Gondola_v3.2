@@ -7,7 +7,7 @@
     ".github": [
       "FUNDING.yml"
     ],
-    ".venice_backups": [
+    ".cortex_backups": [
       "index.html.20260410_061520.bak",
       "index.html.20260410_061529.bak",
       "script.js.20260410_062144.bak",
@@ -155,7 +155,7 @@
       "frame_086.png"
     ],
     "images/avatars/initial/animated/three": [
-      "VeniceAI_C24P91t.mp4",
+      "CortexAI_C24P91t.mp4",
       "output.gif"
     ],
     "images/avatars/initial/animated/transparent": [
@@ -663,7 +663,7 @@
       "frame_241.png"
     ],
     "images/avatars/initial/animated/two": [
-      "VeniceAI_QqOLtkQ.mp4",
+      "CortexAI_QqOLtkQ.mp4",
       "avatar_two.gif",
       "frame_001.png",
       "frame_002.png",
@@ -788,14 +788,14 @@
       "frame_121.png"
     ],
     "images/avatars/initial/animated": [
-      "VeniceAI_9J5VwxF.mp4",
+      "CortexAI_9J5VwxF.mp4",
       "avatar_7sec.mp4",
       "avatar_pingpong.gif",
       "avatar_transparent.gif"
     ],
     "images/avatars/initial/halt": [
       "1.png",
-      "VeniceAI_yQTX0uX.png",
+      "CortexAI_yQTX0uX.png",
       "avatar_transparent.gif",
       "expr_topless_bare_chest_casual_po_20260227_055631.png",
       "gen-1772073927922.png",
@@ -823,7 +823,7 @@
       "gen-1772162772201.png"
     ],
     "images/avatars/read_file/animated": [
-      "VeniceAI_4oiLCgc.mp4",
+      "CortexAI_4oiLCgc.mp4",
       "gen-1772047503918.png",
       "gen-1772047542513.png",
       "gen-1772048343314.png"
@@ -1448,7 +1448,7 @@
       "frame_241.png"
     ],
     "images/avatars/run_command/animated": [
-      "VeniceAI_89bBXr3.mp4",
+      "CortexAI_89bBXr3.mp4",
       "frame_001.png",
       "frame_002.png",
       "frame_003.png",
@@ -1581,7 +1581,7 @@
       "pose1.png"
     ],
     "images/avatars/search_file_content/animated": [
-      "VeniceAI_GCI65NK.mp4"
+      "CortexAI_GCI65NK.mp4"
     ],
     "images/avatars/search_file_content": [
       "search_file_content.gif"
@@ -1666,11 +1666,11 @@
       "matrix1.png",
       "tasteful_nude.png"
     ],
-    "venice/prompts": [
+    "cortex/prompts": [
       "__init__.py",
       "system.py"
     ],
-    "venice/tools": [
+    "cortex/tools": [
       "__init__.py",
       "base.py",
       "batch_ops.py",
@@ -1685,7 +1685,7 @@
       "undead_ops.py",
       "web_ops.py"
     ],
-    "venice": [
+    "cortex": [
       "__init__.py",
       "agent_state.py",
       "api.py",
@@ -1701,7 +1701,7 @@
       "undead_manager.py",
       "workspace.py"
     ],
-    "venice-web-ui/logs": [
+    "cortex-web-ui/logs": [
       "gondola_debug_20260122_184225.log",
       "gondola_debug_20260122_185156.log",
       "gondola_debug_20260122_194422.log",
@@ -1768,21 +1768,21 @@
       "gondola_debug_20260410_062110.log",
       "gondola_debug_20260410_062542.log"
     ],
-    "venice-web-ui/static": [
+    "cortex-web-ui/static": [
       "script.js",
       "style.css"
     ],
-    "venice-web-ui/templates": [
+    "cortex-web-ui/templates": [
       "index.html"
     ],
-    "venice-web-ui": [
+    "cortex-web-ui": [
       "server.py"
     ],
     "": [
       ".gitignore",
       ".gondola_diagnostics.json",
       ".gondola_index.json",
-      ".venice_memory.json",
+      ".cortex_memory.json",
       "LICENSE",
       "app_config.json",
       "requirements.txt",
@@ -1796,43 +1796,43 @@
     ".github/ISSUE_TEMPLATE/feature_request.md": "MD file",
     ".gondola_diagnostics.json": "JSON file",
     ".gondola_index.json": "JSON file",
-    ".venice_memory.json": "JSON file",
+    ".cortex_memory.json": "JSON file",
     "app_config.json": "JSON file",
     "start_gondola.sh": "SH file",
     "v2.3_rocks.md": "MD file",
-    "venice/__init__.py": "Venice CLI v2 - AI Code Assistant Package",
-    "venice/agent_state.py": "Agent State - Session state tracking to prevent infinite loops.",
-    "venice/api.py": "API utilities for Venice CLI",
-    "venice/cli.py": "3 function(s)",
-    "venice/config.py": "Configuration and constants for Venice CLI",
-    "venice/context_manager.py": "Context Manager - Token-aware context building for cheap models.",
-    "venice/core.py": "Core foundations for Venice CLI: Colors, UI, and Model definitions",
-    "venice/memory.py": "Memory system for persistent storage across sessions",
-    "venice/persistence.py": "1 class(es), 0 function(s)",
-    "venice/project_index.py": "Project Index - Compressed project understanding for cheap models.",
-    "venice/prompts/__init__.py": "Prompts package for Venice CLI",
-    "venice/prompts/system.py": "Dynamic system prompt builder for Venice agent.",
-    "venice/risk_analyzer.py": "1 class(es), 1 function(s)",
-    "venice/tools/__init__.py": "Tools package for Venice CLI",
-    "venice/tools/base.py": "Base Tools class for Venice CLI",
-    "venice/tools/batch_ops.py": "Batch Operations - Multi-file editing and intelligent context gathering",
-    "venice/tools/code_ops.py": "Code analysis, refactoring, and memory operations for Venice CLI",
-    "venice/tools/file_ops.py": "File read/write/edit operations for Venice CLI",
-    "venice/tools/git_ops.py": "Git Operations - Intelligent version control integration",
-    "venice/tools/image_ops.py": "Image Operations Mixin for Venice CLI",
-    "venice/tools/knowledge_ops.py": "Knowledge Operations Mixin for Venice CLI",
-    "venice/tools/schema.py": "OpenAI-compatible function schemas for Venice native tool use",
-    "venice/tools/shell_ops.py": "Shell commands, backup, and file management operations for Venice CLI",
-    "venice/tools/test_ops.py": "Test Operations - Run tests, analyze coverage, find bugs",
-    "venice/tools/undead_ops.py": "1 class(es), 0 function(s)",
-    "venice/tools/web_ops.py": "Web Operations - Search and fetch web content",
-    "venice/ui.py": "UI and formatting for Venice CLI (Adapter for venice.core)",
-    "venice/undead_manager.py": "1 class(es), 0 function(s)",
-    "venice/workspace.py": "Workspace sandbox for secure file operations",
-    "venice-web-ui/server.py": "43 function(s)",
-    "venice-web-ui/static/script.js": "Global function to make an image the avatar",
-    "venice-web-ui/static/style.css": "CSS file",
-    "venice-web-ui/templates/index.html": "Main entry point"
+    "cortex/__init__.py": "Cortex AI v2 - AI Code Assistant Package",
+    "cortex/agent_state.py": "Agent State - Session state tracking to prevent infinite loops.",
+    "cortex/api.py": "API utilities for Cortex AI",
+    "cortex/cli.py": "3 function(s)",
+    "cortex/config.py": "Configuration and constants for Cortex AI",
+    "cortex/context_manager.py": "Context Manager - Token-aware context building for cheap models.",
+    "cortex/core.py": "Core foundations for Cortex AI: Colors, UI, and Model definitions",
+    "cortex/memory.py": "Memory system for persistent storage across sessions",
+    "cortex/persistence.py": "1 class(es), 0 function(s)",
+    "cortex/project_index.py": "Project Index - Compressed project understanding for cheap models.",
+    "cortex/prompts/__init__.py": "Prompts package for Cortex AI",
+    "cortex/prompts/system.py": "Dynamic system prompt builder for Cortex agent.",
+    "cortex/risk_analyzer.py": "1 class(es), 1 function(s)",
+    "cortex/tools/__init__.py": "Tools package for Cortex AI",
+    "cortex/tools/base.py": "Base Tools class for Cortex AI",
+    "cortex/tools/batch_ops.py": "Batch Operations - Multi-file editing and intelligent context gathering",
+    "cortex/tools/code_ops.py": "Code analysis, refactoring, and memory operations for Cortex AI",
+    "cortex/tools/file_ops.py": "File read/write/edit operations for Cortex AI",
+    "cortex/tools/git_ops.py": "Git Operations - Intelligent version control integration",
+    "cortex/tools/image_ops.py": "Image Operations Mixin for Cortex AI",
+    "cortex/tools/knowledge_ops.py": "Knowledge Operations Mixin for Cortex AI",
+    "cortex/tools/schema.py": "OpenAI-compatible function schemas for Cortex native tool use",
+    "cortex/tools/shell_ops.py": "Shell commands, backup, and file management operations for Cortex AI",
+    "cortex/tools/test_ops.py": "Test Operations - Run tests, analyze coverage, find bugs",
+    "cortex/tools/undead_ops.py": "1 class(es), 0 function(s)",
+    "cortex/tools/web_ops.py": "Web Operations - Search and fetch web content",
+    "cortex/ui.py": "UI and formatting for Cortex AI (Adapter for cortex.core)",
+    "cortex/undead_manager.py": "1 class(es), 0 function(s)",
+    "cortex/workspace.py": "Workspace sandbox for secure file operations",
+    "cortex-web-ui/server.py": "43 function(s)",
+    "cortex-web-ui/static/script.js": "Global function to make an image the avatar",
+    "cortex-web-ui/static/style.css": "CSS file",
+    "cortex-web-ui/templates/index.html": "Main entry point"
   },
   "symbols": {
     ".gondola_diagnostics.json": {
@@ -1841,17 +1841,17 @@
     ".gondola_index.json": {
       "type": "config"
     },
-    ".venice_memory.json": {
+    ".cortex_memory.json": {
       "type": "config"
     },
     "app_config.json": {
       "type": "config"
     },
-    "venice/__init__.py": {
+    "cortex/__init__.py": {
       "functions": [],
       "classes": []
     },
-    "venice/agent_state.py": {
+    "cortex/agent_state.py": {
       "functions": [],
       "classes": [
         {
@@ -1868,7 +1868,7 @@
         }
       ]
     },
-    "venice/api.py": {
+    "cortex/api.py": {
       "functions": [
         {
           "name": "validate_tool_args",
@@ -1933,7 +1933,7 @@
       ],
       "classes": []
     },
-    "venice/cli.py": {
+    "cortex/cli.py": {
       "functions": [
         {
           "name": "_resize_image_for_context",
@@ -1950,11 +1950,11 @@
       ],
       "classes": []
     },
-    "venice/config.py": {
+    "cortex/config.py": {
       "functions": [],
       "classes": []
     },
-    "venice/context_manager.py": {
+    "cortex/context_manager.py": {
       "functions": [],
       "classes": [
         {
@@ -1967,7 +1967,7 @@
         }
       ]
     },
-    "venice/core.py": {
+    "cortex/core.py": {
       "functions": [
         {
           "name": "get_model_config",
@@ -1985,7 +1985,7 @@
         }
       ]
     },
-    "venice/memory.py": {
+    "cortex/memory.py": {
       "functions": [],
       "classes": [
         {
@@ -1994,7 +1994,7 @@
         }
       ]
     },
-    "venice/persistence.py": {
+    "cortex/persistence.py": {
       "functions": [],
       "classes": [
         {
@@ -2003,7 +2003,7 @@
         }
       ]
     },
-    "venice/project_index.py": {
+    "cortex/project_index.py": {
       "functions": [],
       "classes": [
         {
@@ -2012,11 +2012,11 @@
         }
       ]
     },
-    "venice/prompts/__init__.py": {
+    "cortex/prompts/__init__.py": {
       "functions": [],
       "classes": []
     },
-    "venice/prompts/system.py": {
+    "cortex/prompts/system.py": {
       "functions": [
         {
           "name": "load_personality",
@@ -2049,7 +2049,7 @@
       ],
       "classes": []
     },
-    "venice/risk_analyzer.py": {
+    "cortex/risk_analyzer.py": {
       "functions": [
         {
           "name": "get_block_threshold",
@@ -2063,7 +2063,7 @@
         }
       ]
     },
-    "venice/tools/__init__.py": {
+    "cortex/tools/__init__.py": {
       "functions": [],
       "classes": [
         {
@@ -2072,7 +2072,7 @@
         }
       ]
     },
-    "venice/tools/base.py": {
+    "cortex/tools/base.py": {
       "functions": [],
       "classes": [
         {
@@ -2081,7 +2081,7 @@
         }
       ]
     },
-    "venice/tools/batch_ops.py": {
+    "cortex/tools/batch_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2090,7 +2090,7 @@
         }
       ]
     },
-    "venice/tools/code_ops.py": {
+    "cortex/tools/code_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2099,7 +2099,7 @@
         }
       ]
     },
-    "venice/tools/file_ops.py": {
+    "cortex/tools/file_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2108,7 +2108,7 @@
         }
       ]
     },
-    "venice/tools/git_ops.py": {
+    "cortex/tools/git_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2117,7 +2117,7 @@
         }
       ]
     },
-    "venice/tools/image_ops.py": {
+    "cortex/tools/image_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2126,7 +2126,7 @@
         }
       ]
     },
-    "venice/tools/knowledge_ops.py": {
+    "cortex/tools/knowledge_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2135,11 +2135,11 @@
         }
       ]
     },
-    "venice/tools/schema.py": {
+    "cortex/tools/schema.py": {
       "functions": [],
       "classes": []
     },
-    "venice/tools/shell_ops.py": {
+    "cortex/tools/shell_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2148,7 +2148,7 @@
         }
       ]
     },
-    "venice/tools/test_ops.py": {
+    "cortex/tools/test_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2157,7 +2157,7 @@
         }
       ]
     },
-    "venice/tools/undead_ops.py": {
+    "cortex/tools/undead_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2166,7 +2166,7 @@
         }
       ]
     },
-    "venice/tools/web_ops.py": {
+    "cortex/tools/web_ops.py": {
       "functions": [],
       "classes": [
         {
@@ -2175,11 +2175,11 @@
         }
       ]
     },
-    "venice/ui.py": {
+    "cortex/ui.py": {
       "functions": [],
       "classes": []
     },
-    "venice/undead_manager.py": {
+    "cortex/undead_manager.py": {
       "functions": [],
       "classes": [
         {
@@ -2188,7 +2188,7 @@
         }
       ]
     },
-    "venice/workspace.py": {
+    "cortex/workspace.py": {
       "functions": [],
       "classes": [
         {
@@ -2197,7 +2197,7 @@
         }
       ]
     },
-    "venice-web-ui/server.py": {
+    "cortex-web-ui/server.py": {
       "functions": [
         {
           "name": "resize_image_for_context",
@@ -2374,7 +2374,7 @@
       ],
       "classes": []
     },
-    "venice-web-ui/static/script.js": {
+    "cortex-web-ui/static/script.js": {
       "functions": [
         {
           "name": "to",
@@ -2652,29 +2652,29 @@
       "classes": [],
       "exports": []
     },
-    "venice-web-ui/static/style.css": {
+    "cortex-web-ui/static/style.css": {
       "type": "styles"
     },
-    "venice-web-ui/templates/index.html": {
+    "cortex-web-ui/templates/index.html": {
       "type": "template"
     }
   },
   "dependencies": {
-    "venice/agent_state.py": [
+    "cortex/agent_state.py": [
       "dataclasses",
       "time",
       "typing",
       "hashlib",
       "collections"
     ],
-    "venice/api.py": [
+    "cortex/api.py": [
       "re",
       "time",
       "logging",
       "os",
       "json"
     ],
-    "venice/cli.py": [
+    "cortex/cli.py": [
       "pathlib",
       "threading",
       "sys",
@@ -2693,35 +2693,35 @@
       "json",
       "uuid"
     ],
-    "venice/config.py": [
+    "cortex/config.py": [
       "os"
     ],
-    "venice/context_manager.py": [
+    "cortex/context_manager.py": [
       "json",
       "typing",
       "dataclasses",
       "re"
     ],
-    "venice/core.py": [
+    "cortex/core.py": [
       "threading",
       "sys",
       "difflib",
       "logging",
       "os"
     ],
-    "venice/memory.py": [
+    "cortex/memory.py": [
       "os",
       "json",
       "datetime"
     ],
-    "venice/persistence.py": [
+    "cortex/persistence.py": [
       "pathlib",
       "subprocess",
       "datetime",
       "os",
       "json"
     ],
-    "venice/project_index.py": [
+    "cortex/project_index.py": [
       "pathlib",
       "re",
       "typing",
@@ -2729,28 +2729,28 @@
       "os",
       "json"
     ],
-    "venice/prompts/system.py": [
+    "cortex/prompts/system.py": [
       "os",
       "json"
     ],
-    "venice/risk_analyzer.py": [
+    "cortex/risk_analyzer.py": [
       "os",
       "hashlib",
       "re"
     ],
-    "venice/tools/batch_ops.py": [
+    "cortex/tools/batch_ops.py": [
       "os",
       "typing",
       "re"
     ],
-    "venice/tools/code_ops.py": [
+    "cortex/tools/code_ops.py": [
       "ast",
       "datetime",
       "shutil",
       "os",
       "json"
     ],
-    "venice/tools/file_ops.py": [
+    "cortex/tools/file_ops.py": [
       "ast",
       "re",
       "datetime",
@@ -2758,32 +2758,32 @@
       "os",
       "json"
     ],
-    "venice/tools/git_ops.py": [
+    "cortex/tools/git_ops.py": [
       "os",
       "typing",
       "subprocess",
       "re"
     ],
-    "venice/tools/image_ops.py": [
+    "cortex/tools/image_ops.py": [
       "datetime",
       "base64",
       "httpx",
       "typing",
       "os"
     ],
-    "venice/tools/knowledge_ops.py": [
+    "cortex/tools/knowledge_ops.py": [
       "os",
       "json",
       "typing",
       "pathlib"
     ],
-    "venice/tools/shell_ops.py": [
+    "cortex/tools/shell_ops.py": [
       "os",
       "subprocess",
       "datetime",
       "shutil"
     ],
-    "venice/tools/test_ops.py": [
+    "cortex/tools/test_ops.py": [
       "pathlib",
       "subprocess",
       "re",
@@ -2791,30 +2791,30 @@
       "os",
       "json"
     ],
-    "venice/tools/undead_ops.py": [
+    "cortex/tools/undead_ops.py": [
       "pathlib",
       "json",
       "subprocess",
       "os"
     ],
-    "venice/tools/web_ops.py": [
+    "cortex/tools/web_ops.py": [
       "re",
       "httpx",
       "typing",
       "os",
       "json"
     ],
-    "venice/undead_manager.py": [
+    "cortex/undead_manager.py": [
       "pathlib",
       "tempfile",
       "jedi",
       "os",
       "json"
     ],
-    "venice/workspace.py": [
+    "cortex/workspace.py": [
       "os"
     ],
-    "venice-web-ui/server.py": [
+    "cortex-web-ui/server.py": [
       "threading",
       "sys",
       "subprocess",
@@ -2839,43 +2839,43 @@
     ".github/ISSUE_TEMPLATE/feature_request.md": "0aaf9107",
     ".gondola_diagnostics.json": "d41d8cd9",
     ".gondola_index.json": "9238a9fe",
-    ".venice_memory.json": "38d2a186",
+    ".cortex_memory.json": "38d2a186",
     "app_config.json": "12125cde",
     "start_gondola.sh": "d596a45d",
     "v2.3_rocks.md": "968c46a2",
-    "venice/__init__.py": "5015002b",
-    "venice/agent_state.py": "02a6f9c2",
-    "venice/api.py": "d153bce5",
-    "venice/cli.py": "84c179e9",
-    "venice/config.py": "008c1e72",
-    "venice/context_manager.py": "e6a86dfc",
-    "venice/core.py": "6a2d8721",
-    "venice/memory.py": "441e00ea",
-    "venice/persistence.py": "59564232",
-    "venice/project_index.py": "7ce97809",
-    "venice/prompts/__init__.py": "27c54f6e",
-    "venice/prompts/system.py": "322a02a9",
-    "venice/risk_analyzer.py": "276f0466",
-    "venice/tools/__init__.py": "262c6f62",
-    "venice/tools/base.py": "9f025fb8",
-    "venice/tools/batch_ops.py": "e2933702",
-    "venice/tools/code_ops.py": "af712186",
-    "venice/tools/file_ops.py": "f58b2e90",
-    "venice/tools/git_ops.py": "12d55dbe",
-    "venice/tools/image_ops.py": "d0a08946",
-    "venice/tools/knowledge_ops.py": "8c9e0ad5",
-    "venice/tools/schema.py": "1f92f1a2",
-    "venice/tools/shell_ops.py": "a3d19dc3",
-    "venice/tools/test_ops.py": "fd61cd3e",
-    "venice/tools/undead_ops.py": "781ae3f0",
-    "venice/tools/web_ops.py": "5863e1e2",
-    "venice/ui.py": "6b70f027",
-    "venice/undead_manager.py": "5327a3ac",
-    "venice/workspace.py": "cb931f23",
-    "venice-web-ui/server.py": "c7714aac",
-    "venice-web-ui/static/script.js": "44587238",
-    "venice-web-ui/static/style.css": "a2168b7e",
-    "venice-web-ui/templates/index.html": "92638f18"
+    "cortex/__init__.py": "5015002b",
+    "cortex/agent_state.py": "02a6f9c2",
+    "cortex/api.py": "d153bce5",
+    "cortex/cli.py": "84c179e9",
+    "cortex/config.py": "008c1e72",
+    "cortex/context_manager.py": "e6a86dfc",
+    "cortex/core.py": "6a2d8721",
+    "cortex/memory.py": "441e00ea",
+    "cortex/persistence.py": "59564232",
+    "cortex/project_index.py": "7ce97809",
+    "cortex/prompts/__init__.py": "27c54f6e",
+    "cortex/prompts/system.py": "322a02a9",
+    "cortex/risk_analyzer.py": "276f0466",
+    "cortex/tools/__init__.py": "262c6f62",
+    "cortex/tools/base.py": "9f025fb8",
+    "cortex/tools/batch_ops.py": "e2933702",
+    "cortex/tools/code_ops.py": "af712186",
+    "cortex/tools/file_ops.py": "f58b2e90",
+    "cortex/tools/git_ops.py": "12d55dbe",
+    "cortex/tools/image_ops.py": "d0a08946",
+    "cortex/tools/knowledge_ops.py": "8c9e0ad5",
+    "cortex/tools/schema.py": "1f92f1a2",
+    "cortex/tools/shell_ops.py": "a3d19dc3",
+    "cortex/tools/test_ops.py": "fd61cd3e",
+    "cortex/tools/undead_ops.py": "781ae3f0",
+    "cortex/tools/web_ops.py": "5863e1e2",
+    "cortex/ui.py": "6b70f027",
+    "cortex/undead_manager.py": "5327a3ac",
+    "cortex/workspace.py": "cb931f23",
+    "cortex-web-ui/server.py": "c7714aac",
+    "cortex-web-ui/static/script.js": "44587238",
+    "cortex-web-ui/static/style.css": "a2168b7e",
+    "cortex-web-ui/templates/index.html": "92638f18"
   },
   "vectors": {
     ".github/FUNDING.yml": [
@@ -4808,7 +4808,7 @@
       -0.04211832582950592,
       0.00833297148346901
     ],
-    ".venice_memory.json": [
+    ".cortex_memory.json": [
       -0.0065556182526052,
       0.0700584203004837,
       -0.06448844075202942,
@@ -6352,7 +6352,7 @@
       0.02194671519100666,
       -0.03305729478597641
     ],
-    "venice/__init__.py": [
+    "cortex/__init__.py": [
       -0.08184298127889633,
       0.017044920474290848,
       -0.05771833285689354,
@@ -6738,7 +6738,7 @@
       0.023028569296002388,
       -0.05021737143397331
     ],
-    "venice/agent_state.py": [
+    "cortex/agent_state.py": [
       -0.05975890904664993,
       0.027844736352562904,
       -0.08698444068431854,
@@ -7124,7 +7124,7 @@
       -0.037015173584222794,
       0.009043857455253601
     ],
-    "venice/api.py": [
+    "cortex/api.py": [
       -0.07340162247419357,
       0.04915524274110794,
       -0.04665616527199745,
@@ -7510,7 +7510,7 @@
       0.05895819514989853,
       0.023944003507494926
     ],
-    "venice/cli.py": [
+    "cortex/cli.py": [
       0.00817024800926447,
       0.0954933911561966,
       -0.015083580277860165,
@@ -7896,7 +7896,7 @@
       -0.037923991680145264,
       -0.00897984765470028
     ],
-    "venice/config.py": [
+    "cortex/config.py": [
       -0.01454258244484663,
       0.04195420444011688,
       -0.03754108026623726,
@@ -8282,7 +8282,7 @@
       -0.0018007635371759534,
       -0.03677864745259285
     ],
-    "venice/context_manager.py": [
+    "cortex/context_manager.py": [
       -0.040720611810684204,
       -0.014812122099101543,
       -0.03583294153213501,
@@ -8668,7 +8668,7 @@
       -0.021268926560878754,
       0.012661169283092022
     ],
-    "venice/core.py": [
+    "cortex/core.py": [
       -0.01129794679582119,
       0.017500031739473343,
       -0.05413281172513962,
@@ -9054,7 +9054,7 @@
       -0.0033463886938989162,
       0.04838684946298599
     ],
-    "venice/memory.py": [
+    "cortex/memory.py": [
       -0.05388365685939789,
       0.06775267422199249,
       -0.1261274516582489,
@@ -9440,7 +9440,7 @@
       -0.05120697245001793,
       0.013586588203907013
     ],
-    "venice/persistence.py": [
+    "cortex/persistence.py": [
       -0.036575738340616226,
       0.06321973353624344,
       -0.08501262962818146,
@@ -9826,7 +9826,7 @@
       0.018199359998106956,
       0.0558246448636055
     ],
-    "venice/project_index.py": [
+    "cortex/project_index.py": [
       -0.057063084095716476,
       0.06753211468458176,
       0.004478343762457371,
@@ -10212,7 +10212,7 @@
       -0.035916611552238464,
       0.022653724998235703
     ],
-    "venice/prompts/__init__.py": [
+    "cortex/prompts/__init__.py": [
       -0.0069558024406433105,
       0.0551924966275692,
       -0.02836025319993496,
@@ -10598,7 +10598,7 @@
       0.03076283447444439,
       -0.017417462542653084
     ],
-    "venice/prompts/system.py": [
+    "cortex/prompts/system.py": [
       0.02678629755973816,
       0.0737239196896553,
       -0.028493447229266167,
@@ -10984,7 +10984,7 @@
       0.04827606678009033,
       -0.033148691058158875
     ],
-    "venice/risk_analyzer.py": [
+    "cortex/risk_analyzer.py": [
       -0.05093738064169884,
       0.04496365413069725,
       -0.1016707718372345,
@@ -11370,7 +11370,7 @@
       0.028839439153671265,
       0.007003423757851124
     ],
-    "venice/tools/__init__.py": [
+    "cortex/tools/__init__.py": [
       -0.07934039831161499,
       0.005300643853843212,
       -0.06621814519166946,
@@ -11756,7 +11756,7 @@
       0.060766901820898056,
       0.007170794531702995
     ],
-    "venice/tools/base.py": [
+    "cortex/tools/base.py": [
       -0.05991930887103081,
       0.03406323865056038,
       -0.04305253550410271,
@@ -12142,7 +12142,7 @@
       0.03933194652199745,
       0.02579602226614952
     ],
-    "venice/tools/batch_ops.py": [
+    "cortex/tools/batch_ops.py": [
       -0.07647004723548889,
       0.02065659500658512,
       -0.07542342692613602,
@@ -12528,7 +12528,7 @@
       0.012382159009575844,
       -0.029193343594670296
     ],
-    "venice/tools/code_ops.py": [
+    "cortex/tools/code_ops.py": [
       -0.08408485352993011,
       0.026730401441454887,
       -0.07002964615821838,
@@ -12914,7 +12914,7 @@
       0.04188171774148941,
       -0.0072418819181621075
     ],
-    "venice/tools/file_ops.py": [
+    "cortex/tools/file_ops.py": [
       -0.05118202045559883,
       0.03722858056426048,
       -0.05339030921459198,
@@ -13300,7 +13300,7 @@
       0.04985703155398369,
       0.02544320933520794
     ],
-    "venice/tools/git_ops.py": [
+    "cortex/tools/git_ops.py": [
       -0.04397011920809746,
       -0.03982234001159668,
       -0.013509714975953102,
@@ -13686,7 +13686,7 @@
       0.08495915681123734,
       0.00867669191211462
     ],
-    "venice/tools/image_ops.py": [
+    "cortex/tools/image_ops.py": [
       -0.04404645785689354,
       0.005406116135418415,
       -0.0061741783283650875,
@@ -14072,7 +14072,7 @@
       0.010422802530229092,
       0.005653292406350374
     ],
-    "venice/tools/knowledge_ops.py": [
+    "cortex/tools/knowledge_ops.py": [
       -0.014533095993101597,
       -0.008039424195885658,
       -0.04668448492884636,
@@ -14458,7 +14458,7 @@
       0.042835552245378494,
       0.043402086943387985
     ],
-    "venice/tools/schema.py": [
+    "cortex/tools/schema.py": [
       -0.005590809974819422,
       0.005635788198560476,
       -0.06787329167127609,
@@ -14844,7 +14844,7 @@
       0.03247550502419472,
       0.026579776778817177
     ],
-    "venice/tools/shell_ops.py": [
+    "cortex/tools/shell_ops.py": [
       -0.03713027015328407,
       0.062496449798345566,
       -0.03372146934270859,
@@ -15230,7 +15230,7 @@
       0.028076475486159325,
       0.004177322145551443
     ],
-    "venice/tools/test_ops.py": [
+    "cortex/tools/test_ops.py": [
       -0.051430583000183105,
       0.030094388872385025,
       -0.05637895688414574,
@@ -15616,7 +15616,7 @@
       0.05233781039714813,
       0.0044366465881466866
     ],
-    "venice/tools/undead_ops.py": [
+    "cortex/tools/undead_ops.py": [
       -0.06584715098142624,
       0.0933564305305481,
       -0.07257656008005142,
@@ -16002,7 +16002,7 @@
       0.12347041070461273,
       -0.010729031637310982
     ],
-    "venice/tools/web_ops.py": [
+    "cortex/tools/web_ops.py": [
       -0.058511003851890564,
       0.024055054411292076,
       -0.049018606543540955,
@@ -16388,7 +16388,7 @@
       0.0526769682765007,
       0.0011838331120088696
     ],
-    "venice/ui.py": [
+    "cortex/ui.py": [
       -0.017185118049383163,
       0.0695149302482605,
       -0.018568018451333046,
@@ -16774,7 +16774,7 @@
       0.003474129131063819,
       0.030498111620545387
     ],
-    "venice/undead_manager.py": [
+    "cortex/undead_manager.py": [
       -0.03780531883239746,
       0.10031862556934357,
       -0.07656143605709076,
@@ -17160,7 +17160,7 @@
       0.0806855633854866,
       0.006032951641827822
     ],
-    "venice/workspace.py": [
+    "cortex/workspace.py": [
       -0.07111276686191559,
       0.07452082633972168,
       -0.0641903430223465,
@@ -17546,7 +17546,7 @@
       0.053144969046115875,
       0.026306308805942535
     ],
-    "venice-web-ui/server.py": [
+    "cortex-web-ui/server.py": [
       0.04259943589568138,
       0.05398543179035187,
       -0.018145030364394188,
@@ -17932,7 +17932,7 @@
       -0.013616508804261684,
       -0.02501809038221836
     ],
-    "venice-web-ui/static/script.js": [
+    "cortex-web-ui/static/script.js": [
       -0.05253797769546509,
       0.06166088581085205,
       -0.007495547644793987,
@@ -18318,7 +18318,7 @@
       0.0008501502452418208,
       -0.024193551391363144
     ],
-    "venice-web-ui/static/style.css": [
+    "cortex-web-ui/static/style.css": [
       -0.07106975466012955,
       0.10933227092027664,
       -0.06518839299678802,
@@ -18704,7 +18704,7 @@
       -0.05912300571799278,
       0.0030862234998494387
     ],
-    "venice-web-ui/templates/index.html": [
+    "cortex-web-ui/templates/index.html": [
       -0.004884061403572559,
       0.07437479496002197,
       -0.0072397394105792046,

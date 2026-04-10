@@ -9,7 +9,7 @@ PORT=${GONDOLA_PORT:-5056}
 PYTHON_EXEC="/home/anonymous/gemini-workspace/litellm_venv/bin/python"
 
 # Path to the server script
-SERVER_SCRIPT="venice-web-ui/server.py"
+SERVER_SCRIPT="cortex-web-ui/server.py"
 
 # Ensure we are in the Project directory
 cd "$(dirname "$0")"

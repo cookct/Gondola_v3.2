@@ -400,7 +400,7 @@ class CodeOpsMixin(Tools):
                 knowledge_entries = self.get_relevant_knowledge(query)
                 for entry in knowledge_entries:
                     knowledge_results.append({
-                        "filename": f".gondola_knowledge/{entry['title']}.md",
+                        "filename": f".cortex_knowledge/{entry['title']}.md",
                         "relevance": 0.95,  # High relevance for explicit knowledge
                         "summary": f"Knowledge: {entry['title']}",
                         "line_hints": [],
@@ -442,7 +442,7 @@ class CodeOpsMixin(Tools):
                 UI.step_detail(f"Found {len(formatted_results)} relevant results")
                 for res in formatted_results[:3]:
                     hints_str = f" ({len(res['line_hints'])} line hints)" if res.get('line_hints') else ""
-                    knowledge_marker = " [KNOWLEDGE]" if '.gondola_knowledge/' in res['filename'] else ""
+                    knowledge_marker = " [KNOWLEDGE]" if '.cortex_knowledge/' in res['filename'] else ""
                     UI.step_detail(f"  - {res['filename']}{knowledge_marker} {hints_str}")
                 UI.step_done()
             else:

@@ -80,7 +80,7 @@ class ImageOpsMixin:
 
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(
-                    "https://api.cortex.ai/api/v1/image/generate",
+                    "https://api.venice.ai/api/v1/image/generate",
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json"
@@ -145,23 +145,23 @@ class ImageOpsMixin:
 
         # Resolve reference image path - ALWAYS use absolute path to gondola images
         # Get gondola root directory (where cortex package lives)
-        gondola_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        gondola_images = os.path.join(gondola_root, "images", reference_image)
+        cortex_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        cortex_images = os.path.join(cortex_root, "images", reference_image)
 
         # DEBUG: Log exact path being used
         import sys
         print(f"[edit_image DEBUG] __file__: {__file__}", file=sys.stderr)
-        print(f"[edit_image DEBUG] gondola_root: {gondola_root}", file=sys.stderr)
-        print(f"[edit_image DEBUG] Looking for avatar at: {gondola_images}", file=sys.stderr)
-        print(f"[edit_image DEBUG] File exists: {os.path.exists(gondola_images)}", file=sys.stderr)
-        if os.path.exists(gondola_images):
-            stat = os.stat(gondola_images)
+        print(f"[edit_image DEBUG] cortex_root: {cortex_root}", file=sys.stderr)
+        print(f"[edit_image DEBUG] Looking for avatar at: {cortex_images}", file=sys.stderr)
+        print(f"[edit_image DEBUG] File exists: {os.path.exists(cortex_images)}", file=sys.stderr)
+        if os.path.exists(cortex_images):
+            stat = os.stat(cortex_images)
             print(f"[edit_image DEBUG] File size: {stat.st_size}, mtime: {stat.st_mtime}", file=sys.stderr)
 
         ref_path = None
-        if os.path.exists(gondola_images):
+        if os.path.exists(cortex_images):
             # Found in gondola's images directory
-            ref_path = gondola_images
+            ref_path = cortex_images
         else:
             # Try workspace resolution
             ref_path = self.workspace._resolve(reference_image)
@@ -169,7 +169,7 @@ class ImageOpsMixin:
                 # Try in workspace images directory
                 ref_path = os.path.join(self.workspace.root_dir, "images", reference_image)
                 if not os.path.exists(ref_path):
-                    return {"success": False, "error": f"Reference image not found: {reference_image}. Checked: {gondola_images}, workspace"}
+                    return {"success": False, "error": f"Reference image not found: {reference_image}. Checked: {cortex_images}, workspace"}
 
         # Read and encode reference image
         try:
@@ -186,8 +186,8 @@ class ImageOpsMixin:
             return {"success": False, "error": f"Failed to read reference image: {str(e)}"}
 
         # Expressions go in gondola root, not workspace
-        gondola_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        expressions_dir = os.path.join(gondola_root, "expressions")
+        cortex_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        expressions_dir = os.path.join(cortex_root, "expressions")
         os.makedirs(expressions_dir, exist_ok=True)
 
         # Generate filename if not provided - include expression description for easy browsing
@@ -226,7 +226,7 @@ class ImageOpsMixin:
 
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(
-                    "https://api.cortex.ai/api/v1/image/edit",
+                    "https://api.venice.ai/api/v1/image/edit",
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json"

@@ -101,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let sessionTokensIn = 0;
     let sessionTokensOut = 0;
     let currentTurn = 0;
+    let serverContextTokens = 0; // Accurate tiktoken count from server
     let maxTurns = 50;
 
     // Lightbox state
@@ -315,6 +316,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 console.log(`Restored ${data.count} messages from server`);
+                if (data.context_tokens) {
+                    serverContextTokens = data.context_tokens;
+                }
                 updateContextPulse(conversationHistory);
             }
         } catch (e) {
@@ -477,6 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const data = await res.json();
                             if (data.success) {
                                 conversationHistory = [];
+                                serverContextTokens = 0;
                                 chatHistory.innerHTML = '<div class="message system">Memory cleared.</div>';
                                 updateContextPulse([]);
                             } else {
@@ -1085,45 +1090,6 @@ async function handleSummarize() {
     }
 }
 
-async function handleCompact() {
-    if (!conversationHistory || conversationHistory.length === 0) {
-        alert('No conversation to compact');
-        return;
-    }
-
-    try {
-        const compactBtn = document.getElementById('compact-btn');
-        compactBtn.innerHTML = '<span class="macro-icon">⏳</span><span class="macro-text">Compacting...</span>';
-        compactBtn.disabled = true;
-
-        const res = await fetch('/api/summarize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                history: conversationHistory,
-                keep_last_messages: 2
-            })
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-            conversationHistory = data.new_history;
-            await displayConversationHistory();
-            updateContextPulse(conversationHistory);
-            addSystemMessage('Context compacted. Keeping last 2 messages + summary.');
-        } else {
-            alert('Error: ' + data.error);
-        }
-    } catch (e) {
-        alert('Failed to compact: ' + e.message);
-    } finally {
-        const compactBtn = document.getElementById('compact-btn');
-        compactBtn.innerHTML = '<span class="macro-icon">📦</span><span class="macro-text">Compact</span>';
-        compactBtn.disabled = false;
-    }
-}
-
 async function sendMessage() {
         const text = userInput.value.trim();
         if (!text && !currentImageData && !currentDocContext) return;
@@ -1375,6 +1341,10 @@ async function sendMessage() {
                 currentTurn = data.turn || 0;
                 sessionTokensIn = data.session_tokens_in || 0;
                 sessionTokensOut = data.session_tokens_out || 0;
+                if (data.context_tokens) {
+                    serverContextTokens = data.context_tokens;
+                    updateContextPulse();
+                }
                 updateSessionStats();
                 break;
         }
@@ -1419,6 +1389,7 @@ async function sendMessage() {
         sessionTokensIn = 0;
         sessionTokensOut = 0;
         currentTurn = 0;
+        serverContextTokens = 0;
         if (sessionTimerInterval) {
             clearInterval(sessionTimerInterval);
             sessionTimerInterval = null;
@@ -1461,36 +1432,39 @@ async function sendMessage() {
     }
 
     function updateContextPulse(history) {
-        if (!history) return;
-        let totalChars = 0;
-        history.forEach(msg => {
-            if (typeof msg.content === 'string') totalChars += msg.content.length;
-            else if (Array.isArray(msg.content)) {
-                msg.content.forEach(c => { if (c.text) totalChars += c.text.length; });
-            }
-        });
-        const tokens = Math.round(totalChars / 4);
-        
+        // Use server-provided tiktoken count when available; fall back to char/4 estimate
+        let tokens;
+        if (serverContextTokens > 0) {
+            tokens = serverContextTokens;
+        } else if (history && history.length > 0) {
+            let totalChars = 0;
+            history.forEach(msg => {
+                if (typeof msg.content === 'string') totalChars += msg.content.length;
+                else if (Array.isArray(msg.content)) {
+                    msg.content.forEach(c => { if (c.text) totalChars += c.text.length; });
+                }
+            });
+            tokens = Math.round(totalChars / 4);
+        } else {
+            tokens = 0;
+        }
+
         // Dynamic limit from selected model
         const currentModelId = modelSelect.value;
         let maxTokens = 200000; // Default fallback
-        
         if (modelMap[currentModelId] && modelMap[currentModelId].context_limit) {
             maxTokens = modelMap[currentModelId].context_limit;
         }
-        
+
         const percent = Math.min(100, (tokens / maxTokens) * 100);
         const fill = document.getElementById('pulse-fill');
-        const count = document.getElementById('pulse-count');
-        
-        // Update label with max tokens
         const pulseCount = document.getElementById('pulse-count');
         const pulseMax = document.getElementById('pulse-max');
+
         if (pulseCount && pulseMax) {
             pulseCount.textContent = tokens.toLocaleString();
             pulseMax.textContent = maxTokens.toLocaleString();
         }
-
         if (fill) {
             fill.style.width = percent + '%';
             if (percent > 90) fill.style.backgroundColor = '#f44747';

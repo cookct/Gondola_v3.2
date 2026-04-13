@@ -67,7 +67,7 @@ class ProjectIndex:
         self.dependencies: Dict[str, Set[str]] = {}  # file -> set of imported files
         self.file_hashes: Dict[str, str] = {}      # file -> content hash
         self.vectors: Dict[str, List[float]] = {}  # file -> embedding vector
-        self._cache_path = self.project_path / '.gondola_index.json'
+        self._cache_path = self.project_path / '.cortex_index.json'
         self._model = None  # Lazy load
 
     def build(self, force: bool = False) -> 'ProjectIndex':

@@ -14,7 +14,7 @@ from cortex.tools import CombinedTools
 from cortex.tools.schema import TOOL_SCHEMAS
 
 # Get logger from parent module
-logger = logging.getLogger('gondola.api')
+logger = logging.getLogger('cortex.api')
 
 # Build a lookup of tool schemas for validation
 _TOOL_SCHEMA_MAP = {}

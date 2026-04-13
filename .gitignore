@@ -60,3 +60,8 @@ logs/
 # Temporary files
 tmp/
 temp/
+.cortex_tags
+.cortex_index.json
+.cortex_diagnostics.json
+.cortex_memory.json
+.cortex_conversation.json

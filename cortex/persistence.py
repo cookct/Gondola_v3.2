@@ -11,7 +11,7 @@ class PersistenceManager:
     checking out the shadow branch and clobbering the working directory.
     """
     
-    def __init__(self, branch_name="_gondola_shadow", project_root=None):
+    def __init__(self, branch_name="_cortex_shadow", project_root=None):
         self.branch_name = branch_name
         self.project_root = Path(project_root).resolve() if project_root else Path.cwd()
         self._init_branch()
@@ -55,7 +55,7 @@ class PersistenceManager:
             # 2. Create tree object
             result = subprocess.run([
                 "git", "mktree"
-            ], input=f"100644 blob {blob_hash}\t.gondola_necromancer", 
+            ], input=f"100644 blob {blob_hash}\t.cortex_necromancer", 
                capture_output=True, text=True, check=True, cwd=self.project_root)
             tree_hash = result.stdout.strip()
             

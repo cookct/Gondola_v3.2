@@ -120,10 +120,10 @@ class FileOpsMixin(Tools):
             path = self.workspace._resolve(filename)
             if not os.path.exists(path):
                 # Check gondola images directory for image files
-                gondola_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                gondola_path = os.path.join(gondola_root, "images", filename)
-                if os.path.exists(gondola_path):
-                    path = gondola_path
+                cortex_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                cortex_path = os.path.join(cortex_root, "images", filename)
+                if os.path.exists(cortex_path):
+                    path = cortex_path
                 else:
                     UI.step_error(f"File not found: {filename}")
                     return {"success": False, "error": f"File '{filename}' does not exist"}
@@ -400,7 +400,7 @@ class FileOpsMixin(Tools):
             # Phase 5: Trigger background diagnostics
             if filename.endswith(".py"):
                 import subprocess
-                diag_path = os.path.join(self.workspace.root_dir, ".gondola_diagnostics.json")
+                diag_path = os.path.join(self.workspace.root_dir, ".cortex_diagnostics.json")
                 cmd = f"ruff check --format json {path} > {diag_path} 2>/dev/null &"
                 subprocess.Popen(cmd, shell=True)
 
@@ -587,7 +587,7 @@ Required: Read the file first, then retry with verify_risk=true
             # Phase 5: Trigger background diagnostics
             if filename.endswith(".py"):
                 import subprocess
-                diag_path = os.path.join(self.workspace.root_dir, ".gondola_diagnostics.json")
+                diag_path = os.path.join(self.workspace.root_dir, ".cortex_diagnostics.json")
                 cmd = f"ruff check --format json {path} > {diag_path} 2>/dev/null &"
                 subprocess.Popen(cmd, shell=True)
 
@@ -871,7 +871,7 @@ Required: Read the file first, then retry with verify_risk=true
             # Phase 5: Trigger background diagnostics (if code file)
             if filename.endswith(".py"):
                 import subprocess
-                diag_path = os.path.join(self.workspace.root_dir, ".gondola_diagnostics.json")
+                diag_path = os.path.join(self.workspace.root_dir, ".cortex_diagnostics.json")
                 cmd = f"ruff check --format json {path} > {diag_path} 2>/dev/null &"
                 subprocess.Popen(cmd, shell=True)
 

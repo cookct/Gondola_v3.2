@@ -21,15 +21,50 @@ try:
 except ImportError:
     PDF_SUPPORT = False
 
+# Tiktoken for accurate token counting
+try:
+    import tiktoken
+    _tiktoken_enc = tiktoken.get_encoding('cl100k_base')
+    TIKTOKEN_AVAILABLE = True
+except Exception:
+    _tiktoken_enc = None
+    TIKTOKEN_AVAILABLE = False
+
+def _count_text_tokens(text: str) -> int:
+    """Count tokens in a string using tiktoken, or fall back to char/4."""
+    if not text:
+        return 0
+    if TIKTOKEN_AVAILABLE:
+        return len(_tiktoken_enc.encode(text, disallowed_special=()))
+    return max(1, len(text) // 4)
+
+def _count_messages_tokens(msgs: list) -> int:
+    """Count total tokens across a list of message dicts (role+content)."""
+    total = 0
+    for m in msgs:
+        content = m.get('content', '')
+        if isinstance(content, str):
+            total += _count_text_tokens(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get('type') == 'text':
+                    total += _count_text_tokens(block.get('text', ''))
+                # image blocks count as ~256 tokens (rough but consistent)
+                elif isinstance(block, dict) and block.get('type') == 'image_url':
+                    total += 256
+        # +4 per message overhead (role tokens)
+        total += 4
+    return total
+
 # ============================================================================
 # COMPREHENSIVE DEBUG LOGGING CONFIGURATION
 # ============================================================================
 LOG_DIR = os.path.join(os.path.dirname(__file__), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
-LOG_FILE = os.path.join(LOG_DIR, f'gondola_debug_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+LOG_FILE = os.path.join(LOG_DIR, f'cortex_debug_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
 
 # Create logger
-logger = logging.getLogger('gondola')
+logger = logging.getLogger('cortex')
 logger.setLevel(logging.DEBUG)
 
 # File handler - captures EVERYTHING
@@ -273,7 +308,7 @@ def initialize(clear_messages=False):
             from openai import OpenAI
             client = OpenAI(
                 api_key=api_key,
-                base_url="https://api.cortex.ai/api/v1",
+                base_url="https://api.venice.ai/api/v1",
                 timeout=120.0
             )
             logger.info("OpenAI client initialized with 120s timeout")
@@ -333,8 +368,8 @@ def serve_workspace_image(filename):
 @app.route('/workspace-expressions/<path:filename>')
 def serve_workspace_expression(filename):
     """Serve expression images from gondola's expressions directory."""
-    gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    expressions_dir = os.path.join(gondola_root, 'expressions')
+    cortex_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    expressions_dir = os.path.join(cortex_root, 'expressions')
     if not os.path.exists(expressions_dir):
         return "Expressions directory not found", 404
     return send_from_directory(expressions_dir, filename)
@@ -353,8 +388,8 @@ def serve_static(filename):
 def get_initial_avatar():
     """Get a random initial avatar image from the initial directory."""
     import random
-    gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    initial_dir = os.path.join(gondola_root, 'images', 'avatars', 'initial')
+    cortex_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    initial_dir = os.path.join(cortex_root, 'images', 'avatars', 'initial')
     
     if os.path.exists(initial_dir):
         images = [f for f in os.listdir(initial_dir) 
@@ -584,10 +619,12 @@ def get_conversation():
     global messages
     # Return all non-system messages
     conversation = [m for m in messages if m.get('role') != 'system']
+    context_tokens = _count_messages_tokens(messages)
     return jsonify({
         "success": True,
         "messages": conversation,
-        "count": len(conversation)
+        "count": len(conversation),
+        "context_tokens": context_tokens
     })
 
 def archive_chat_log(history):
@@ -598,8 +635,8 @@ def archive_chat_log(history):
     try:
         # Determine paths
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        gondola_root = os.path.dirname(current_dir)
-        project_root = os.path.dirname(gondola_root)
+        cortex_root = os.path.dirname(current_dir)
+        project_root = os.path.dirname(cortex_root)
         archive_dir = os.path.join(project_root, 'chats', 'archives')
         os.makedirs(archive_dir, exist_ok=True)
 
@@ -1164,6 +1201,7 @@ def chat():
                         stream_timeout = model_info.get("stream_timeout", 180)
                         context_limit = model_info.get("context_limit", 128000)
                         pricing = model_info.get("pricing", "unknown")
+                        disable_thinking = model_info.get("disable_thinking", False)
 
                         # Determine Provider and Endpoint
                         # Use explicit provider field from model config
@@ -1187,7 +1225,7 @@ def chat():
                                 break
                         else:  # cortex or default
                             api_key = get_api_key()
-                            api_base = "https://api.cortex.ai/api/v1/chat/completions"
+                            api_base = "https://api.venice.ai/api/v1/chat/completions"
                             if not api_key:
                                 logger.error(f"[{request_id}] Cortex API Key missing")
                                 event_queue.put({"type": "error", "data": "Cortex API Key not configured."})
@@ -1309,11 +1347,11 @@ def chat():
                                                         {"role": "user", "content": content}
                                                     ],
                                                     "max_tokens": 1000,
-                                                    "cortex_parameters": {"include_cortex_system_prompt": True}
+                                                    "venice_parameters": {"include_venice_system_prompt": True, "strip_thinking_response": True}
                                                 }
                                                 
                                                 helper_resp = helper_client.post(
-                                                    "https://api.cortex.ai/api/v1/chat/completions",
+                                                    "https://api.venice.ai/api/v1/chat/completions",
                                                     headers={
                                                         "Authorization": f"Bearer {helper_api_key}",
                                                         "Content-Type": "application/json"
@@ -1350,9 +1388,14 @@ def chat():
                             "tools": TOOL_SCHEMAS,
                             "tool_choice": effective_tool_choice
                         }
-                        # Only add cortex_parameters for Cortex
-                        if not is_together:
-                            api_payload["cortex_parameters"] = {"include_cortex_system_prompt": True, "web_search": True}
+                        # Z.ai direct API: disable thinking for agentic use (thinking burns output budget, leaving no tokens for content)
+                        if is_zai and disable_thinking:
+                            api_payload["thinking"] = {"type": "disabled"}
+                            logger.debug(f"[{request_id}] Z.ai thinking disabled for {model_id}")
+
+                        # Only add venice_parameters for Venice
+                        if not is_together and not is_zai:
+                            api_payload["venice_parameters"] = {"include_venice_system_prompt": True, "strip_thinking_response": True}
                         else:
                             # TOGETHER AI FIX: String tool_choice values (auto, required) trigger flag requirements
                             # We remove them to let the API default to its standard behavior.
@@ -1480,6 +1523,7 @@ def chat():
                                         stall_warned = False
                                         chunk_count = 0
                                         total_content_chars = 0
+                                        total_reasoning_chars = 0
                                         first_chunk_time = None
                                         api_usage = None  # Will capture usage info for cache detection
 
@@ -1532,6 +1576,7 @@ def chat():
                                                             delta = data_obj['choices'][0].get('delta', {})
 
                                                             if 'reasoning_content' in delta:
+                                                                total_reasoning_chars += len(delta['reasoning_content'])
                                                                 event_queue.put({"type": "reasoning", "data": delta['reasoning_content']})
 
                                                             if 'content' in delta and delta['content']:
@@ -1564,6 +1609,8 @@ def chat():
                                         logger.info(f"[{request_id}] ✓ Stream completed")
                                         logger.info(f"[{request_id}]   Total chunks: {chunk_count}")
                                         logger.info(f"[{request_id}]   Total content chars: {total_content_chars}")
+                                        if total_reasoning_chars > 0:
+                                            logger.info(f"[{request_id}]   Total reasoning chars: {total_reasoning_chars}")
                                         logger.info(f"[{request_id}]   Stream duration: {stream_duration:.2f}s")
                                         logger.info(f"[{request_id}]   Tool calls detected: {len(tool_calls_buffer)}")
                                         if tool_calls_buffer:
@@ -1666,6 +1713,12 @@ def chat():
                     
                     # Store assistant message
                     if not response_content and not tool_calls_buffer:
+                        if total_reasoning_chars > 0:
+                            logger.warning(f"[{request_id}] Model produced {total_reasoning_chars:,} reasoning chars but no content — thinking model returned empty response")
+                            event_queue.put({"type": "error", "data": "Model returned only internal reasoning with no response. Try again or switch models."})
+                        else:
+                            logger.warning(f"[{request_id}] Model returned empty response (no content, no reasoning, no tool calls)")
+                            event_queue.put({"type": "error", "data": "Model returned an empty response. Try again or switch models."})
                         break
 
                     # Convert tool calls
@@ -2030,16 +2083,17 @@ def chat():
                     turn_duration = time.time() - turn_start
                     logger.info(f"[{request_id}] Turn {agent_turns} completed in {turn_duration:.2f}s")
 
-                    # Estimate tokens for this turn (rough: ~4 chars per token)
-                    # Input: estimate from last user message + system prompt
-                    input_chars = sum(len(str(m.get('content', ''))) for m in messages[-3:] if m.get('role') in ('user', 'system'))
-                    turn_tokens_in = max(1, input_chars // 4)
-                    turn_tokens_out = max(1, len(response_content) // 4)
+                    # Accurate token counts via tiktoken (cl100k_base)
+                    # Input: the full messages list sent to the API this turn
+                    turn_tokens_in = max(1, _count_messages_tokens(messages))
+                    turn_tokens_out = max(1, _count_text_tokens(response_content))
+                    # Context pulse: total tokens currently in the context window
+                    context_tokens = turn_tokens_in
 
                     session_tokens_in += turn_tokens_in
                     session_tokens_out += turn_tokens_out
 
-                    # Send turn complete event with token estimates
+                    # Send turn complete event with accurate token counts
                     event_queue.put({
                         "type": "turn_complete",
                         "data": {
@@ -2049,6 +2103,7 @@ def chat():
                             "turn_tokens_out": turn_tokens_out,
                             "session_tokens_in": session_tokens_in,
                             "session_tokens_out": session_tokens_out,
+                            "context_tokens": context_tokens,
                             "turn_duration": round(turn_duration, 2)
                         }
                     })
@@ -2338,8 +2393,8 @@ def make_avatar():
             image_b64 = image_b64.split(',', 1)[1]
 
         # Gondola images directory
-        gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        images_dir = os.path.join(gondola_root, "images")
+        cortex_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        images_dir = os.path.join(cortex_root, "images")
         os.makedirs(images_dir, exist_ok=True)
 
         avatar_path = os.path.join(images_dir, "avatar.png")
@@ -2370,8 +2425,8 @@ def get_avatar_images(tool_name):
     try:
         from PIL import Image
         # Build path to tool-specific avatar folder
-        gondola_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        avatars_dir = os.path.join(gondola_root, 'images', 'avatars')
+        cortex_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        avatars_dir = os.path.join(cortex_root, 'images', 'avatars')
         tool_dir = os.path.join(avatars_dir, tool_name)
         
         images = []

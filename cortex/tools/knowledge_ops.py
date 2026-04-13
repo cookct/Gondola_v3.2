@@ -19,7 +19,7 @@ class KnowledgeOpsMixin(Tools):
         super().__init__(workspace=workspace, memory=memory, project_index=project_index, **kwargs)
         # Initialize knowledge system after parent classes set workspace
         workspace_path = self.workspace.root_dir if hasattr(self.workspace, 'root_dir') else self.workspace
-        self.knowledge_dir = Path(workspace_path) / ".gondola_knowledge"
+        self.knowledge_dir = Path(workspace_path) / ".cortex_knowledge"
         self.knowledge_dir.mkdir(exist_ok=True)
         self.knowledge_index = self._load_knowledge_index()
 

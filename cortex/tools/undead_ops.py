@@ -212,7 +212,7 @@ class UndeadOpsMixin(Tools):
         """Project-wide search for a symbol definition using Ctags"""
         self.next_step(f"Symbol jump: {symbol_name}")
         
-        tags_file = os.path.join(self.workspace.root_dir, ".gondola_tags")
+        tags_file = os.path.join(self.workspace.root_dir, ".cortex_tags")
         if not os.path.exists(tags_file):
             return {"success": False, "error": "Ctags index not found. Background indexing may still be running."}
             

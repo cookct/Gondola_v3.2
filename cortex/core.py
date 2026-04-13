@@ -201,7 +201,8 @@ MODELS = {
         "preferred_tool_choice": "auto",
         "tool_choice_on_nudge": "required",
         "force_done_at_max": True,
-        "native_vision": False
+        "native_vision": False,
+        "disable_thinking": True
     },
     "glm-4.7-flash": {
         "name": "GLM 4.7 Flash",
@@ -221,7 +222,8 @@ MODELS = {
         "preferred_tool_choice": "auto",
         "tool_choice_on_nudge": "required",
         "force_done_at_max": True,
-        "native_vision": False
+        "native_vision": False,
+        "disable_thinking": True
     },
     "glm-4.5-flash": {
         "name": "GLM 4.5 Flash",
@@ -241,7 +243,8 @@ MODELS = {
         "preferred_tool_choice": "auto",
         "tool_choice_on_nudge": "required",
         "force_done_at_max": True,
-        "native_vision": False
+        "native_vision": False,
+        "disable_thinking": True
     }
 }
 

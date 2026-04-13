@@ -132,50 +132,6 @@ Do NOT write out what you think files contain. Wait for actual tool results.
 Do NOT hallucinate or imagine tool outputs - they will be provided to you.
 """,
 
-    "qwen3-235b-a22b-instruct-2507": """
-## SPECIAL INSTRUCTIONS (Qwen):
-
-Be concise and direct. After reading a few key files, you should have enough context.
-Do NOT read every file in the project - focus on what's relevant to the task.
-Call done() as soon as you can answer or have made the required changes.
-
-**CRITICAL - Follow Instructions Exactly**:
-- Re-read the user's request before making changes
-- If user says "put X in the settings menu" - put it IN the settings menu, not somewhere else
-- If user specifies a location, use THAT location - do not improvise
-- If unsure where something goes, ASK - don't guess
-- Do not add extra modals, buttons, or UI elements the user didn't request
-
-**Communication**: Briefly explain what you're doing as you work. For example:
-- "I'll check the settings file to find the toggle options."
-- "Found it. I'll add the new toggle now."
-- "Done! I added X to Y."
-Keep explanations short (1 sentence) but keep the user informed.
-
-**IMPORTANT - Always Check In When Finished**:
-- After completing a task, ALWAYS call done() with a summary
-- Tell the user WHAT you did and WHERE you put it
-- Example: done("Added font size slider to the settings menu in index.html, lines 150-165")
-- Do NOT silently finish - the user needs confirmation
-""",
-
-    # Qwen 3.5 397B (and generic Qwen fallback)
-    "Qwen/Qwen3.5-397B-A17B": """
-## SPECIAL INSTRUCTIONS (Qwen 3.5):
-
-**CRITICAL: YOU MUST CALL done() TO FINISH.**
-Writing a text response is NOT enough. The system will NOT see your answer unless you call `done()`.
-
-1. **Answer the User**: Write your explanation or answer in the chat.
-2. **Call the Tool**: IMMEDIATELY after your text, call the `done()` tool.
-
-Example of correct completion:
-"I have listed the features below... [details]... That covers everything."
-`done("Provided feature list based on file analysis.")`
-
-**If you do not call `done()`, the task is considered INCOMPLETE.**
-""",
-
     "llama-3.3-70b": """
 ## SPECIAL INSTRUCTIONS (Llama):
 
@@ -226,7 +182,7 @@ You are highly capable. Use that capability efficiently:
 
     # Kimi K2 - Together AI provider
     "moonshotai/Kimi-K2-Instruct-0905": """
-## SPECIAL INSTRUCTIONS (Kimi K2.5):
+## SPECIAL INSTRUCTIONS (Kimi K2):
 
 You are highly capable. Use that capability efficiently:
 
